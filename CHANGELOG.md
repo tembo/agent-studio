@@ -15,10 +15,11 @@ they are no longer release versions. Phase scope now lives in
 ## [Unreleased]
 
 ### Added
-- **Per-user OAuth for the TAS MCP server.** Claude Web and other hosted MCP
-  clients can now discover TAS OAuth metadata, register dynamically, complete
-  S256 PKCE, select a workspace, and receive refreshable tokens bound to the
-  signed-in user's live membership and role. Existing `tas_` API keys remain
+- **Per-user OAuth for the TAS MCP server.** Claude Web, Claude Desktop, and
+  other hosted MCP clients can now discover TAS OAuth metadata, register
+  dynamically, complete S256 PKCE, select a workspace, and receive refreshable
+  tokens bound to the signed-in user's live membership and role. Existing
+  `tas_` API keys remain
   supported for Claude Code and scripts.
 - **Durable Pydantic runs.** Pydantic executions now persist their immutable
   launch envelope and checkpoint typed message history at every model/tool node.
@@ -26,6 +27,13 @@ they are no longer release versions. Phase scope now lives in
   checkpoint, preserve the original run clock and completed-step usage, and
   show a **Resumed** indicator on run detail. Cargo AI and legacy runs remain
   explicit interruption failures because they have no safe replay boundary.
+
+### Fixed
+
+- **Claude showed the Railway logo for the TAS connector.** The MCP initialize
+  response now advertises Tembo's display name and a public PNG icon, the icon
+  directory bypasses the session gate, and `/favicon.ico` provides a fallback
+  for clients that use conventional origin favicon discovery.
 
 ## [v2026.8.1] — Password management for email/password instances, in-app instance admins, personal Tembo identity — shipped 2026-08-04
 

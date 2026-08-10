@@ -33,7 +33,9 @@ import {
 import { FRAMEWORKS, type Framework } from "@/lib/agent-framework";
 import { listAutomations } from "@/lib/automations-api";
 import { listConnectionsForUser } from "@/lib/composio-connections";
+import { getPublicOrigin } from "@/lib/config";
 import { listNativeConnectionsForUser } from "@/lib/connections";
+import { FAVICON_ASSET_VERSION } from "@/lib/favicon-constants";
 import { listToolsForUser } from "@/lib/mcp-tools";
 import { MCP_OAUTH_WRITE_SCOPE } from "@/lib/mcp-oauth";
 import { meetsMinRole } from "@/lib/rbac";
@@ -75,9 +77,19 @@ export function buildMcpServer(
   ctx: McpContext,
   options: McpServerOptions = {},
 ): McpServer {
+  const publicOrigin = getPublicOrigin();
   const server = new McpServer({
     name: "tembo-agent-studio",
+    title: "Tembo Agent Studio",
     version: "1.0.0",
+    icons: [
+      {
+        src: `${publicOrigin}/favicons/default-tembo.png?v=${FAVICON_ASSET_VERSION}`,
+        mimeType: "image/png",
+        sizes: ["256x256"],
+      },
+    ],
+    websiteUrl: publicOrigin,
   });
 
   server.registerTool(
