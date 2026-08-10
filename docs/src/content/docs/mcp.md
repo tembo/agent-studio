@@ -1,19 +1,50 @@
 ---
 title: MCP server
-description: Connect Claude Code (or any MCP client) to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
+description: Connect Claude Web, Claude Code, or another MCP client to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
 ---
 
 Tembo Agent Studio exposes a **Model Context Protocol (MCP) server** so an AI
-client like **Claude Code** can read and improve your TAS deployment directly.
-The agent definition files already live in your connected Git repo, which Claude
-Code can edit locally — so the MCP server's job is everything that *isn't* in
-Git: live run history and output, the tool catalog, connection status,
-automations, Slack bots, and spec validation, plus the ability to trigger runs
-and hand authoring to the Tembo Coding Agent.
+client like **Claude Web** or **Claude Code** can read and improve your TAS
+deployment directly. The MCP server exposes live run history and output, the
+tool catalog, connection status, automations, Slack bots, and spec validation,
+plus the ability to trigger runs and hand authoring to the Tembo Coding Agent.
+
+## Connect Claude Web
+
+:::caution[Request headers access required]
+TAS currently authenticates MCP requests with a personal API key, not OAuth.
+Claude's [request-header authentication](https://claude.com/docs/connectors/custom/remote-mcp#authenticating-with-request-headers)
+is in beta. If the custom connector form only shows **OAuth Client ID** and
+**OAuth Client Secret**, you cannot connect TAS from Claude Web yet. Do not put
+a TAS API key in either OAuth field; ask Anthropic for request-header access or
+use [Claude Code](#connect-claude-code) below.
+:::
+
+1. In TAS, open **Settings → API keys**, create a key, and copy the `tas_...`
+   token. It is shown only once.
+2. In Claude Web, open **Customize → Connectors**, select **Add custom
+   connector**, and enter:
+   - **Name:** `Tembo TAS`
+   - **Remote MCP server URL:** `https://<your-tas-host>/mcp`
+   - **OAuth Client ID / Secret:** leave both blank
+3. Under **Request headers**, add a required header:
+   - **Header:** `Authorization`
+   - **Value:** `Bearer tas_...` (include the `Bearer ` prefix)
+4. Add the connector, enable it for a conversation, and ask Claude to “list my
+   agents” or “show the last failed run's output.”
+
+For Team and Enterprise plans, an owner adds the connector under
+**Organization settings → Connectors**, then members enable it under
+**Customize → Connectors**. Claude stores one request header for the whole
+organization, so every member using that connector acts as the TAS user who
+created the key. If you intentionally want a shared connector, use a dedicated
+TAS member with the minimum workspace role and only the connections the team
+should share. If each person must act as themselves, use Claude Code for now.
 
 ## Connect Claude Code
 
-Mint a key under **Settings → API keys**, then:
+The agent definition files live in your connected Git repo, which Claude Code
+can edit locally. Mint a key under **Settings → API keys**, then:
 
 ```bash
 claude mcp add --transport http tas https://<your-tas-host>/mcp \
