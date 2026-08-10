@@ -53,9 +53,11 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Run for app routes only; skip API routes, Next internals, and metadata
-  // files. (API routes resolve workspaces themselves and don't need this.)
+  // Run for app routes only; skip API routes, Next internals, public branding
+  // assets, and metadata files. MCP clients fetch /favicons/* without a TAS
+  // session when rendering serverInfo.icons, so those assets must never hit
+  // the sign-in redirect. (API routes resolve workspaces themselves.)
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+    "/((?!api|_next/static|_next/image|favicons|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };

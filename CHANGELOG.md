@@ -28,6 +28,13 @@ they are no longer release versions. Phase scope now lives in
   show a **Resumed** indicator on run detail. Cargo AI and legacy runs remain
   explicit interruption failures because they have no safe replay boundary.
 
+### Fixed
+
+- **Claude showed the Railway logo for the TAS connector.** The MCP initialize
+  response now advertises Tembo's display name and a public PNG icon, the icon
+  directory bypasses the session gate, and `/favicon.ico` provides a fallback
+  for clients that use conventional origin favicon discovery.
+
 ## [v2026.8.1] — Password management for email/password instances, in-app instance admins, personal Tembo identity — shipped 2026-08-04
 
 ### Added

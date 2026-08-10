@@ -12,6 +12,9 @@ vi.mock("@/lib/workspace-agents", () => ({
 }));
 vi.mock("@/lib/runs-api", () => ({ getRun: vi.fn() }));
 vi.mock("@/lib/runs-db", () => ({ listRunsForWorkspace: vi.fn() }));
+vi.mock("@/lib/config", () => ({
+  getPublicOrigin: () => "https://tas.example.com",
+}));
 // The write tools delegate to the shared action layer; mock it so we test the
 // MCP wiring + role gate, not the (separately tested) action internals.
 vi.mock("@/lib/api-v1/actions", () => ({
@@ -95,6 +98,23 @@ beforeEach(() => {
 });
 
 describe("buildMcpServer", () => {
+  it("advertises the TAS display name and public icon", async () => {
+    const client = await connectedClient();
+    expect(client.getServerVersion()).toEqual({
+      name: "tembo-agent-studio",
+      title: "Tembo Agent Studio",
+      version: "1.0.0",
+      icons: [
+        {
+          src: "https://tas.example.com/favicons/default-tembo.png?v=3",
+          mimeType: "image/png",
+          sizes: ["256x256"],
+        },
+      ],
+      websiteUrl: "https://tas.example.com",
+    });
+  });
+
   it("advertises the full read + write tool set", async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
