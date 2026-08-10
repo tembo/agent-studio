@@ -15,10 +15,11 @@ they are no longer release versions. Phase scope now lives in
 ## [Unreleased]
 
 ### Added
-- **Per-user OAuth for the TAS MCP server.** Claude Web and other hosted MCP
-  clients can now discover TAS OAuth metadata, register dynamically, complete
-  S256 PKCE, select a workspace, and receive refreshable tokens bound to the
-  signed-in user's live membership and role. Existing `tas_` API keys remain
+- **Per-user OAuth for the TAS MCP server.** Claude Web, Claude Desktop, and
+  other hosted MCP clients can now discover TAS OAuth metadata, register
+  dynamically, complete S256 PKCE, select a workspace, and receive refreshable
+  tokens bound to the signed-in user's live membership and role. Existing
+  `tas_` API keys remain
   supported for Claude Code and scripts.
 - **Durable Pydantic runs.** Pydantic executions now persist their immutable
   launch envelope and checkpoint typed message history at every model/tool node.

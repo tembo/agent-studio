@@ -1,17 +1,22 @@
 ---
 title: MCP server
-description: Connect Claude Web, Claude Code, or another MCP client to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
+description: Connect Claude Web, Claude Desktop, Claude Code, or another MCP client to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
 ---
 
 Tembo Agent Studio exposes a **Model Context Protocol (MCP) server** so an AI
-client like **Claude Web** or **Claude Code** can read and improve your TAS
-deployment directly. The MCP server exposes live run history and output, the
-tool catalog, connection status, automations, Slack bots, and spec validation,
-plus the ability to trigger runs and hand authoring to the Tembo Coding Agent.
+client like **Claude Web**, **Claude Desktop**, or **Claude Code** can read and
+improve your TAS deployment directly. The MCP server exposes live run history
+and output, the tool catalog, connection status, automations, Slack bots, and
+spec validation, plus the ability to trigger runs and hand authoring to the
+Tembo Coding Agent.
 
-## Connect Claude Web
+## Connect Claude Web and Desktop
 
-1. Open Claude's custom connector form:
+Claude Web and Claude Desktop use the same custom connectors. Add Tembo TAS
+once through Claude's connector settings and it becomes available in both
+clients when you use the same Claude account or organization.
+
+1. In Claude Web, open the custom connector form:
    - **Pro, Max, or Free:** **Customize → Connectors → Add custom connector**.
    - **Team or Enterprise owner:** **Organization settings → Connectors → Add
      → Custom → Web**. Members connect it afterward under **Customize →
@@ -24,8 +29,9 @@ plus the ability to trigger runs and hand authoring to the Tembo Coding Agent.
 3. Click **Add**, then **Connect**. Claude opens TAS: sign in, choose the
    workspace this connector may access, review the requested access, and click
    **Allow**. No TAS API key or pre-registered OAuth client is required.
-4. Enable **Tembo TAS** for a conversation and ask Claude to “list my agents” or
-   “show the last failed run's output.”
+4. In Claude Web or Desktop, enable **Tembo TAS** for a conversation and ask
+   Claude to “list my agents” or “show the last failed run's output.” There is
+   no separate Desktop MCP configuration.
 
 The TAS host must be publicly reachable over HTTPS, and its `BETTER_AUTH_URL`
 must exactly match that public origin. Each member completes their own OAuth
@@ -48,10 +54,10 @@ works the same way; point it at `https://<your-tas-host>/mcp` with the same
 
 ## Authentication
 
-Claude Web uses TAS's OAuth 2.1 flow: Dynamic Client Registration, S256 PKCE,
-short-lived signed access tokens, and rotating refresh tokens. The consent flow
-binds the token to one workspace. Claude Code and header-based clients can use
-the same [personal API keys](/api/) as the REST API instead.
+Claude Web and Desktop use TAS's OAuth 2.1 flow: Dynamic Client Registration,
+S256 PKCE, short-lived signed access tokens, and rotating refresh tokens. The
+consent flow binds the token to one workspace. Claude Code and header-based
+clients can use the same [personal API keys](/api/) as the REST API instead.
 
 Both methods **act as you**: tools that run agents use *your* per-user
 connections, and every request resolves your live workspace role. Read tools
