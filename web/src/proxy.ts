@@ -4,7 +4,8 @@ import type { NextRequest } from "next/server";
 
 // Routes that don't require a signed-in session:
 //   /                — the sign-in landing
-//   /mcp             — MCP server, authed by `Authorization: Bearer tas_…`
+//   /mcp             — MCP server, authed by a TAS API key or OAuth token
+//   /.well-known/*   — public OAuth discovery metadata for remote MCP clients
 //   /for-agents      — native-MCP tool reference, authed by a signed bearer token
 //   /reset-password  — admin-minted reset links; the visitor is locked out
 //                      by definition, the token is validated on submit
@@ -14,6 +15,7 @@ function isPublicPath(pathname: string): boolean {
   return (
     pathname === "/" ||
     pathname === "/mcp" ||
+    pathname.startsWith("/.well-known/") ||
     pathname === "/for-agents" ||
     pathname.startsWith("/for-agents/") ||
     pathname === "/reset-password"

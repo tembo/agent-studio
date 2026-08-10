@@ -15,7 +15,7 @@ vi.mock("@/lib/workspace", () => ({
   getWorkspaceRole: vi.fn(),
 }));
 
-import { authorizeApiRequest } from "./api-auth";
+import { authorizeApiRequest, authorizeOAuthMcpClaims } from "./api-auth";
 import {
   apiKeyTokenMatches,
   getApiKeyByToken,
@@ -135,5 +135,56 @@ describe("authorizeApiRequest — admit", () => {
     mockGetRole.mockResolvedValue("viewer");
     const r = await authorizeApiRequest(req("Bearer tas_ok"));
     expect(r.ok).toBe(true);
+  });
+});
+
+describe("authorizeOAuthMcpClaims", () => {
+  it("binds valid OAuth claims to the selected workspace and live role", async () => {
+    const r = await authorizeOAuthMcpClaims({
+      sub: "u-1",
+      azp: "claude-client",
+      scope: "mcp:read mcp:write offline_access",
+      tas_workspace_id: "ws-1",
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.workspace.id).toBe("ws-1");
+      expect(r.userId).toBe("u-1");
+      expect(r.apiKeyId).toBe("oauth:claude-client");
+      expect(r.oauthScopes).toEqual([
+        "mcp:read",
+        "mcp:write",
+        "offline_access",
+      ]);
+    }
+  });
+
+  it("rejects tokens without a workspace binding or read scope", async () => {
+    const noWorkspace = await authorizeOAuthMcpClaims({
+      sub: "u-1",
+      azp: "claude-client",
+      scope: "mcp:read",
+    });
+    const noRead = await authorizeOAuthMcpClaims({
+      sub: "u-1",
+      azp: "claude-client",
+      scope: "mcp:write",
+      tas_workspace_id: "ws-1",
+    });
+    expect(noWorkspace).toMatchObject({ ok: false, status: 401 });
+    expect(noRead).toMatchObject({ ok: false, status: 401 });
+    expect(mockGetWs).not.toHaveBeenCalled();
+  });
+
+  it("rejects a token after the user loses workspace membership", async () => {
+    mockGetRole.mockResolvedValue(null);
+    const r = await authorizeOAuthMcpClaims({
+      sub: "u-1",
+      azp: "claude-client",
+      scope: "mcp:read",
+      tas_workspace_id: "ws-1",
+    });
+    expect(r).toMatchObject({ ok: false, status: 403 });
   });
 });

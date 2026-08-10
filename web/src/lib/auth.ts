@@ -1,17 +1,27 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { genericOAuth } from "better-auth/plugins";
+import { genericOAuth, jwt } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { Pool } from "pg";
 
 import { resolveAuthSecret } from "@/lib/auth-secret";
 import { genericOAuthConfigs, emailPasswordEnabled } from "@/lib/auth-providers";
 import { writeAuditEvent } from "@/lib/audit-db";
+import { getPublicOrigin } from "@/lib/config";
 import { isInstanceAdmin } from "@/lib/instance-admins";
 import {
   hasPendingInvite,
   resolvePendingInvitesForUser,
 } from "@/lib/invitations";
 import { listWorkspacesForUser } from "@/lib/workspace";
+import {
+  hasMcpOAuthScope,
+  MCP_OAUTH_SCOPES,
+  MCP_OAUTH_WORKSPACE_CLAIM,
+  mcpOAuthIssuer,
+  mcpOAuthResource,
+} from "@/lib/mcp-oauth";
+import { getMcpOAuthWorkspaceSelection } from "@/lib/mcp-oauth-selection";
 
 // We intentionally do not throw on missing env at module load time:
 // Next.js evaluates this file during `next build` to collect page data,
@@ -21,6 +31,7 @@ const databaseUrl = process.env.DATABASE_URL ?? "postgres://placeholder";
 // Never fall back to a usable default secret: a missing/placeholder secret
 // at runtime would let anyone with the (public) repo forge sessions.
 const secret = resolveAuthSecret();
+const publicOrigin = getPublicOrigin();
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -32,7 +43,8 @@ const oauthConfigs = genericOAuthConfigs();
 export const auth = betterAuth({
   database: new Pool({ connectionString: databaseUrl }),
   secret,
-  baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
+  baseURL: publicOrigin,
+  disabledPaths: ["/token"],
   // Zero-config quickstart: email + password auto-enables when no OAuth provider
   // is configured (see emailPasswordEnabled). The closed-instance gate below
   // still governs who may sign up. No email verification — keep first-run
@@ -56,10 +68,52 @@ export const auth = betterAuth({
           },
         }
       : undefined,
-  plugins:
-    oauthConfigs.length > 0
+  plugins: [
+    jwt({
+      jwt: {
+        issuer: mcpOAuthIssuer(),
+        audience: mcpOAuthResource(),
+      },
+    }),
+    oauthProvider({
+      loginPage: "/",
+      consentPage: "/oauth/consent",
+      scopes: [...MCP_OAUTH_SCOPES],
+      validAudiences: [mcpOAuthResource()],
+      grantTypes: ["authorization_code", "refresh_token"],
+      allowDynamicClientRegistration: true,
+      allowUnauthenticatedClientRegistration: true,
+      silenceWarnings: { oauthAuthServerConfig: true },
+      clientRegistrationDefaultScopes: [...MCP_OAUTH_SCOPES],
+      clientRegistrationAllowedScopes: [...MCP_OAUTH_SCOPES],
+      postLogin: {
+        // The plugin exposes consentReferenceId through postLogin, but TAS does
+        // the workspace choice on the consent screen itself. Never insert an
+        // extra post-login redirect: oauth-provider 1.6.25 cannot clear that
+        // continuation reliably and loops back to the selection page.
+        page: "/oauth/consent",
+        shouldRedirect: async () => false,
+        consentReferenceId: async ({ user, session, scopes }) => {
+          if (!hasMcpOAuthScope(scopes)) return undefined;
+          return (
+            (await getMcpOAuthWorkspaceSelection(session.id, user.id)) ??
+            undefined
+          );
+        },
+      },
+      customAccessTokenClaims: ({ user, referenceId }) => {
+        if (!user || !referenceId) {
+          throw new APIError("BAD_REQUEST", {
+            message: "MCP access tokens must be bound to a TAS workspace.",
+          });
+        }
+        return { [MCP_OAUTH_WORKSPACE_CLAIM]: referenceId };
+      },
+    }),
+    ...(oauthConfigs.length > 0
       ? [genericOAuth({ config: oauthConfigs })]
-      : undefined,
+      : []),
+  ],
   // Closed-instance gate. A new account may only be created for an
   // instance admin or an invited email — everyone else is rejected at
   // sign-up, so an uninvited person can't get into the instance at all.

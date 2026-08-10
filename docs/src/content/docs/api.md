@@ -6,7 +6,8 @@ description: Drive your TAS workspace programmatically — list and read agents,
 The **REST API** lets external tools and scripts read and drive a Tembo Agent
 Studio workspace over HTTP — the same operations you do in the UI, behind a
 bearer token. It pairs with the [MCP server](/mcp/), which exposes the same
-capabilities to AI clients like Claude Code; both share one auth scheme.
+capabilities to AI clients like Claude. The REST API uses personal API keys;
+the MCP server additionally supports per-user OAuth for hosted clients.
 
 ## Authentication
 

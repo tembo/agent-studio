@@ -46,7 +46,10 @@ const mockValidate = vi.mocked(validateSpec);
 const mockCreateSlackApp = vi.mocked(createSlackAppFor);
 const mockSendSlackMessage = vi.mocked(sendSlackMessageFor);
 
-function makeCtx(role: WorkspaceRole = "operator"): McpContext {
+function makeCtx(
+  role: WorkspaceRole = "operator",
+  oauthScopes?: readonly string[],
+): McpContext {
   return {
     ok: true,
     workspace: {
@@ -63,6 +66,7 @@ function makeCtx(role: WorkspaceRole = "operator"): McpContext {
     role,
     apiKeyId: "key-1",
     surface: "mcp" as const,
+    ...(oauthScopes ? { oauthScopes } : {}),
   };
 }
 
@@ -306,6 +310,19 @@ describe("buildMcpServer", () => {
     })) as { isError?: boolean; content: { text: string }[] };
     expect(res.isError).toBe(true);
     expect(res.content[0].text).toMatch(/operator/i);
+    expect(mockSendSlackMessage).not.toHaveBeenCalled();
+  });
+
+  it("write tools reject an operator OAuth token without mcp:write", async () => {
+    const client = await connectedClientFor(
+      makeCtx("operator", ["mcp:read"]),
+    );
+    const res = (await client.callTool({
+      name: "send_slack_message",
+      arguments: { text: "hi", toEmail: "a@b.com" },
+    })) as { isError?: boolean; content: { text: string }[] };
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/mcp:write/i);
     expect(mockSendSlackMessage).not.toHaveBeenCalled();
   });
 
