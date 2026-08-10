@@ -16,7 +16,13 @@ const mocks = vi.hoisted(() => {
       id: "genericOAuth",
       options,
     })),
-    isInstanceAdminEmail: vi.fn(),
+    jwt: vi.fn((options: unknown) => ({ id: "jwt", options })),
+    oauthProvider: vi.fn((options: unknown) => ({
+      id: "oauthProvider",
+      options,
+    })),
+    isInstanceAdmin: vi.fn(),
+    getMcpOAuthWorkspaceSelection: vi.fn(),
     hasPendingInvite: vi.fn(),
     resolvePendingInvitesForUser: vi.fn(),
     listWorkspacesForUser: vi.fn(),
@@ -35,6 +41,11 @@ vi.mock("better-auth/api", () => ({
 
 vi.mock("better-auth/plugins", () => ({
   genericOAuth: mocks.genericOAuth,
+  jwt: mocks.jwt,
+}));
+
+vi.mock("@better-auth/oauth-provider", () => ({
+  oauthProvider: mocks.oauthProvider,
 }));
 
 vi.mock("pg", () => ({
@@ -52,7 +63,15 @@ vi.mock("@/lib/audit-db", () => ({
 }));
 
 vi.mock("@/lib/config", () => ({
-  isInstanceAdminEmail: mocks.isInstanceAdminEmail,
+  getPublicOrigin: () => "https://tas.example.com",
+}));
+
+vi.mock("@/lib/instance-admins", () => ({
+  isInstanceAdmin: mocks.isInstanceAdmin,
+}));
+
+vi.mock("@/lib/mcp-oauth-selection", () => ({
+  getMcpOAuthWorkspaceSelection: mocks.getMcpOAuthWorkspaceSelection,
 }));
 
 vi.mock("@/lib/invitations", () => ({
@@ -120,11 +139,12 @@ beforeEach(() => {
   mocks.hasPendingInvite.mockResolvedValue(false);
   mocks.resolvePendingInvitesForUser.mockResolvedValue(0);
   mocks.listWorkspacesForUser.mockResolvedValue([]);
+  mocks.getMcpOAuthWorkspaceSelection.mockResolvedValue("ws-1");
 });
 
 describe("better-auth account creation hooks", () => {
   it("rejects new OAuth users who are neither instance admins nor invited", async () => {
-    mocks.isInstanceAdminEmail.mockReturnValue(false);
+    mocks.isInstanceAdmin.mockResolvedValue(false);
     mocks.hasPendingInvite.mockResolvedValue(false);
     const config = await loadAuthConfig();
 
@@ -140,7 +160,7 @@ describe("better-auth account creation hooks", () => {
   });
 
   it("allows an instance admin account without requiring an invite", async () => {
-    mocks.isInstanceAdminEmail.mockReturnValue(true);
+    mocks.isInstanceAdmin.mockResolvedValue(true);
     const config = await loadAuthConfig();
     const user = {
       id: "user-admin",
@@ -155,7 +175,7 @@ describe("better-auth account creation hooks", () => {
   });
 
   it("allows invited OAuth users and resolves their workspaces after create", async () => {
-    mocks.isInstanceAdminEmail.mockReturnValue(false);
+    mocks.isInstanceAdmin.mockResolvedValue(false);
     mocks.hasPendingInvite.mockResolvedValue(true);
     const config = await loadAuthConfig();
     const user = {
@@ -194,6 +214,73 @@ describe("better-auth provider wiring", () => {
         expect.objectContaining({ providerId: "oidc" }),
       ]),
     });
-    expect(config.plugins).toHaveLength(1);
+    expect(config.plugins).toHaveLength(3);
+  });
+});
+
+describe("MCP OAuth provider wiring", () => {
+  it("requires workspace selection and binds access-token claims to it", async () => {
+    await loadAuthConfig();
+    const options = mocks.oauthProvider.mock.calls[0][0] as {
+      scopes: string[];
+      validAudiences: string[];
+      allowDynamicClientRegistration: boolean;
+      allowUnauthenticatedClientRegistration: boolean;
+      postLogin: {
+        shouldRedirect: (input: { scopes: string[] }) => Promise<boolean>;
+        consentReferenceId: (input: {
+          user: { id: string };
+          session: { id: string };
+          scopes: string[];
+        }) => Promise<string | undefined>;
+      };
+      customAccessTokenClaims: (input: {
+        user?: { id: string };
+        referenceId?: string;
+      }) => Record<string, unknown>;
+    };
+
+    expect(options.validAudiences).toEqual(["https://tas.example.com/mcp"]);
+    expect(options.scopes).toEqual([
+      "mcp:read",
+      "mcp:write",
+      "offline_access",
+    ]);
+    expect(options.allowDynamicClientRegistration).toBe(true);
+    expect(options.allowUnauthenticatedClientRegistration).toBe(true);
+    await expect(
+      options.postLogin.shouldRedirect({ scopes: ["mcp:read"] }),
+    ).resolves.toBe(false);
+    await expect(
+      options.postLogin.consentReferenceId({
+        user: { id: "u-1" },
+        session: { id: "session-1" },
+        scopes: ["mcp:read"],
+      }),
+    ).resolves.toBe("ws-1");
+    expect(mocks.getMcpOAuthWorkspaceSelection).toHaveBeenCalledWith(
+      "session-1",
+      "u-1",
+    );
+    expect(
+      options.customAccessTokenClaims({
+        user: { id: "u-1" },
+        referenceId: "ws-1",
+      }),
+    ).toEqual({ tas_workspace_id: "ws-1" });
+  });
+
+  it("fails token creation when an MCP consent has no workspace binding", async () => {
+    await loadAuthConfig();
+    const options = mocks.oauthProvider.mock.calls[0][0] as {
+      customAccessTokenClaims: (input: {
+        user?: { id: string };
+        referenceId?: string;
+      }) => Record<string, unknown>;
+    };
+
+    expect(() =>
+      options.customAccessTokenClaims({ user: { id: "u-1" } }),
+    ).toThrow("must be bound to a TAS workspace");
   });
 });

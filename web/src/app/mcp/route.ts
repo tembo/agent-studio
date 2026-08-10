@@ -1,7 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { mcpHandler } from "@better-auth/oauth-provider";
 
-import { authorizeApiRequest } from "@/lib/api-auth";
+import {
+  authorizeApiRequest,
+  authorizeOAuthMcpClaims,
+  type AuthorizeApiSuccess,
+} from "@/lib/api-auth";
+import {
+  MCP_OAUTH_READ_SCOPE,
+  mcpOAuthIssuer,
+  mcpOAuthResource,
+} from "@/lib/mcp-oauth";
 import { buildMcpServer } from "@/lib/mcp/server";
 
 // MCP server endpoint (Streamable HTTP). A client such as Claude Code connects
@@ -10,12 +20,11 @@ import { buildMcpServer } from "@/lib/mcp/server";
 //   claude mcp add --transport http tas https://<host>/mcp \
 //     --header "Authorization: Bearer tas_..."
 //
-// Auth is the same per-user API key as /api/v1 (authorizeApiRequest) — we reject
-// before constructing the server, then pass the resolved {workspace, userId,
-// role} context into buildMcpServer so every tool is pre-scoped. Stateless: a
-// fresh server + transport per POST (sessionIdGenerator undefined), so there's
-// no cross-request state to store in a serverless deployment. enableJsonResponse
-// keeps replies as plain JSON rather than SSE for simple request/response.
+// Header clients may use the same per-user API key as /api/v1. Hosted clients
+// use OAuth 2.1; their signed access token carries the selected workspace and
+// user, then the live membership role is re-read before constructing the
+// server. A fresh server + transport is created per POST (stateless), and
+// enableJsonResponse keeps simple request/response replies as plain JSON.
 //
 // We use the SDK's Web-standard transport (Request -> Response) so this is a
 // native Next.js App Router handler with no Node req/res bridge.
@@ -23,7 +32,48 @@ import { buildMcpServer } from "@/lib/mcp/server";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+async function handleAuthorizedMcpRequest(
+  request: NextRequest,
+  auth: AuthorizeApiSuccess,
+): Promise<Response> {
+  const transport = new WebStandardStreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  const parentRunId = request.headers.get("x-tas-parent-run") ?? undefined;
+  const server = buildMcpServer(auth, { parentRunId });
+  await server.connect(transport);
+  return transport.handleRequest(request);
+}
+
+const handleOAuthMcpRequest = mcpHandler(
+  {
+    jwksUrl: `${mcpOAuthIssuer()}/jwks`,
+    verifyOptions: {
+      issuer: mcpOAuthIssuer(),
+      audience: mcpOAuthResource(),
+    },
+    scopes: [MCP_OAUTH_READ_SCOPE],
+  },
+  async (request, claims) => {
+    const auth = await authorizeOAuthMcpClaims(claims);
+    if (!auth.ok) {
+      return NextResponse.json(
+        { error: auth.error },
+        { status: auth.status },
+      );
+    }
+    return handleAuthorizedMcpRequest(request as NextRequest, auth);
+  },
+);
+
 export async function POST(request: NextRequest): Promise<Response> {
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  const token = /^Bearer\s+(.+)$/i.exec(authorization)?.[1]?.trim();
+  if (!token?.startsWith("tas_")) {
+    return handleOAuthMcpRequest(request);
+  }
+
   // Min role viewer to connect; write tools re-check operator on the resolved
   // context (ctx.role) inside buildMcpServer.
   const auth = await authorizeApiRequest(request, "viewer", "mcp");
@@ -31,16 +81,7 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-    enableJsonResponse: true,
-  });
-  // Set by the runner when an agent calls /mcp from inside its own run, so
-  // trigger_run can record that run as the parent of the run it spawns.
-  const parentRunId = request.headers.get("x-tas-parent-run") ?? undefined;
-  const server = buildMcpServer(auth, { parentRunId });
-  await server.connect(transport);
-  return transport.handleRequest(request);
+  return handleAuthorizedMcpRequest(request, auth);
 }
 
 // Stateless server: no standalone SSE stream and no session to terminate, so GET

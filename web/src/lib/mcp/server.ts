@@ -35,6 +35,7 @@ import { listAutomations } from "@/lib/automations-api";
 import { listConnectionsForUser } from "@/lib/composio-connections";
 import { listNativeConnectionsForUser } from "@/lib/connections";
 import { listToolsForUser } from "@/lib/mcp-tools";
+import { MCP_OAUTH_WRITE_SCOPE } from "@/lib/mcp-oauth";
 import { meetsMinRole } from "@/lib/rbac";
 import { getRun } from "@/lib/runs-api";
 import { listRunsForWorkspace, type RunListFilters } from "@/lib/runs-db";
@@ -47,8 +48,8 @@ import { getAgentByName, listAgents } from "@/lib/workspace-agents";
 // the resolved auth context (which workspace, which acting user, what role) so
 // every tool is already scoped — no tool takes a workspace/user argument.
 //
-// Read tools require viewer (the key already cleared that in authorizeApiRequest);
-// write tools (added in P4) re-check operator via ctx.role.
+// Read tools require viewer (the credential already cleared that in the auth
+// boundary); write tools re-check the live role and, for OAuth, mcp:write.
 
 export type McpContext = AuthorizeApiSuccess;
 
@@ -181,7 +182,7 @@ export function buildMcpServer(
     "list_tools",
     {
       description:
-        "List the cached tool catalog for this API key's user (composio + " +
+        "List the cached tool catalog for the authenticated user (composio + " +
         "native-mcp). Each tool's `slug` is what goes into an agent's " +
         "`connections: tools: [...]` — use this when authoring connections.",
     },
@@ -195,7 +196,7 @@ export function buildMcpServer(
     "list_connections",
     {
       description:
-        "List this API key user's per-user connection status (composio + " +
+        "List the authenticated user's per-user connection status (composio + " +
         "native-mcp): provider, slot name, and whether it's active. Use to " +
         "check an agent's declared connections are authorized before a run. " +
         "No tokens are returned.",
@@ -299,12 +300,18 @@ export function buildMcpServer(
   // ── Write tools (operator) ──────────────────────────────────────────
   // Connecting only required viewer; these re-check operator on the resolved
   // role so a viewer key can read but not act.
-  const isOperator = meetsMinRole(ctx.role, "operator");
+  const oauthAllowsWrite =
+    !ctx.oauthScopes || ctx.oauthScopes.includes(MCP_OAUTH_WRITE_SCOPE);
+  const isOperator =
+    oauthAllowsWrite && meetsMinRole(ctx.role, "operator");
   const operatorOnly = () =>
     errorResult(
-      "This action requires the operator role; this API key's user is a viewer.",
+      !oauthAllowsWrite
+        ? "This OAuth connection did not grant the mcp:write scope. Reconnect it with write access."
+        : "This action requires the operator role; the authenticated user is a viewer.",
     );
-  const isAdmin = meetsMinRole(ctx.role, "workspace_admin");
+  const isAdmin =
+    oauthAllowsWrite && meetsMinRole(ctx.role, "workspace_admin");
   const adminOnly = () =>
     errorResult(
       "This action requires the workspace_admin role.",

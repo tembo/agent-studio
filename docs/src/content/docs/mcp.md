@@ -1,19 +1,40 @@
 ---
 title: MCP server
-description: Connect Claude Code (or any MCP client) to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
+description: Connect Claude Web, Claude Code, or another MCP client to your TAS workspace to read live state and drive it — list agents, validate specs, trigger runs, browse the tool catalog, and manage automations.
 ---
 
 Tembo Agent Studio exposes a **Model Context Protocol (MCP) server** so an AI
-client like **Claude Code** can read and improve your TAS deployment directly.
-The agent definition files already live in your connected Git repo, which Claude
-Code can edit locally — so the MCP server's job is everything that *isn't* in
-Git: live run history and output, the tool catalog, connection status,
-automations, Slack bots, and spec validation, plus the ability to trigger runs
-and hand authoring to the Tembo Coding Agent.
+client like **Claude Web** or **Claude Code** can read and improve your TAS
+deployment directly. The MCP server exposes live run history and output, the
+tool catalog, connection status, automations, Slack bots, and spec validation,
+plus the ability to trigger runs and hand authoring to the Tembo Coding Agent.
+
+## Connect Claude Web
+
+1. Open Claude's custom connector form:
+   - **Pro, Max, or Free:** **Customize → Connectors → Add custom connector**.
+   - **Team or Enterprise owner:** **Organization settings → Connectors → Add
+     → Custom → Web**. Members connect it afterward under **Customize →
+     Connectors**.
+2. Enter:
+   - **Name:** `Tembo TAS`
+   - **Remote MCP server URL:** `https://<your-tas-host>/mcp`
+   - **OAuth Client ID / Secret:** leave both blank
+   - **Individual sign-in:** keep enabled when the form shows it
+3. Click **Add**, then **Connect**. Claude opens TAS: sign in, choose the
+   workspace this connector may access, review the requested access, and click
+   **Allow**. No TAS API key or pre-registered OAuth client is required.
+4. Enable **Tembo TAS** for a conversation and ask Claude to “list my agents” or
+   “show the last failed run's output.”
+
+The TAS host must be publicly reachable over HTTPS, and its `BETTER_AUTH_URL`
+must exactly match that public origin. Each member completes their own OAuth
+flow, acts as their own TAS user, and chooses which workspace to expose.
 
 ## Connect Claude Code
 
-Mint a key under **Settings → API keys**, then:
+The agent definition files live in your connected Git repo, which Claude Code
+can edit locally. Mint a key under **Settings → API keys**, then:
 
 ```bash
 claude mcp add --transport http tas https://<your-tas-host>/mcp \
@@ -27,11 +48,17 @@ works the same way; point it at `https://<your-tas-host>/mcp` with the same
 
 ## Authentication
 
-The MCP server uses the same [personal API keys](/api/) as the REST API. A key
-**acts as you**: tools that run agents use *your* per-user connections, and each
-tool is allowed only if your live workspace role permits it. Read tools need
-**viewer**; write tools (`trigger_run`, `create_automation`,
-`request_agent_change`) need **operator** and return an error for a viewer key.
+Claude Web uses TAS's OAuth 2.1 flow: Dynamic Client Registration, S256 PKCE,
+short-lived signed access tokens, and rotating refresh tokens. The consent flow
+binds the token to one workspace. Claude Code and header-based clients can use
+the same [personal API keys](/api/) as the REST API instead.
+
+Both methods **act as you**: tools that run agents use *your* per-user
+connections, and every request resolves your live workspace role. Read tools
+need **viewer**. Write tools (`trigger_run`, `create_automation`,
+`request_agent_change`) need both the OAuth `mcp:write` scope (when using OAuth)
+and the **operator** role; a viewer cannot gain write access by authorizing a
+connector.
 
 ## Tools
 
@@ -87,4 +114,6 @@ files directly, that's usually the faster path.
   connections *you* authorized. If a run fails on a missing connection, check
   `list_connections` and authorize it under Connections.
 - **The token is shown once.** Revoke or disable a key anytime under Settings →
-  API keys; the change takes effect immediately.
+  API keys; the change takes effect immediately. OAuth clients manage their
+  tokens automatically and can be disconnected from Claude's connector
+  settings.

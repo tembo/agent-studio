@@ -7,12 +7,16 @@ import {
 } from "@/lib/api-keys-db";
 import { meetsMinRole, type WorkspaceRole } from "@/lib/rbac";
 import { getWorkspaceById, getWorkspaceRole, type Workspace } from "@/lib/workspace";
+import {
+  MCP_OAUTH_READ_SCOPE,
+  MCP_OAUTH_WORKSPACE_CLAIM,
+} from "@/lib/mcp-oauth";
 
 // API-client analogue of authorizeWorkspace (lib/auth-server.ts). That helper is
 // session/cookie based; programmatic callers (the /api/v1 REST surface and the
-// /api/mcp server) present `Authorization: Bearer tas_<token>` instead. This is
-// the single auth choke point for BOTH surfaces — route handlers and MCP tools
-// funnel through here so the RBAC policy lives in one place.
+// /api/mcp server) present bearer credentials instead. REST accepts `tas_` API
+// keys; MCP additionally accepts OAuth access-token claims. Both funnel through
+// this module so the live-membership RBAC policy lives in one place.
 //
 // Unlike authorizeWorkspace (which returns a reason enum the caller maps to a
 // status), API callers always want an HTTP status, so we return it directly.
@@ -31,6 +35,7 @@ export type AuthorizeApiSuccess = {
   role: WorkspaceRole;
   apiKeyId: string;
   surface: ApiSurface;
+  oauthScopes?: readonly string[];
 };
 
 export type AuthorizeApiFailure = {
@@ -70,29 +75,79 @@ export async function authorizeApiRequest(
     return UNAUTHORIZED;
   }
 
-  const workspace = await getWorkspaceById(row.workspaceId);
-  if (!workspace) return UNAUTHORIZED; // key outlived its workspace (shouldn't happen — FK cascades)
-
-  // Effective role is the user's LIVE workspace_member role, not anything baked
-  // into the key. Demote or remove the user and the key's power changes at once.
-  const role = await getWorkspaceRole(workspace.id, row.userId);
-  if (!meetsMinRole(role, minRole)) {
-    return {
-      ok: false,
-      status: 403,
-      error: "this API key's user lacks the required role for this action",
-    };
-  }
-
   // Fire-and-forget — never block the request on the usage bump.
   void touchApiKeyLastUsed(row.id);
+  return authorizeProgrammaticIdentity({
+    workspaceId: row.workspaceId,
+    userId: row.userId,
+    minRole,
+    credentialId: row.id,
+    surface,
+    deniedMessage: "this API key's user lacks the required role for this action",
+  });
+}
+
+type OAuthMcpClaims = {
+  sub?: unknown;
+  azp?: unknown;
+  scope?: unknown;
+  [claim: string]: unknown;
+};
+
+export async function authorizeOAuthMcpClaims(
+  claims: OAuthMcpClaims,
+): Promise<AuthorizeApiResult> {
+  const workspaceId = claims[MCP_OAUTH_WORKSPACE_CLAIM];
+  const scopes =
+    typeof claims.scope === "string"
+      ? claims.scope.split(" ").filter(Boolean)
+      : [];
+  if (
+    typeof claims.sub !== "string" ||
+    typeof claims.azp !== "string" ||
+    typeof workspaceId !== "string" ||
+    !scopes.includes(MCP_OAUTH_READ_SCOPE)
+  ) {
+    return UNAUTHORIZED;
+  }
+
+  return authorizeProgrammaticIdentity({
+    workspaceId,
+    userId: claims.sub,
+    minRole: "viewer",
+    credentialId: `oauth:${claims.azp}`,
+    surface: "mcp",
+    oauthScopes: scopes,
+    deniedMessage: "this OAuth token's user lacks access to its TAS workspace",
+  });
+}
+
+async function authorizeProgrammaticIdentity(args: {
+  workspaceId: string;
+  userId: string;
+  minRole: WorkspaceRole;
+  credentialId: string;
+  surface: ApiSurface;
+  oauthScopes?: readonly string[];
+  deniedMessage: string;
+}): Promise<AuthorizeApiResult> {
+  const workspace = await getWorkspaceById(args.workspaceId);
+  if (!workspace) return UNAUTHORIZED;
+
+  // Effective role is always live. Demoting/removing the user changes both API
+  // key and OAuth access immediately, regardless of the credential lifetime.
+  const role = await getWorkspaceRole(workspace.id, args.userId);
+  if (!meetsMinRole(role, args.minRole)) {
+    return { ok: false, status: 403, error: args.deniedMessage };
+  }
 
   return {
     ok: true,
     workspace,
-    userId: row.userId,
+    userId: args.userId,
     role: role as WorkspaceRole,
-    apiKeyId: row.id,
-    surface,
+    apiKeyId: args.credentialId,
+    surface: args.surface,
+    ...(args.oauthScopes ? { oauthScopes: args.oauthScopes } : {}),
   };
 }
