@@ -128,7 +128,7 @@ jobs:
         # Security on private repos; if it's unavailable the table report
         # above is still in the job log, so don't fail the release.
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4.37.4
+        uses: github/codeql-action/upload-sarif@v4.37.7
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: ${{ matrix.image }}
