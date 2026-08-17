@@ -55,6 +55,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: api
+      # Two PRs each adding "the next" migration number merge cleanly but
+      # produce a duplicate sqlx version, which crashes the api at boot and
+      # poisons any database it touches (v2026.8.1 shipped that way).
+      - name: Migration version numbers are unique (blocking)
+        run: |
+          dups=$(ls migrations/*.sql | sed 's|.*/||; s|_.*||' | sort | uniq -d)
+          if [ -n "$dups" ]; then
+            echo "Duplicate migration version(s): $dups"
+            ls migrations/ | grep -E "^($(echo "$dups" | paste -sd'|' -))_"
+            exit 1
+          fi
       - name: Format (blocking)
         run: cargo fmt --check
       # No `-D warnings`: there's a pre-existing clippy lint
