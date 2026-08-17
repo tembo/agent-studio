@@ -14,6 +14,8 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+## [v2026.8.2] — migration 0069 collision fix, per-user MCP OAuth, durable Pydantic runs — shipped 2026-08-17
+
 ### Added
 - **Per-user OAuth for the TAS MCP server.** Claude Web, Claude Desktop, and
   other hosted MCP clients can now discover TAS OAuth metadata, register
@@ -30,6 +32,21 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **v2026.8.1 could not apply database migrations.** That release shipped two
+  migrations both numbered `0069` (`workspace_user_secret` and
+  `instance_admin`), so the api recorded one and crashed applying the other —
+  and afterwards no version could boot against the touched database.
+  `instance_admin` is now `0070`. Upgrading to this release is the fix; if a
+  v2026.8.1 api already ran against your database, first check
+  `SELECT description FROM _sqlx_migrations WHERE version = 69;` — if it says
+  `instance admin`, run `UPDATE _sqlx_migrations SET version = 70 WHERE
+  version = 69;` once before upgrading (the file was renamed with identical
+  content, so the recorded checksum already matches). If it says
+  `workspace user secret`, or there is no row 69, no manual step is needed.
+- **Chat-to-PR tasks could drift to the wrong repository.** Tembo agent tasks
+  now carry an explicit scope block pinning them to the workspace's connected
+  agents repo and default branch, so session context mentioning other repos or
+  prior PRs no longer redirects the change.
 - **Claude showed the Railway logo for the TAS connector.** The MCP initialize
   response now advertises Tembo's display name and a public PNG icon, the icon
   directory bypasses the session gate, and `/favicon.ico` provides a fallback
