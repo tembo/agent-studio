@@ -725,21 +725,76 @@ export async function getWorkspaceStats30d(
   };
 }
 
-/** Workspace-scope sibling of {@link getAgentDailyRunBands30d}. */
+/**
+ * Workspace-scope sibling of {@link getAgentDailyRunBands30d}.
+ *
+ * This one spans every agent in the workspace, so the "bounded at low
+ * thousands" assumption that makes the per-agent JS roll-up cheap doesn't
+ * hold — a busy workspace shipped one row per run to Node on every dashboard
+ * render. The run-length encoding happens in SQL here instead, so the result
+ * set is one row per *band* (what the chart actually draws) rather than one
+ * row per run.
+ */
 export async function getWorkspaceDailyRunBands30d(
   workspaceId: string,
 ): Promise<AgentDailyRunBands[]> {
-  const { rows } = await db.query<RunStatusRow>(
-    `SELECT date_trunc('day', created_at) AS day,
-            status,
-            created_at
-       FROM run
-      WHERE workspace_id = $1
-        AND created_at >= NOW() - INTERVAL '30 days'
-      ORDER BY created_at ASC`,
+  const { rows } = await db.query<{
+    day: Date;
+    status: DailyRunBand["status"];
+    count: string;
+  }>(
+    `WITH normalised AS (
+       SELECT date_trunc('day', created_at) AS day,
+              CASE status
+                WHEN 'succeeded' THEN 'success'
+                WHEN 'failed'    THEN 'failed'
+                ELSE 'other'
+              END AS status,
+              created_at
+         FROM run
+        WHERE workspace_id = $1
+          AND created_at >= NOW() - INTERVAL '30 days'
+     ),
+     -- Flag each run whose status differs from the previous run that day.
+     -- A running sum of those flags numbers the consecutive same-status
+     -- groups, which is exactly the run-length encoding the chart wants.
+     marked AS (
+       SELECT day, status, created_at,
+              CASE
+                WHEN LAG(status) OVER (PARTITION BY day ORDER BY created_at)
+                     IS DISTINCT FROM status
+                THEN 1 ELSE 0
+              END AS starts_band
+         FROM normalised
+     ),
+     banded AS (
+       SELECT day, status, created_at,
+              SUM(starts_band) OVER (
+                PARTITION BY day ORDER BY created_at
+                ROWS UNBOUNDED PRECEDING
+              ) AS band
+         FROM marked
+     )
+     SELECT day, status, COUNT(*)::TEXT AS count
+       FROM banded
+      GROUP BY day, band, status
+      ORDER BY day ASC, MIN(created_at) ASC`,
     [workspaceId],
   );
-  return rowsToBands(rows);
+
+  const out = new Map<string, AgentDailyRunBands>();
+  for (const r of rows) {
+    const day = r.day.toISOString().slice(0, 10);
+    let entry = out.get(day);
+    if (!entry) {
+      entry = { day, bands: [], total: 0 };
+      out.set(day, entry);
+    }
+    const count = Number(r.count);
+    entry.bands.push({ status: r.status, count });
+    entry.total += count;
+  }
+  return Array.from(out.values());
 }
 
 export async function listAgentFailureGroups30d(
