@@ -17,7 +17,10 @@ against your repo. (This needs a Tembo API key in **Settings**.)
 
 The **Improvements** page lists submissions and their status. TAS correlates the
 merged pull request back to your submission, so you can see whether a fix landed
-without leaving the studio. Because the change lands as a reviewable diff in Git
+without leaving the studio. Statuses are reconciled against GitHub whenever you
+open a page that shows improvements, at most once a minute per workspace — so a
+PR you merged moments ago can take up to a minute to show as `Merged`. Because
+the change lands as a reviewable diff in Git
 — a pull request by default (see [delivery mode](#delivery-mode-always-pr-vs-yolo)
 below) — it goes through the same review as any other edit, so the adaptation
 stays governed.
