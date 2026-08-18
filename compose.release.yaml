@@ -43,7 +43,7 @@ services:
       retries: 10
 
   api:
-    image: ghcr.io/${TAS_IMAGE_OWNER:-tembo}/tas-api:${TAS_VERSION:-2026.8.2}
+    image: ghcr.io/${TAS_IMAGE_OWNER:-tembo}/tas-api:${TAS_VERSION:-2026.8.3}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -63,7 +63,7 @@ services:
       start_period: 30s
 
   web:
-    image: ghcr.io/${TAS_IMAGE_OWNER:-tembo}/tas-web:${TAS_VERSION:-2026.8.2}
+    image: ghcr.io/${TAS_IMAGE_OWNER:-tembo}/tas-web:${TAS_VERSION:-2026.8.3}
     restart: unless-stopped
     depends_on:
       api:
