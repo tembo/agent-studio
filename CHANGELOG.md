@@ -14,6 +14,32 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+## [v2026.8.3] — Dashboard load-time fix, duplicate-migration CI guard — shipped 2026-08-18
+
+### Fixed
+- **The workspace dashboard took seconds to render.** Every visit blocked on a
+  full GitHub reconciliation of open improvements before any database query
+  ran: one PR fetch per open improvement — unbounded, so a large backlog drew
+  secondary rate-limit 403s whose answers were then discarded — plus two calls
+  to GitHub's ~30 req/min search endpoints, issued back-to-back. The scan now
+  runs its three paths concurrently, caps PR fetches at 8 in flight, and
+  re-runs at most once a minute per workspace. Improvement PR state is
+  correspondingly at most a minute stale: a PR you merged moments ago can take
+  that long to show as `Merged`.
+- **The dashboard's 30-day activity chart loaded one row per run.** The
+  workspace-wide trend spans every agent, so it shipped the entire 30-day run
+  set to the web tier to run-length-encode in JavaScript. The encoding now
+  happens in SQL and returns one row per band the chart actually draws.
+
+### Changed
+- CI fails a pull request when two migrations share a version number — the
+  defect that made v2026.8.1 unable to boot.
+
+### Dependencies
+- Routine Dependabot bumps across web, api, docs, and CI actions (better-auth,
+  cron-parser, vite, eslint-config-next, `@types/node`, thiserror, base64,
+  Astro, github/codeql-action).
+
 ## [v2026.8.2] — migration 0069 collision fix, per-user MCP OAuth, durable Pydantic runs — shipped 2026-08-17
 
 ### Added
