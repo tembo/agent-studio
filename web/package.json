@@ -17,7 +17,7 @@
     "test:bdd:install": "playwright install --with-deps chromium"
   },
   "dependencies": {
-    "@base-ui/react": "^1.6.0",
+    "@base-ui/react": "^1.7.0",
     "@better-auth/oauth-provider": "^1.6.25",
     "@composio/core": "^0.14.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
