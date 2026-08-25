@@ -72,6 +72,9 @@ pub struct RunContext {
     /// Preserve the original running timestamp across recovery so the built-in
     /// run clock remains stable and duration covers the interruption.
     pub started_at: Option<DateTime<Utc>>,
+    /// Parent run when this execution was launched by another TAS agent. Child
+    /// runs may use capacity reserved for orchestration progress.
+    pub parent_run_id: Option<Uuid>,
 }
 
 struct RunOutcome {
@@ -107,6 +110,7 @@ struct OrphanedRun {
     execution_skills_content: Option<serde_json::Value>,
     message_history: Option<serde_json::Value>,
     started_at: Option<DateTime<Utc>>,
+    parent_run_id: Option<Uuid>,
 }
 
 /// Reconstruct Pydantic runs whose in-memory task disappeared with the prior
@@ -117,7 +121,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
         "SELECT id, workspace_id, created_by, model, user_message, \
                 execution_framework, execution_spec_content, execution_spec_format, \
                 execution_tools_module_content, execution_skills_content, \
-                message_history, started_at \
+                message_history, started_at, parent_run_id \
            FROM run WHERE status IN ('queued', 'running') ORDER BY created_at",
     )
     .fetch_all(&state.db)
@@ -193,6 +197,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
                     skills_content,
                     message_history: row.message_history,
                     started_at: row.started_at,
+                    parent_run_id: row.parent_run_id,
                 },
                 cancel,
             )
@@ -208,9 +213,40 @@ pub async fn recover_orphaned_runs(state: &AppState) {
 pub async fn execute_run(state: &AppState, ctx: RunContext, cancel: CancellationToken) {
     // The handler registered this token synchronously before spawning so
     // shutdown draining cannot miss a queued-but-not-yet-polled run. Always
-    // remove it on exit, so the registry only ever holds genuinely in-flight
-    // runs.
+    // remove it on exit, so the registry only holds accepted, non-terminal
+    // runs from this api process.
     let run_id = ctx.run_id;
+
+    let is_child = ctx.parent_run_id.is_some();
+    let permit = state.run_concurrency.acquire(is_child, &cancel).await;
+    let Some(_permit) = permit else {
+        if cancel.is_cancelled() {
+            tracing::info!(run_id = %run_id, "queued run cancelled before execution capacity was available");
+        } else {
+            tracing::info!(run_id = %run_id, "queued run deferred for recovery during shutdown");
+        }
+        state
+            .run_cancels
+            .lock()
+            .expect("run_cancels mutex poisoned")
+            .remove(&run_id);
+        return;
+    };
+    if cancel.is_cancelled() {
+        state
+            .run_cancels
+            .lock()
+            .expect("run_cancels mutex poisoned")
+            .remove(&run_id);
+        return;
+    }
+    tracing::info!(
+        run_id = %run_id,
+        active_runs = state.run_concurrency.active_runs(),
+        max_concurrent_runs = state.run_concurrency.max_concurrent_runs(),
+        is_child,
+        "run execution slot acquired"
+    );
 
     execute_run_inner(state, ctx, &cancel).await;
 
@@ -223,11 +259,15 @@ pub async fn execute_run(state: &AppState, ctx: RunContext, cancel: Cancellation
 
 async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &CancellationToken) {
     let run_started_at = ctx.started_at.unwrap_or_else(Utc::now);
-    if let Err(e) = mark_running(state, ctx.run_id, run_started_at).await {
-        tracing::error!(run_id = %ctx.run_id, ?e, "mark_running failed");
-        // Best-effort write the failure to the run row so the UI sees it.
-        let _ = mark_failed(state, ctx.run_id, &format!("internal: {e}")).await;
-        return;
+    match mark_running(state, ctx.run_id, run_started_at).await {
+        Ok(true) => {}
+        Ok(false) => return,
+        Err(e) => {
+            tracing::error!(run_id = %ctx.run_id, ?e, "mark_running failed");
+            // Best-effort write the failure to the run row so the UI sees it.
+            let _ = mark_failed(state, ctx.run_id, &format!("internal: {e}")).await;
+            return;
+        }
     }
 
     let (result, tool_calls, steps) = run_inner(state, &ctx, run_started_at, cancel).await;
@@ -723,10 +763,10 @@ async fn mark_running(
     state: &AppState,
     run_id: Uuid,
     started_at: DateTime<Utc>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<bool> {
     // Guard on 'queued': if the run was cancelled in the gap between being
     // queued and starting, leave the 'cancelled' status alone.
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE run SET status = 'running', started_at = $1 \
               WHERE id = $2 AND status = 'queued'",
     )
@@ -734,7 +774,7 @@ async fn mark_running(
     .bind(run_id)
     .execute(&state.db)
     .await?;
-    Ok(())
+    Ok(result.rows_affected() == 1)
 }
 
 async fn mark_succeeded(

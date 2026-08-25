@@ -205,6 +205,7 @@ pub async fn create_run(
                 skills_content,
                 message_history: None,
                 started_at: None,
+                parent_run_id: req.parent_run_id,
             },
             cancel,
         )

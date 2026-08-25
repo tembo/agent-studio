@@ -14,6 +14,15 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+### Fixed
+- **Heavy run bursts no longer spawn unbounded Python processes.** The api now
+  caps simultaneous agent executions (four by default) and leaves excess work
+  queued until capacity opens. One slot is reserved for child agents by default
+  so an orchestrator waiting on a sub-agent cannot occupy every root-run slot.
+  Queued cancellation and shutdown/recovery both honor the same admission gate;
+  operators can tune it with `API_MAX_CONCURRENT_RUNS` and
+  `API_RESERVED_CHILD_RUNS`.
+
 ## [v2026.8.3] — Dashboard load-time fix, duplicate-migration CI guard — shipped 2026-08-18
 
 ### Fixed
