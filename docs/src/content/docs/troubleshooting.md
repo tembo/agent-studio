@@ -10,6 +10,12 @@ failed runs).
 
 ## Common issues
 
+**A run stays queued while other agents are running.**
+The instance has reached its execution limit. It starts automatically when a
+slot opens; operators can tune `API_MAX_CONCURRENT_RUNS` against the API
+service's memory limit. If no runs are active, check the API service logs and
+networking instead.
+
 **"LLM provider needed" / runs won't start.**
 The workspace has no Anthropic or OpenAI key. Add one under
 **Settings → LLM Providers** ([Settings](/agent-studio/settings/)).

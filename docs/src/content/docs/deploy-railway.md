@@ -56,6 +56,8 @@ there's no manual migration step — just hand both services the URL.
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}`. |
 | `TAS_ENCRYPTION_KEY` | 32-byte base64. `openssl rand -base64 32`. **Must match the web service exactly** — web encrypts secrets, api decrypts them. Rotating it orphans every existing workspace secret. |
 | `INTERNAL_API_TOKEN` | Shared bearer the web service sends on `/internal/*`. `openssl rand -base64 32`. **Must match the web service exactly.** |
+| `API_MAX_CONCURRENT_RUNS` | Optional; maximum agents executing in this api service at once (default `4`). Extra runs stay queued. Lower this when Python runner processes approach the service's memory limit. |
+| `API_RESERVED_CHILD_RUNS` | Optional; slots reserved for child agents launched by another run (default `1`, must be lower than the maximum). Set `0` if the instance does not use orchestrators. |
 | `RUST_LOG` | `info,tas_api=debug` is a sensible start. |
 
 Put `TAS_ENCRYPTION_KEY` and `INTERNAL_API_TOKEN` in Railway **shared
@@ -128,8 +130,8 @@ Google redirect URI to match.
 - Connect a GitHub repo (Settings → Repository).
 - Add a Tembo API key (Settings → Tembo API key) for chat-to-PR
   authoring.
-- Trigger one manual run and confirm it lands in `/runs`. A run that
-  queues but never starts means web can't reach api — see below.
+- Trigger one manual run and confirm it lands in `/runs` and starts when an
+  execution slot is available.
 
 ## 5. Operational notes
 
@@ -159,7 +161,8 @@ Google redirect URI to match.
 
 | Symptom | Likely cause |
 | --- | --- |
-| Runs queue but never start. | web can't reach api. On images older than `2026.5.31`, set `API_BIND_ADDR=[::]:8080` on the api service (IPv6 private network). Otherwise check `API_INTERNAL_URL` = `http://<api-service>.railway.internal:8080`. |
+| A run stays queued while other runs are active. | The concurrency cap is full; it starts when a slot opens. Tune `API_MAX_CONCURRENT_RUNS` against service memory. |
+| Run dispatch fails and no run is created. | web may not reach api. On images older than `2026.5.31`, set `API_BIND_ADDR=[::]:8080` on the api service (IPv6 private network). Otherwise check `API_INTERNAL_URL` = `http://<api-service>.railway.internal:8080`. |
 | `/internal/runs` returns 401 in api logs. | `INTERNAL_API_TOKEN` differs between web and api. |
 | `failed to decrypt secret` in api logs. | `TAS_ENCRYPTION_KEY` mismatch — web encrypted with a different key than api holds. |
 | Sign-in succeeds, then a 401 loop. | `BETTER_AUTH_URL` / `NEXT_PUBLIC_BETTER_AUTH_URL` don't match the actual public domain. |

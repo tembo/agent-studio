@@ -13,6 +13,13 @@ Open an agent and use **Run** to execute it once. You can optionally pass an
 input message; agents with no input run their instructions directly. By default
 a run uses the agent's **stable** version; the chat surface runs the live draft.
 
+The API limits how many agents execute simultaneously. When all execution slots
+are occupied, newly accepted runs stay **queued** and start automatically as
+capacity becomes available. Instance operators configure the cap with
+`API_MAX_CONCURRENT_RUNS`; one slot is reserved for child agents by default so
+an orchestrator waiting for a sub-agent cannot consume all root-run capacity.
+Queued runs can be stopped normally before they start.
+
 ## The run detail page
 
 Each run records and displays:

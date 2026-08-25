@@ -21,10 +21,10 @@ mod runs;
 mod slack_mrkdwn;
 mod workspace;
 
-/// Cancellation handles for in-flight runs, keyed by run id. Inserted when a run
-/// starts executing and removed when it finishes; the cancel endpoint fires the
-/// token to kill a running run's subprocess. In-process only (runs are
-/// in-memory tasks on this api instance).
+/// Cancellation handles for queued or running runs, keyed by run id. Inserted
+/// when a run is accepted and removed when it finishes; the cancel endpoint
+/// fires the token to stop permit waiting or kill a running subprocess.
+/// In-process only (runs are in-memory tasks on this api instance).
 pub type RunCancels = Arc<Mutex<HashMap<uuid::Uuid, CancellationToken>>>;
 
 #[derive(Clone)]
@@ -33,6 +33,7 @@ pub struct AppState {
     pub http: reqwest::Client,
     pub encryption_key: Arc<crypto::MasterKey>,
     pub run_cancels: RunCancels,
+    pub run_concurrency: runs::concurrency::RunConcurrency,
     /// Set once a shutdown signal (SIGTERM from a deploy/restart) arrives, so the
     /// run endpoint refuses new work while in-flight runs drain. See main()'s
     /// graceful-shutdown path.
@@ -78,12 +79,19 @@ async fn main() -> anyhow::Result<()> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .context("failed to build reqwest client")?;
+    let run_concurrency = runs::concurrency::RunConcurrency::from_env()?;
+    tracing::info!(
+        max_concurrent_runs = run_concurrency.max_concurrent_runs(),
+        reserved_child_runs = run_concurrency.reserved_child_runs(),
+        "run concurrency configured"
+    );
 
     let state = AppState {
         db,
         http,
         encryption_key,
         run_cancels: Arc::new(Mutex::new(HashMap::new())),
+        run_concurrency,
         draining: Arc::new(AtomicBool::new(false)),
     };
 
@@ -103,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
     // the router.
     let draining = state.draining.clone();
     let run_cancels = state.run_cancels.clone();
+    let run_concurrency = state.run_concurrency.clone();
 
     let app = Router::new()
         .route("/health", get(routes::health::health))
@@ -117,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("tas-api listening on {bind_addr}");
     let listener = tokio::net::TcpListener::bind(bind_addr).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(draining))
+        .with_graceful_shutdown(shutdown_signal(draining, run_concurrency))
         .await?;
 
     // The HTTP server has stopped accepting connections. Runs execute as detached
@@ -148,7 +157,10 @@ fn drain_timeout() -> Duration {
 /// Resolves when the process is asked to stop — SIGTERM (a deploy/restart) or
 /// Ctrl-C locally. Flips `draining` so `create_run` starts refusing new work,
 /// then returns, which tells axum to stop accepting connections.
-async fn shutdown_signal(draining: Arc<AtomicBool>) {
+async fn shutdown_signal(
+    draining: Arc<AtomicBool>,
+    run_concurrency: runs::concurrency::RunConcurrency,
+) {
     let ctrl_c = async {
         let _ = tokio::signal::ctrl_c().await;
     };
@@ -172,6 +184,7 @@ async fn shutdown_signal(draining: Arc<AtomicBool>) {
         _ = terminate => {}
     }
     draining.store(true, Ordering::SeqCst);
+    run_concurrency.close();
     tracing::info!("shutdown signal received — refusing new runs, draining in-flight ones");
 }
 
