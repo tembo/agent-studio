@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -48,6 +50,62 @@ def test_build_agent_constructs_provider_models(spec: dict) -> None:
 
     assert isinstance(agent, Agent)
     assert "get_run_datetime" in agent._function_toolset.tools
+
+
+def test_anthropic_adapter_handles_temperature_with_current_sdk() -> None:
+    """Exercise the provider request boundary without calling Anthropic.
+
+    Anthropic 1.0 removed sampling kwargs from `messages.create`; older
+    Pydantic AI adapters raised TypeError before making the request. The current
+    adapter moves them into the request body instead.
+    """
+    import httpx2
+    from anthropic import AsyncAnthropic
+    from pydantic_ai.models import ModelRequestParameters
+    from pydantic_ai.models.anthropic import AnthropicModel
+    from pydantic_ai.providers.anthropic import AnthropicProvider
+
+    async def exercise_request() -> None:
+        request_body: dict = {}
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            request_body.update(json.loads(request.content))
+            return httpx2.Response(
+                200,
+                json={
+                    "id": "msg_test",
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "ok"}],
+                    "model": "claude-sonnet-4-5",
+                    "stop_reason": "end_turn",
+                    "stop_sequence": None,
+                    "usage": {"input_tokens": 1, "output_tokens": 1},
+                },
+                headers={"x-request-id": "req_test"},
+            )
+
+        async with httpx2.AsyncClient(
+            transport=httpx2.MockTransport(handler)
+        ) as http_client:
+            client = AsyncAnthropic(
+                api_key="test-anthropic-key",
+                http_client=http_client,
+                max_retries=0,
+            )
+            model = AnthropicModel(
+                "claude-sonnet-4-5",
+                provider=AnthropicProvider(anthropic_client=client),
+            )
+            await model.request(
+                [ModelRequest(parts=[UserPromptPart("hello")])],
+                {"temperature": 0.2},
+                ModelRequestParameters(),
+            )
+
+        assert request_body["temperature"] == 0.2
+
+    asyncio.run(exercise_request())
 
 
 def test_build_agent_constructs_with_tools_module() -> None:

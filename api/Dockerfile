@@ -40,24 +40,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install pydantic-ai into a venv so it doesn't fight Debian's
-# PEP-668 system-package lockdown. Pinned the same way cargo-ai is —
-# version bumps go through PR review so we can vet the changelog.
+# PEP-668 system-package lockdown.
 ENV PYDANTIC_AI_VENV=/opt/pydantic-ai
 ENV PYDANTIC_AI_PY="${PYDANTIC_AI_VENV}/bin/python3"
 # pydantic-ai 2.x bundles the MCP client deps (MCPToolset) by default —
 # that's how Composio exposes its toolkits to pydantic-ai at run time.
-# 2.10.0+ is required for Anthropic `pause_turn` continuation: without it,
-# WebSearch runs on Claude die with a 400 ("web_search tool use without a
-# corresponding web_search_tool_result block") when the API pauses a long
-# server-tool turn. `composio` is the Python SDK we use to spin up a
+# Pydantic AI intentionally floats to its current release: its provider
+# adapters move with the Anthropic/OpenAI SDKs, and pinning it left rebuilds on
+# an adapter that did not support Anthropic 1.0. The CI runner smoke test is the
+# compatibility gate. `composio` is the Python SDK we use to spin up a
 # Composio session keyed by workspace + toolkit list and read the
-# MCP URL back. All three are pinned so a rebuild of a given image
-# tag is reproducible — Composio in particular ships frequently and
-# an unpinned bump could break connection-using agents on the next
-# rebuild. Rev versions via PR so we can vet the changelog.
+# MCP URL back; it remains pinned because its session API ships frequently.
 RUN python3 -m venv "${PYDANTIC_AI_VENV}" && \
     "${PYDANTIC_AI_VENV}/bin/pip" install --no-cache-dir \
-        'pydantic-ai==2.13.0' pyyaml==6.0.2 composio==0.13.1 \
+        pydantic-ai pyyaml==6.0.2 composio==0.13.1 \
         pydantic-ai-skills==0.11.0
 
 # Extra deps for agent sidecar tool modules (`tools_module:`). Ships

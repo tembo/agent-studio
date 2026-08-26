@@ -20,6 +20,11 @@ they are no longer release versions. Phase scope now lives in
 ## Unreleased
 
 ### Fixed
+- **Anthropic runs work with the 1.0 Python SDK.** Pydantic AI now floats to
+  the current release instead of staying on 2.13.0, whose Anthropic adapter
+  passed removed sampling kwargs and made every Anthropic run fail before its
+  first request. CI now exercises a mocked provider request with `temperature`
+  so future dependency updates must clear the same boundary production uses.
 - **Heavy run bursts no longer spawn unbounded Python processes.** The api now
   caps simultaneous agent executions (four by default) and leaves excess work
   queued until capacity opens. One slot is reserved for child agents by default
