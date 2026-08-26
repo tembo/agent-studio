@@ -14,6 +14,8 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+## [v2026.8.4] — Agent concurrency + Anthropic runtime fixes — shipped 2026-08-26
+
 ### Fixed
 - **Anthropic 1.0 connections no longer fail on timeout setup.** The runner
   previously built the new `httpx2`-based Anthropic client with an old
