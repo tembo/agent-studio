@@ -41,11 +41,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 import yaml
 
-from anthropic import AsyncAnthropic
 from pydantic_ai import Agent, ModelMessagesTypeAdapter, capture_run_messages
 from pydantic_ai.usage import RunUsage, UsageLimits
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
 
 
 USAGE_SENTINEL = "__TAS_USAGE__:"
@@ -1221,17 +1218,12 @@ def build_agent(
         ms.setdefault("anthropic_cache_instructions", True)
         ms.setdefault("anthropic_cache_tool_definitions", True)
         ms.setdefault("anthropic_cache", True)
-        # Swap the string for an AnthropicModel backed by a client with no read
-        # timeout. The default httpx read timeout is too short for long streaming
-        # turns in multi-step agentic runs and causes ReadTimeout errors mid-run.
-        model = AnthropicModel(
-            model.removeprefix("anthropic:"),
-            provider=AnthropicProvider(
-                anthropic_client=AsyncAnthropic(
-                    timeout=httpx.Timeout(timeout=300.0, connect=10.0)
-                )
-            ),
-        )
+        # Long streaming turns need more than the provider default. Keep this in
+        # Pydantic AI's provider-neutral settings so its Anthropic adapter can
+        # translate the value for the SDK's current transport (`httpx` before
+        # Anthropic 1.0, `httpx2` after) instead of constructing a client with a
+        # transport-specific Timeout object here.
+        ms.setdefault("timeout", 300.0)
     kwargs["model_settings"] = ms
     retries = spec.get("retries")
     if isinstance(retries, int):

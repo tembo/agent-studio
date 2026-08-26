@@ -20,6 +20,13 @@ they are no longer release versions. Phase scope now lives in
 ## Unreleased
 
 ### Fixed
+- **Anthropic 1.0 connections no longer fail on timeout setup.** The runner
+  previously built the new `httpx2`-based Anthropic client with an old
+  `httpx.Timeout`, which reached AnyIO as a delay and raised `float + Timeout`
+  before connecting. The long-read timeout now goes through Pydantic AI's model
+  settings so its provider adapter performs the transport-specific conversion.
+  A loopback integration test now runs a wrapper-built agent through the real
+  TCP and Anthropic streaming stack, covering the path that failed in production.
 - **Anthropic runs work with the 1.0 Python SDK.** Pydantic AI now floats to
   the current release instead of staying on 2.13.0, whose Anthropic adapter
   passed removed sampling kwargs and made every Anthropic run fail before its

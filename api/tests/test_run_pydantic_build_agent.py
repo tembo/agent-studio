@@ -99,13 +99,102 @@ def test_anthropic_adapter_handles_temperature_with_current_sdk() -> None:
             )
             await model.request(
                 [ModelRequest(parts=[UserPromptPart("hello")])],
-                {"temperature": 0.2},
+                {"temperature": 0.2, "timeout": 300.0},
                 ModelRequestParameters(),
             )
 
         assert request_body["temperature"] == 0.2
 
     asyncio.run(exercise_request())
+
+
+def test_wrapper_streams_anthropic_request_over_real_tcp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Run a wrapper-built agent through the SDK's real network transport.
+
+    MockTransport-based tests never call httpcore's TCP backend, so they could
+    not catch the `httpx.Timeout` passed into Anthropic's `httpx2` client. A
+    loopback server exercises the same connect + streaming path as production
+    without sending credentials or traffic outside the test process.
+    """
+    stream_body = b"""event: message_start
+data: {"type":"message_start","message":{"id":"msg_test","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":1}}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+"""
+
+    async def exercise_stream() -> None:
+        request_bodies: list[dict] = []
+
+        async def handle_request(
+            reader: asyncio.StreamReader, writer: asyncio.StreamWriter
+        ) -> None:
+            header_bytes = await reader.readuntil(b"\r\n\r\n")
+            headers: dict[str, str] = {}
+            for line in header_bytes.decode().split("\r\n")[1:]:
+                if ": " in line:
+                    name, value = line.split(": ", 1)
+                    headers[name.lower()] = value
+            request_bytes = await reader.readexactly(
+                int(headers.get("content-length", "0"))
+            )
+            request_bodies.append(json.loads(request_bytes))
+
+            response = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: text/event-stream\r\n"
+                + f"Content-Length: {len(stream_body)}\r\n".encode()
+                + b"Connection: close\r\n\r\n"
+                + stream_body
+            )
+            writer.write(response)
+            await writer.drain()
+            writer.close()
+            await writer.wait_closed()
+
+        server = await asyncio.start_server(handle_request, "127.0.0.1", 0)
+        try:
+            port = server.sockets[0].getsockname()[1]
+            monkeypatch.setenv("ANTHROPIC_BASE_URL", f"http://127.0.0.1:{port}")
+            agent = run_pydantic.build_agent(
+                {
+                    "name": "anthropic-loopback",
+                    "model": "anthropic:claude-sonnet-4-5",
+                    "instructions": "Reply briefly.",
+                    "model_settings": {"temperature": 0.2},
+                }
+            )
+            result = await asyncio.wait_for(
+                agent.run(
+                    "hello",
+                    event_stream_handler=run_pydantic.make_stream_handler(),
+                ),
+                timeout=5,
+            )
+        finally:
+            server.close()
+            await server.wait_closed()
+
+        assert result.output == "ok"
+        assert request_bodies[0]["temperature"] == 0.2
+        assert agent.model_settings["timeout"] == 300.0
+
+    asyncio.run(exercise_stream())
 
 
 def test_build_agent_constructs_with_tools_module() -> None:
@@ -227,6 +316,7 @@ def test_websearch_on_anthropic_skips_parallel_tool_calls_setting() -> None:
         }
     )
     assert plain.model_settings["parallel_tool_calls"] is False
+    assert plain.model_settings["timeout"] == 300.0
 
 
 def test_build_agent_with_scaledown_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
