@@ -6,7 +6,11 @@ const nextConfig: NextConfig = {
   // template; the agent-library starter YAML files). Next.js's tracing won't
   // include raw assets by default, so opt them in here for the standalone build.
   outputFileTracingIncludes: {
-    "*": ["./src/lib/templates/**/*.md", "./src/lib/agent-library/**/*.yaml"],
+    "*": [
+      "./node_modules/@swc/helpers/**/*",
+      "./src/lib/templates/**/*.md",
+      "./src/lib/agent-library/**/*.yaml",
+    ],
   },
 };
 
