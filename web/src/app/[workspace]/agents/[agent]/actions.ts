@@ -125,8 +125,8 @@ export async function runNowAction(
   // input" run that just exercises the agent's instructions).
   const userMessage = String(formData.get("user_message") ?? "");
   const runAsRaw = String(formData.get("run_as") ?? "").trim();
-  // Which version to run. Defaults to the current stable snapshot; "draft"
-  // opts into the live default-branch file.
+  // The manual-run dialog submits its explicit selection. Missing or invalid
+  // values stay on stable as the defensive server-side fallback.
   const preferDraft = String(formData.get("run_version") ?? "") === "draft";
 
   const auth = await authorizeWorkspace(slug, "operator");
@@ -151,8 +151,8 @@ export async function runNowAction(
     actingUserId = runAsRaw;
   }
 
-  // Resolve the spec to run — the current stable snapshot by default, or
-  // the live draft file when the toggle is set (or no stable exists yet).
+  // Resolve the selected spec. With no stable snapshot, dispatch naturally
+  // falls back to the live draft.
   const dispatch = await resolveAgentForDispatch(workspace.id, agentName, {
     preferDraft,
   });
@@ -768,4 +768,3 @@ export async function forkAgentAction(args: {
   revalidatePath(`/${args.workspaceSlug}`, "layout");
   return { ok: true, agentName: result.agentName };
 }
-

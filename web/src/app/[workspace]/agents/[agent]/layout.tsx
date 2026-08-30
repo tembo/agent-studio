@@ -197,7 +197,7 @@ export default async function AgentLayout({
                 agentName={canonicalName}
                 members={runAsMembers}
                 currentUserId={session.user.id}
-                hasStable={stable !== null}
+                stableVersion={stable?.versionNumber}
               />
             )}
           </div>
