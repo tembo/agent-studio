@@ -109,9 +109,11 @@ export function ConnectionsTable({
       sortable: true,
       thClassName: "w-[120px]",
       cell: (r) => (
-        <Badge variant={r.statusVariant} size="small">
-          {r.statusLabel}
-        </Badge>
+        <span title={r.statusDetail ?? undefined}>
+          <Badge variant={r.statusVariant} size="small">
+            {r.statusLabel}
+          </Badge>
+        </span>
       ),
     },
   ];

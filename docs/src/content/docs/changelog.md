@@ -19,6 +19,15 @@ they are no longer release versions. Phase scope now lives in
 
 ## Unreleased
 
+### Fixed
+
+- **Native MCP OAuth refreshes survive rotation and explain failures.**
+  Concurrent runs now serialize refreshes so they cannot spend the same rotating
+  refresh token. Retryable authorization-service failures use bounded backoff;
+  revoked grants, rejected OAuth clients, and unsupported refresh grants are
+  classified separately. Connections retain a sanitized health reason and
+  reconnect action without storing provider response bodies or token values.
+
 ## v2026.8.4 — Agent concurrency + Anthropic runtime fixes
 
 ### Fixed

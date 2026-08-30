@@ -70,6 +70,7 @@ export type ConnectionRow = {
   logoSlug: string | null;
   statusLabel: string;
   statusVariant: StatusVariant;
+  statusDetail: string | null;
 };
 
 function nativeStatusVariant(status: WorkspaceConnection["status"]): StatusVariant {
@@ -117,8 +118,13 @@ export async function listAllConnections(
       slot: c.name,
       typeLabel: "MCP · OAuth",
       logoSlug: c.type,
-      statusLabel: c.status,
-      statusVariant: nativeStatusVariant(c.status),
+      statusLabel:
+        c.status === "active" && c.refreshErrorCode ? "retrying" : c.status,
+      statusVariant:
+        c.status === "active" && c.refreshErrorCode
+          ? "yellow"
+          : nativeStatusVariant(c.status),
+      statusDetail: c.refreshErrorMessage,
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
@@ -132,6 +138,7 @@ export async function listAllConnections(
       logoSlug: c.toolkit,
       statusLabel: c.status.toLowerCase(),
       statusVariant: composioStatusVariant(c.status),
+      statusDetail: null,
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
@@ -151,6 +158,7 @@ export async function listAllConnections(
       logoSlug: null,
       statusLabel: "set",
       statusVariant: "green" as const,
+      statusDetail: null,
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 
@@ -171,6 +179,7 @@ export async function listAllConnections(
       logoSlug: p.slug,
       statusLabel: complete ? "connected" : "incomplete",
       statusVariant: complete ? "green" : "yellow",
+      statusDetail: null,
     });
   }
   manualRows.sort((a, b) => a.title.localeCompare(b.title));
