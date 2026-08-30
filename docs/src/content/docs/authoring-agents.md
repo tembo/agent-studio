@@ -181,6 +181,10 @@ keep your day-to-day view tidy:
   list defaults to **Mine + Starred** — agents you own or starred — with a
   **View all** toggle to see everyone's. Stars are personal; they don't change
   the shared repo or the `labels:` taxonomy.
+- Each row shows a short preview of the agent's `description:`. Hover or focus
+  the preview to read it in full, and use the list search to find agents by
+  description as well as by name. This works in both the personal and full
+  workspace views.
 - **Fork** an agent (the **Fork** button on its page) to make your own editable
   copy. The copy is named with an **owner prefix** — `sales-gen` forked by `ryw`
   becomes **`ryw.sales-gen`** — so two people can each keep their own without a

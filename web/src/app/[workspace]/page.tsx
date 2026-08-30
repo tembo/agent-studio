@@ -196,6 +196,7 @@ export default async function WorkspacePage({
             filename: a.filename,
             name: a.spec.name,
             displayName: agentDisplayName(a.spec),
+            description: a.spec.description?.trim() || null,
             detailHref: `/${workspace.slug}/agents/${encodeURIComponent(a.spec.name)}`,
             frameworkLabel: FRAMEWORK_LABELS[a.spec.framework],
             labels: a.spec.labels,

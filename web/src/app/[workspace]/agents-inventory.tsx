@@ -14,6 +14,10 @@ import { mcpLogoUrl } from "@/lib/mcp-logo";
 import { formatCurrency } from "@/lib/pricing";
 
 import { toggleAgentStarAction } from "./agent-stars-actions";
+import {
+  AgentInventoryNameCell,
+  inventoryAgentSearchText,
+} from "./agent-inventory-name-cell";
 import { dismissPendingCreateAction } from "./inventory-actions";
 
 // Workspace agent inventory. Replaces the card grid (better for ~10
@@ -39,6 +43,8 @@ export type InventoryAgent =
       name: string;
       /** Free-text display name (spec `title:`), falls back to the slug. */
       displayName: string;
+      /** Agent summary from the spec, when present. */
+      description: string | null;
       detailHref: string;
       frameworkLabel: string;
       /** Spec labels (for grouping + Slack-app scoping). */
@@ -198,7 +204,7 @@ export function AgentsInventory({
     const q = query.trim().toLowerCase();
     let rows = q
       ? enriched.filter(({ agent }) =>
-          searchHaystack(agent).toLowerCase().includes(q),
+          inventoryAgentSearchText(agent).toLowerCase().includes(q),
         )
       : enriched;
     if (view === "mine") {
@@ -297,21 +303,7 @@ export function AgentsInventory({
             </span>
           );
         }
-        return (
-          <>
-            <Link
-              href={agent.detailHref}
-              className="text-foreground font-medium hover:underline"
-            >
-              {agent.displayName}
-            </Link>
-            {agent.displayName !== agent.name && (
-              <div className="text-foreground-muted font-mono text-xs">
-                {agent.filename}
-              </div>
-            )}
-          </>
-        );
+        return <AgentInventoryNameCell agent={agent} />;
       },
     },
     {
@@ -891,12 +883,6 @@ function statusBucket(a: InventoryAgent): StatusBucket {
   if (a.lastRun?.status === "failed") return "error";
   if (a.runs30d === 0) return "idle";
   return "active";
-}
-
-function searchHaystack(a: InventoryAgent): string {
-  if (a.kind === "invalid") return a.filename;
-  if (a.kind === "live") return `${a.displayName} ${a.name} ${a.filename}`;
-  return a.name;
 }
 
 function rowKey(a: InventoryAgent): string {
