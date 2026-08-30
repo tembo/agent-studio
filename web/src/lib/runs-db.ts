@@ -194,57 +194,6 @@ export async function listAgentSummaries30d(
   return out;
 }
 
-// Runs that originated from the /chat composer (non-empty
-// user_message). "Run now" runs come through with an empty
-// user_message — they're not part of the conversation thread, so
-// we skip them here. Returns the user message + agent output so
-// the chat UI can render both halves of each turn.
-export interface ChatRun {
-  id: string;
-  agentName: string;
-  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
-  userMessage: string;
-  output: string;
-  errorMessage: string | null;
-  createdAt: Date;
-  completedAt: Date | null;
-}
-
-export async function listChatRunsForAgent(
-  workspaceId: string,
-  agentName: string,
-  limit = 50,
-): Promise<ChatRun[]> {
-  const { rows } = await db.query<{
-    id: string;
-    agent_name: string;
-    status: ChatRun["status"];
-    user_message: string;
-    output: string;
-    failure_summary: string | null;
-    created_at: Date;
-    completed_at: Date | null;
-  }>(
-    `SELECT id, agent_name, status, user_message, output, failure_summary, created_at, completed_at
-       FROM run
-      WHERE workspace_id = $1 AND agent_name = $2
-        AND user_message IS NOT NULL AND user_message <> ''
-      ORDER BY created_at ASC
-      LIMIT $3`,
-    [workspaceId, agentName, limit],
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    agentName: r.agent_name,
-    status: r.status,
-    userMessage: r.user_message,
-    output: r.output,
-    errorMessage: r.failure_summary ?? "The run ended unexpectedly.",
-    createdAt: r.created_at,
-    completedAt: r.completed_at,
-  }));
-}
-
 // Workspace-wide run list with optional filters. Status / trigger
 // arrays use ANY() so an empty array means "no filter" via NULL
 // coalescing on the parameter; agentName is a scalar; search runs an
