@@ -1,5 +1,7 @@
 import "server-only";
 
+import { after } from "next/server";
+
 // On-demand scan that reconciles each open improvement row's PR state with
 // GitHub. Called when the user visits /<workspace>/improvements (and the
 // dashboard / inventory). No webhook infra — trades freshness for simplicity.
@@ -64,12 +66,13 @@ const GH_HEADERS = (token: string) => ({
   "X-GitHub-Api-Version": "2022-11-28",
 });
 
-// Every workspace surface that renders improvement state calls this scan
-// during its server render, and the scan is several GitHub round trips —
+// Every workspace surface that renders improvement state requests this scan,
+// and the scan is several GitHub round trips —
 // two of them on the search endpoints, which are capped at ~30 req/min and
 // routinely take a second each. Unthrottled, a dashboard refresh pays the
-// full cost every time. Re-scanning at most once per window per workspace
-// keeps a merge visible within a minute while making repeat views free.
+// full cost every time if it waits for the result. Re-scanning at most once per
+// window per workspace keeps a merge visible within a minute while making
+// repeat views free.
 //
 // In-process and per-instance on purpose: this throttles redundant work, it
 // doesn't guard correctness, so a second web replica scanning once more per
@@ -82,6 +85,22 @@ const lastScanAt = new Map<string, number>();
 // workspace can have dozens) draws 403s that fetchPull silently swallows, so
 // the scan does the work and throws the answers away. Cap the burst instead.
 const PR_FETCH_CONCURRENCY = 8;
+
+/** Refresh stored GitHub state without holding the current page response open. */
+export function scheduleImprovementScan(
+  workspaceId: string,
+  improvements: Improvement[],
+): void {
+  const hasOpen = improvements.some(
+    (improvement) =>
+      improvement.status !== "merged" && improvement.status !== "closed",
+  );
+  if (!hasOpen) return;
+
+  after(async () => {
+    await scanImprovementsForPRs(workspaceId, improvements);
+  });
+}
 
 async function mapWithConcurrency<T>(
   items: T[],

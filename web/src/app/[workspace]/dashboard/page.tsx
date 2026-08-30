@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { LocalTime } from "@/components/local-time";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
-import { scanImprovementsForPRs } from "@/lib/improvement-scan";
+import { scheduleImprovementScan } from "@/lib/improvement-scan";
 import {
   countImprovementsSince,
   listImprovements,
@@ -49,12 +49,6 @@ export default async function DashboardPage({
   // Server component: compute the rolling window from the request-time clock.
   // eslint-disable-next-line react-hooks/purity
   const since = new Date(Date.now() - WEEK_MS);
-  // Refresh open PR statuses before reading counts so the headline
-  // numbers reflect reality. listOpenImprovements returns every non-
-  // terminal row regardless of age.
-  const open = await listOpenImprovements(workspace.id);
-  await scanImprovementsForPRs(workspace.id, open);
-
   const [
     stats,
     daily,
@@ -66,6 +60,7 @@ export default async function DashboardPage({
     agentsListing,
     agentOwners,
     role,
+    openImprovements,
   ] = await Promise.all([
     getWorkspaceStats30d(workspace.id),
     getWorkspaceDailyRunBands30d(workspace.id),
@@ -77,7 +72,9 @@ export default async function DashboardPage({
     listAgents(workspace.id).catch(() => null),
     listAgentOwners(workspace.id).catch(() => new Map<string, string>()),
     getWorkspaceRole(workspace.id, session.user.id),
+    listOpenImprovements(workspace.id),
   ]);
+  scheduleImprovementScan(workspace.id, openImprovements);
   const isAdmin = role === "workspace_admin";
 
   // Tally agents-owned per member, plus what's left unowned. The live agent
