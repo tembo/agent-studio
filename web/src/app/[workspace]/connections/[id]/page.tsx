@@ -66,6 +66,12 @@ export default async function ConnectionDetailPage({
   let editable = false;
   // Provider-specific "you need an API key with these scopes" note (Attio etc.).
   let auxKeyNote: string | null = null;
+  let refreshHealth: {
+    message: string;
+    retryAt: Date | null;
+    reconnectHref: string;
+    needsReconnect: boolean;
+  } | null = null;
   const rows: { label: string; value: ReactNode }[] = [];
   const actions: ReactNode[] = [];
 
@@ -106,6 +112,14 @@ export default async function ConnectionDetailPage({
     const reconnect = `/api/connections/native/${c.type}/authorize?workspace=${encodeURIComponent(
       workspace.slug,
     )}&${isManual ? "app" : "name"}=${encodeURIComponent(c.name)}`;
+    if (c.refreshErrorMessage) {
+      refreshHealth = {
+        message: c.refreshErrorMessage,
+        retryAt: c.refreshRetryAt,
+        reconnectHref: reconnect,
+        needsReconnect: c.status !== "active",
+      };
+    }
     rows.push(
       { label: "Type", value: "Native MCP" },
       { label: "Connection", value: <code className="text-foreground">{c.name}</code> },
@@ -279,6 +293,32 @@ export default async function ConnectionDetailPage({
           <span className="text-foreground">
             Connection failed{detailParam ? `: ${detailParam}` : "."}
           </span>
+        </div>
+      )}
+
+      {refreshHealth && (
+        <div className="border-sentiment-caution rounded-lg border bg-[var(--color-sentiment-caution-subtle)] px-3 py-2.5 text-sm">
+          <p className="text-foreground font-medium">
+            {refreshHealth.needsReconnect
+              ? "This connection needs attention."
+              : "Token refresh will retry automatically."}
+          </p>
+          <p className="text-foreground-weak mt-1 leading-5">
+            {refreshHealth.message}
+          </p>
+          {!refreshHealth.needsReconnect && refreshHealth.retryAt && (
+            <p className="text-foreground-muted mt-1">
+              Next retry after <LocalTime iso={refreshHealth.retryAt.toISOString()} />.
+            </p>
+          )}
+          {refreshHealth.needsReconnect && !view.viewingOther && (
+            <a
+              href={refreshHealth.reconnectHref}
+              className="text-foreground mt-2 inline-block underline underline-offset-2"
+            >
+              Reconnect now
+            </a>
+          )}
         </div>
       )}
 

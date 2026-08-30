@@ -48,6 +48,11 @@ export type WorkspaceConnection = {
   authType: "oauth2" | "pat";
   status: NativeConnectionStatus;
   tokenExpiresAt: Date | null;
+  refreshErrorCode: string | null;
+  refreshErrorMessage: string | null;
+  refreshErrorAt: Date | null;
+  refreshFailureCount: number;
+  refreshRetryAt: Date | null;
   metadata: Record<string, unknown>;
   /** Whether a supplementary API key is attached (never the value — that's
    *  decrypted only in the runtime, never exposed to the UI). */
@@ -67,6 +72,11 @@ type ConnectionRow = {
   auth_type: string | null;
   status: string;
   token_expires_at: Date | null;
+  refresh_error_code: string | null;
+  refresh_error_message: string | null;
+  refresh_error_at: Date | null;
+  refresh_failure_count: number;
+  refresh_retry_at: Date | null;
   metadata: Record<string, unknown> | null;
   has_api_key: boolean;
   created_by: string;
@@ -75,7 +85,9 @@ type ConnectionRow = {
 };
 
 const COLUMNS = `id, workspace_id, user_id, type, name, mcp_server_url,
-  auth_type, status, token_expires_at, metadata,
+  auth_type, status, token_expires_at,
+  refresh_error_code, refresh_error_message, refresh_error_at,
+  refresh_failure_count, refresh_retry_at, metadata,
   (aux_secret_ciphertext IS NOT NULL) AS has_api_key,
   created_by, created_at, updated_at`;
 
@@ -90,6 +102,11 @@ function rowToConnection(r: ConnectionRow): WorkspaceConnection {
     authType: (r.auth_type as "oauth2" | "pat") ?? "oauth2",
     status: (r.status as NativeConnectionStatus) ?? "active",
     tokenExpiresAt: r.token_expires_at,
+    refreshErrorCode: r.refresh_error_code,
+    refreshErrorMessage: r.refresh_error_message,
+    refreshErrorAt: r.refresh_error_at,
+    refreshFailureCount: r.refresh_failure_count ?? 0,
+    refreshRetryAt: r.refresh_retry_at,
     metadata: r.metadata ?? {},
     hasApiKey: r.has_api_key ?? false,
     createdBy: r.created_by,
@@ -231,6 +248,11 @@ export async function saveNativeConnection(
                      auth_type         = EXCLUDED.auth_type,
                      token_expires_at  = EXCLUDED.token_expires_at,
                      status            = 'active',
+                     refresh_error_code = NULL,
+                     refresh_error_message = NULL,
+                     refresh_error_at = NULL,
+                     refresh_failure_count = 0,
+                     refresh_retry_at = NULL,
                      metadata          = EXCLUDED.metadata,
                      updated_at        = NOW()
        RETURNING ${COLUMNS}`,
@@ -362,4 +384,3 @@ export async function setNativeConnectionAuxSecret(
   );
   return (rowCount ?? 0) > 0;
 }
-

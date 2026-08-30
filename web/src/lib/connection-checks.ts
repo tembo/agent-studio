@@ -25,6 +25,10 @@ export type MissingConnection = {
   source: AgentConnectionSource;
   /** Human label for messages, e.g. "Slack", "Attio", "clay". */
   label: string;
+  /** Present when a matching native connection exists but cannot be used. */
+  connectionStatus?: string;
+  /** Sanitized refresh diagnostic persisted by the runtime. */
+  connectionMessage?: string;
 };
 
 export function labelFor(
@@ -150,6 +154,20 @@ export async function findMissingConnections(
       name: conn.source === "secret" ? "default" : name,
       source: conn.source,
       label: labelFor(toolkit, conn.source),
+      ...(conn.source === "native-mcp"
+        ? (() => {
+            const providerRows = native.filter((c) => c.type === toolkit);
+            const matched =
+              providerRows.find((c) => c.name === name) ??
+              (providerRows.length === 1 ? providerRows[0] : undefined);
+            return matched && matched.status !== "active"
+              ? {
+                  connectionStatus: matched.status,
+                  connectionMessage: matched.refreshErrorMessage ?? undefined,
+                }
+              : {};
+          })()
+        : {}),
     });
   }
   return missing;
@@ -169,6 +187,18 @@ export function missingConnectionsMessage(
   const subject = actingIsSelf
     ? "You haven't connected"
     : "The selected member hasn't connected";
+  const unhealthy = missing.filter((m) => m.connectionStatus);
+  if (unhealthy.length > 0) {
+    const owner = actingIsSelf ? "Your" : "The selected member's";
+    const reasons = Array.from(
+      new Set(unhealthy.map((m) => m.connectionMessage).filter(Boolean)),
+    );
+    const action =
+      reasons.length > 0
+        ? `${reasons.join(" ")} Then run again.`
+        : "Reconnect under Connections, then run again.";
+    return `${owner} connection needs attention: ${labels}. ${action}`;
+  }
   const secretOnly = missing.every((m) => m.source === "secret");
   const where = secretOnly
     ? "Add it under Connections → Secrets"

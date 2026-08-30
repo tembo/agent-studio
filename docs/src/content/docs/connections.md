@@ -91,13 +91,24 @@ connections:
 
 ## Authorizing and reconnecting
 
-Authorize and manage connections under **Connections**. If a credential expires
-or is revoked, the connection is marked stale and runs that need it fail with a
-clear message — reconnect from the same page. Reconnecting a Native MCP account
-normally reuses its existing registered OAuth client instead of consuming
-another provider registration. If a provider rate-limits a first-time
-connection, wait and retry later. See
-[Troubleshooting](/agent-studio/troubleshooting/).
+Authorize and manage connections under **Connections**. Native MCP OAuth tokens
+refresh automatically shortly before they expire. Rotating refresh tokens are
+stored atomically, and temporary authorization-service failures are retried
+without requiring you to reconnect.
+
+When a refresh is temporarily unavailable, the connection shows **Retrying**
+and its detail page shows when another attempt is allowed. If consent was
+revoked, the refresh grant is no longer supported, or the OAuth application is
+invalid, the connection is marked **Stale** or **Revoked** with a safe reason
+and a **Reconnect** action. Runs that require one of those connections are
+blocked with the same actionable reason. Token values and provider response
+bodies are never shown in the health message.
+
+Reconnecting a Native MCP account normally reuses its existing registered OAuth
+client instead of consuming another provider registration. If a provider
+rate-limits a first-time connection, wait and retry later.
+
+See [Troubleshooting](/agent-studio/troubleshooting/).
 
 ### Viewing another member's connections (admins)
 

@@ -10,14 +10,22 @@ vi.mock("@/lib/secret-connections", () => ({
   listSecretConnections: vi.fn(async () => []),
 }));
 
-import { findMissingConnections } from "./connection-checks";
+import {
+  findMissingConnections,
+  missingConnectionsMessage,
+} from "./connection-checks";
 import { listNativeConnectionsForUser } from "@/lib/connections";
 
 const mockNative = vi.mocked(listNativeConnectionsForUser);
 
 // Only the fields findMissingConnections reads.
-function nativeRow(type: string, name: string, status = "active") {
-  return { type, name, status } as Awaited<
+function nativeRow(
+  type: string,
+  name: string,
+  status = "active",
+  refreshErrorMessage: string | null = null,
+) {
+  return { type, name, status, refreshErrorMessage } as Awaited<
     ReturnType<typeof listNativeConnectionsForUser>
   >[number];
 }
@@ -58,5 +66,26 @@ describe("findMissingConnections — native single-connection slot fallback", ()
     mockNative.mockResolvedValue([nativeRow("pylon", "tembo", "stale")]);
     const missing = await findMissingConnections("w", "u", declare("pylon", "default"));
     expect(missing.map((m) => m.toolkit)).toEqual(["pylon"]);
+  });
+
+  it("surfaces the saved refresh reason and reconnect action before a run", async () => {
+    mockNative.mockResolvedValue([
+      nativeRow(
+        "pylon",
+        "tembo",
+        "revoked",
+        "The authorization was revoked or expired. Reconnect this account.",
+      ),
+    ]);
+
+    const missing = await findMissingConnections(
+      "w",
+      "u",
+      declare("pylon", "default"),
+    );
+
+    expect(missingConnectionsMessage(missing, true)).toBe(
+      "Your connection needs attention: Pylon. The authorization was revoked or expired. Reconnect this account. Then run again.",
+    );
   });
 });

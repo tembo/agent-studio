@@ -16,18 +16,19 @@
 //! writes: the encrypted credentials JSON plus the denormalized
 //! `token_expires_at` column.
 //!
-//! Everything is best-effort and per-connection: a failed refresh is
-//! logged and the run proceeds with whatever token is on hand, so a
-//! provider outage can't take down runs that don't touch that
-//! connection. A refresh the provider actively *rejects* (4xx → dead
-//! refresh token) proactively flips the row to 'stale' so the UI
-//! prompts Reconnect rather than waiting for a run to 401.
+//! Everything is per-connection: retryable transport, rate-limit, and
+//! provider failures leave the connection active and record a bounded retry;
+//! revoked grants and client/configuration failures move it to an actionable
+//! stale state. Concurrent runs serialize refreshes so rotating tokens are
+//! spent and persisted exactly once.
 
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, Duration, Utc};
+use reqwest::StatusCode;
 use serde::Deserialize;
 use sqlx::PgPool;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::time::Duration as StdDuration;
 
 use crate::crypto::MasterKey;
 
@@ -35,6 +36,8 @@ use crate::crypto::MasterKey;
 /// so a token can't die mid-run between the sweep and the agent's
 /// first tool call.
 const REFRESH_SKEW_SECS: i64 = 120;
+const MAX_REFRESH_ATTEMPTS: usize = 3;
+const REFRESH_RETRY_BASE_MILLIS: u64 = 150;
 
 // The (mcp_server_url origin → allowed OAuth authorization-server origins)
 // allowlist lives in native_oauth_allowlist.rs, GENERATED from the web catalog
@@ -61,11 +64,106 @@ struct TokenResponse {
     token_type: Option<String>,
 }
 
-/// Refresh every active oauth2 native connection for this
-/// (workspace, user) whose token is at/near expiry and that has a
-/// stored refresh_token. Best-effort: never returns an error for a
-/// single connection's failure — those are logged and swallowed so
-/// the run can continue.
+#[derive(Deserialize, Default)]
+struct OAuthErrorResponse {
+    error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RefreshFailureKind {
+    Temporary,
+    Reconnect,
+    Revoked,
+}
+
+#[derive(Debug)]
+struct RefreshFailure {
+    kind: RefreshFailureKind,
+    code: &'static str,
+    message: &'static str,
+    diagnostic: String,
+}
+
+impl RefreshFailure {
+    fn temporary(code: &'static str, message: &'static str, diagnostic: impl Into<String>) -> Self {
+        Self {
+            kind: RefreshFailureKind::Temporary,
+            code,
+            message,
+            diagnostic: diagnostic.into(),
+        }
+    }
+
+    fn reconnect(code: &'static str, message: &'static str, diagnostic: impl Into<String>) -> Self {
+        Self {
+            kind: RefreshFailureKind::Reconnect,
+            code,
+            message,
+            diagnostic: diagnostic.into(),
+        }
+    }
+
+    fn revoked(diagnostic: impl Into<String>) -> Self {
+        Self {
+            kind: RefreshFailureKind::Revoked,
+            code: "refresh_token_rejected",
+            message: "The authorization was revoked or expired. Reconnect this account.",
+            diagnostic: diagnostic.into(),
+        }
+    }
+}
+
+fn retry_delay(attempt: usize) -> StdDuration {
+    StdDuration::from_millis(REFRESH_RETRY_BASE_MILLIS * (1_u64 << attempt.min(4)))
+}
+
+fn refresh_is_due(
+    status: &str,
+    expires_at: Option<DateTime<Utc>>,
+    retry_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+    threshold: DateTime<Utc>,
+) -> bool {
+    let retry_allowed = retry_at.is_none_or(|retry| retry <= now)
+        || expires_at.is_some_and(|expires| expires <= now);
+    status == "active" && expires_at.is_some_and(|expires| expires < threshold) && retry_allowed
+}
+
+fn classify_refresh_rejection(status: StatusCode, oauth_error: Option<&str>) -> RefreshFailure {
+    if status == StatusCode::REQUEST_TIMEOUT
+        || status == StatusCode::TOO_MANY_REQUESTS
+        || status.is_server_error()
+    {
+        return RefreshFailure::temporary(
+            "refresh_temporarily_unavailable",
+            "The authorization service is temporarily unavailable. Token refresh will retry automatically.",
+            format!("token endpoint returned {status}"),
+        );
+    }
+    match oauth_error {
+        Some("invalid_grant") => RefreshFailure::revoked("token endpoint returned invalid_grant"),
+        Some("unsupported_grant_type") => RefreshFailure::reconnect(
+            "refresh_not_supported",
+            "This authorization no longer supports token refresh. Reconnect this account.",
+            "token endpoint returned unsupported_grant_type",
+        ),
+        Some("invalid_client") | Some("unauthorized_client") => RefreshFailure::reconnect(
+            "oauth_client_rejected",
+            "The OAuth application was rejected. Check its configuration, then reconnect this account.",
+            format!("token endpoint returned {}", oauth_error.unwrap_or("invalid_client")),
+        ),
+        _ => RefreshFailure::reconnect(
+            "refresh_rejected",
+            "The authorization service rejected token refresh. Reconnect this account.",
+            format!("token endpoint returned {status}"),
+        ),
+    }
+}
+
+/// Refresh every active oauth2 native connection for this (workspace, user)
+/// whose token is at/near expiry. Connections are serialized with a
+/// transaction-scoped advisory lock so two simultaneous runs cannot spend the
+/// same rotating refresh token.
 pub async fn refresh_expiring_native_connections(
     pool: &PgPool,
     key: &MasterKey,
@@ -74,20 +172,15 @@ pub async fn refresh_expiring_native_connections(
     user_id: &str,
 ) -> anyhow::Result<()> {
     let threshold = Utc::now() + Duration::seconds(REFRESH_SKEW_SECS);
-    let rows: Vec<(
-        uuid::Uuid,
-        String,
-        String,
-        Option<String>,
-        Vec<u8>,
-        serde_json::Value,
-    )> = sqlx::query_as(
-        "SELECT id, type, name, mcp_server_url, credentials, metadata \
+    let ids: Vec<(uuid::Uuid,)> = sqlx::query_as(
+        "SELECT id \
            FROM workspace_connection \
           WHERE workspace_id = $1 AND user_id = $2 \
             AND status = 'active' AND auth_type = 'oauth2' \
             AND token_expires_at IS NOT NULL \
-            AND token_expires_at < $3",
+            AND token_expires_at < $3 \
+            AND (refresh_retry_at IS NULL OR refresh_retry_at <= now() \
+                 OR token_expires_at <= now())",
     )
     .bind(workspace_id)
     .bind(user_id)
@@ -96,30 +189,128 @@ pub async fn refresh_expiring_native_connections(
     .await
     .context("failed to list native connections for refresh")?;
 
-    for (id, provider, name, mcp_url, ciphertext, metadata) in rows {
-        match refresh_one(
-            pool,
-            key,
-            http,
-            workspace_id,
-            user_id,
-            id,
-            &provider,
-            &name,
-            &mcp_url,
-            &ciphertext,
-            &metadata,
-        )
+    for (id,) in ids {
+        refresh_connection(pool, key, http, workspace_id, user_id, id, threshold).await?;
+    }
+    Ok(())
+}
+
+type RefreshRow = (
+    String,
+    String,
+    Option<String>,
+    Vec<u8>,
+    serde_json::Value,
+    String,
+    Option<DateTime<Utc>>,
+    Option<DateTime<Utc>>,
+);
+
+async fn refresh_connection(
+    pool: &PgPool,
+    key: &MasterKey,
+    http: &reqwest::Client,
+    workspace_id: uuid::Uuid,
+    user_id: &str,
+    id: uuid::Uuid,
+    threshold: DateTime<Utc>,
+) -> anyhow::Result<()> {
+    let mut lock_tx = pool
+        .begin()
         .await
-        {
-            Ok(()) => {
-                tracing::info!(%provider, %name, "refreshed native MCP token before run")
-            }
-            Err(e) => {
-                tracing::warn!(?e, %provider, %name, "native MCP token refresh failed; leaving token as-is")
-            }
+        .context("begin refresh lock transaction")?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(id.to_string())
+        .execute(&mut *lock_tx)
+        .await
+        .context("lock native connection refresh")?;
+
+    let row: Option<RefreshRow> = sqlx::query_as(
+        "SELECT type, name, mcp_server_url, credentials, metadata, status, \
+                token_expires_at, refresh_retry_at \
+           FROM workspace_connection \
+          WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
+    )
+    .bind(id)
+    .bind(workspace_id)
+    .bind(user_id)
+    .fetch_optional(&mut *lock_tx)
+    .await
+    .context("reload native connection for refresh")?;
+
+    let Some((provider, name, mcp_url, ciphertext, metadata, status, expires_at, retry_at)) = row
+    else {
+        lock_tx.commit().await?;
+        return Ok(());
+    };
+    let now = Utc::now();
+    let due = refresh_is_due(&status, expires_at, retry_at, now, threshold);
+    if !due {
+        lock_tx.commit().await?;
+        return Ok(());
+    }
+
+    match refresh_one(
+        pool,
+        key,
+        http,
+        workspace_id,
+        user_id,
+        id,
+        &provider,
+        &name,
+        &mcp_url,
+        &ciphertext,
+        &metadata,
+    )
+    .await
+    {
+        Ok(()) => tracing::info!(%provider, %name, "refreshed native MCP token before run"),
+        Err(failure) => {
+            record_refresh_failure(pool, id, &failure).await?;
+            tracing::warn!(
+                provider,
+                name,
+                error_code = failure.code,
+                diagnostic = failure.diagnostic,
+                "native MCP token refresh failed"
+            );
         }
     }
+    lock_tx
+        .commit()
+        .await
+        .context("release native refresh lock")?;
+    Ok(())
+}
+
+async fn record_refresh_failure(
+    pool: &PgPool,
+    id: uuid::Uuid,
+    failure: &RefreshFailure,
+) -> anyhow::Result<()> {
+    let status = match failure.kind {
+        RefreshFailureKind::Temporary => "active",
+        RefreshFailureKind::Reconnect => "stale",
+        RefreshFailureKind::Revoked => "revoked",
+    };
+    let retry_at =
+        (failure.kind == RefreshFailureKind::Temporary).then(|| Utc::now() + Duration::seconds(30));
+    sqlx::query(
+        "UPDATE workspace_connection \
+            SET status = $2, refresh_error_code = $3, refresh_error_message = $4, \
+                refresh_error_at = now(), refresh_failure_count = refresh_failure_count + 1, \
+                refresh_retry_at = $5, updated_at = now() \
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(status)
+    .bind(failure.code)
+    .bind(failure.message)
+    .bind(retry_at)
+    .execute(pool)
+    .await
+    .context("persist native refresh failure")?;
     Ok(())
 }
 
@@ -136,23 +327,46 @@ async fn refresh_one(
     mcp_url: &Option<String>,
     ciphertext: &[u8],
     metadata: &serde_json::Value,
-) -> anyhow::Result<()> {
+) -> Result<(), RefreshFailure> {
     let mcp_url = mcp_url
         .as_deref()
         .filter(|u| !u.is_empty())
-        .ok_or_else(|| anyhow!("connection has no mcp_server_url"))?;
+        .ok_or_else(|| {
+            RefreshFailure::reconnect(
+                "connection_configuration_invalid",
+                "This connection is missing its service URL. Reconnect this account.",
+                "connection has no mcp_server_url",
+            )
+        })?;
 
     let conn_aad = crate::crypto::aad::native_connection(workspace_id, user_id, provider, name);
     let plaintext = key
         .decrypt_aad(ciphertext, conn_aad.as_bytes())
-        .context("decrypt credentials")?;
-    let creds: serde_json::Value =
-        serde_json::from_str(&plaintext).context("credentials not JSON")?;
+        .map_err(|_| {
+            RefreshFailure::reconnect(
+                "stored_credentials_invalid",
+                "Stored authorization data could not be read. Reconnect this account.",
+                "decrypt credentials failed",
+            )
+        })?;
+    let creds: serde_json::Value = serde_json::from_str(&plaintext).map_err(|_| {
+        RefreshFailure::reconnect(
+            "stored_credentials_invalid",
+            "Stored authorization data could not be read. Reconnect this account.",
+            "credentials are not valid JSON",
+        )
+    })?;
     let refresh_token = creds
         .get("refresh_token")
         .and_then(|v| v.as_str())
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow!("no refresh_token stored — reconnect required"))?;
+        .ok_or_else(|| {
+            RefreshFailure::reconnect(
+                "refresh_token_missing",
+                "This authorization cannot renew automatically. Reconnect this account to grant offline access.",
+                "no refresh_token stored",
+            )
+        })?;
     // The client identity the refresh exchange presents:
     //  - manual (HubSpot): BYO client_id + client_secret from
     //    workspace_native_oauth_client → client_secret_post by default, or
@@ -172,8 +386,21 @@ async fn refresh_one(
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
                 .unwrap_or("default");
-            let (cid, secret) =
-                native_oauth_client_secret(pool, key, workspace_id, provider, instance).await?;
+            let (cid, secret) = native_oauth_client_secret(
+                pool,
+                key,
+                workspace_id,
+                provider,
+                instance,
+            )
+            .await
+            .map_err(|_| {
+                RefreshFailure::reconnect(
+                    "oauth_client_missing",
+                    "The OAuth application is no longer configured. Restore it, then reconnect this account.",
+                    "workspace OAuth client is missing or unreadable",
+                )
+            })?;
             let basic = metadata
                 .get("token_endpoint_auth_method")
                 .and_then(|v| v.as_str())
@@ -185,13 +412,25 @@ async fn refresh_one(
                 .get("client_id")
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| anyhow!("dcr_confidential connection has no client_id stored"))?
+                .ok_or_else(|| {
+                    RefreshFailure::reconnect(
+                        "stored_credentials_invalid",
+                        "Stored authorization data is incomplete. Reconnect this account.",
+                        "dcr_confidential connection has no client_id",
+                    )
+                })?
                 .to_string();
             let secret = creds
                 .get("client_secret")
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| anyhow!("dcr_confidential connection has no client_secret stored"))?
+                .ok_or_else(|| {
+                    RefreshFailure::reconnect(
+                        "stored_credentials_invalid",
+                        "Stored authorization data is incomplete. Reconnect this account.",
+                        "dcr_confidential connection has no client_secret",
+                    )
+                })?
                 .to_string();
             (cid, Some(secret), true)
         }
@@ -200,7 +439,13 @@ async fn refresh_one(
                 .get("dcr_client_id")
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
-                .ok_or_else(|| anyhow!("no dcr_client_id in connection metadata"))?
+                .ok_or_else(|| {
+                    RefreshFailure::reconnect(
+                        "stored_credentials_invalid",
+                        "Stored authorization data is incomplete. Reconnect this account.",
+                        "connection metadata has no dcr_client_id",
+                    )
+                })?
                 .to_string();
             (cid, None, false)
         }
@@ -210,95 +455,111 @@ async fn refresh_one(
         .get("instance_based")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let token_endpoint = discover_token_endpoint(http, mcp_url, instance_based).await?;
+    let token_endpoint = discover_token_endpoint(http, mcp_url, instance_based)
+        .await
+        .map_err(|_| {
+            RefreshFailure::temporary(
+                "oauth_discovery_failed",
+                "The authorization service could not be reached. Token refresh will retry automatically.",
+                "OAuth endpoint discovery failed",
+            )
+        })?;
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh_token),
         ("client_id", client_id.as_str()),
     ];
-    let mut req = http
-        .post(token_endpoint)
-        .header("Accept", "application/json");
-    // Confidential client auth: dcr_confidential uses HTTP Basic (Avoma's default);
-    // manual uses client_secret_post (in the body). Public sends neither.
+    // Confidential client auth: dcr_confidential uses HTTP Basic; manual uses
+    // client_secret_post unless provider metadata requires Basic. Retry only
+    // transport/429/5xx failures; OAuth rejections are deterministic.
     if let Some(ref secret) = client_secret {
-        if use_basic {
-            req = req.basic_auth(client_id.as_str(), Some(secret.as_str()));
-        } else {
+        if !use_basic {
             form.push(("client_secret", secret.as_str()));
         }
     }
-    let res = req
-        .form(&form)
-        .send()
-        .await
-        .context("refresh request failed")?;
-
-    let status = res.status();
-    if !status.is_success() {
-        let body = res.text().await.unwrap_or_default();
-        // 4xx means the refresh token itself is dead (revoked or
-        // expired). Proactively flip to 'stale' so the Connections
-        // page prompts Reconnect instead of letting the run 401.
-        // 5xx/transient: leave the row active and try again next run.
-        if status.is_client_error() {
-            let _ = sqlx::query(
-                "UPDATE workspace_connection \
-                    SET status = 'stale', updated_at = now() WHERE id = $1",
-            )
-            .bind(id)
-            .execute(pool)
-            .await;
+    let res = {
+        let mut successful = None;
+        let mut last_failure = None;
+        for attempt in 0..MAX_REFRESH_ATTEMPTS {
+            let mut req = http
+                .post(token_endpoint.clone())
+                .header("Accept", "application/json");
+            if use_basic {
+                if let Some(ref secret) = client_secret {
+                    req = req.basic_auth(client_id.as_str(), Some(secret.as_str()));
+                }
+            }
+            match req.form(&form).send().await {
+                Ok(response) if response.status().is_success() => {
+                    successful = Some(response);
+                    break;
+                }
+                Ok(response) => {
+                    let status = response.status();
+                    let oauth_error = response
+                        .json::<OAuthErrorResponse>()
+                        .await
+                        .ok()
+                        .and_then(|body| body.error);
+                    let failure = classify_refresh_rejection(status, oauth_error.as_deref());
+                    if failure.kind != RefreshFailureKind::Temporary
+                        || attempt + 1 == MAX_REFRESH_ATTEMPTS
+                    {
+                        return Err(failure);
+                    }
+                    last_failure = Some(failure);
+                }
+                Err(_) => {
+                    let failure = RefreshFailure::temporary(
+                        "refresh_temporarily_unavailable",
+                        "The authorization service is temporarily unavailable. Token refresh will retry automatically.",
+                        "token refresh request failed",
+                    );
+                    if attempt + 1 == MAX_REFRESH_ATTEMPTS {
+                        return Err(failure);
+                    }
+                    last_failure = Some(failure);
+                }
+            }
+            tokio::time::sleep(retry_delay(attempt)).await;
         }
-        return Err(anyhow!(
-            "refresh rejected ({status}): {}",
-            body.chars().take(200).collect::<String>()
-        ));
-    }
+        successful.ok_or_else(|| {
+            last_failure.unwrap_or_else(|| {
+                RefreshFailure::temporary(
+                    "refresh_temporarily_unavailable",
+                    "The authorization service is temporarily unavailable. Token refresh will retry automatically.",
+                    "token refresh exhausted retries",
+                )
+            })
+        })?
+    };
 
-    let token: TokenResponse = res.json().await.context("refresh response not JSON")?;
-    let access_token = token
-        .access_token
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| anyhow!("refresh response had no access_token"))?;
-    // Rotate the refresh token if the server issued a new one
-    // (OAuth servers commonly do); otherwise the prior one stays
-    // valid and we keep it.
-    let new_refresh = token
-        .refresh_token
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| refresh_token.to_string());
-    let expires_at: Option<DateTime<Utc>> = token
-        .expires_in
-        .map(|secs| Utc::now() + Duration::seconds(secs));
-
-    // Same JSON shape as the web `ConnectionCredentials` / what
-    // saveNativeConnection persists, so a blob written here round-trips
-    // through the web layer unchanged.
-    let mut new_creds = serde_json::json!({
-        "access_token": access_token,
-        "refresh_token": new_refresh,
-        "expires_at": expires_at.map(|t| t.to_rfc3339()),
-        "scope": token.scope,
-        "token_type": token.token_type,
-    });
-    // dcr_confidential stores its client_id/secret in the blob — this rewrite
-    // would drop them, so carry them forward for the next refresh.
-    if auth_mode == Some("dcr_confidential") {
-        if let Some(ref secret) = client_secret {
-            new_creds["client_id"] = serde_json::Value::String(client_id.clone());
-            new_creds["client_secret"] = serde_json::Value::String(secret.clone());
-        }
-    }
+    let token: TokenResponse = res.json().await.map_err(|_| {
+        RefreshFailure::temporary(
+            "refresh_response_invalid",
+            "The authorization service returned an invalid response. Token refresh will retry automatically.",
+            "refresh response was not valid JSON",
+        )
+    })?;
+    let (new_creds, expires_at) = merge_refreshed_credentials(&creds, token, Utc::now())?;
     let blob = key
         .encrypt_aad(&new_creds.to_string(), conn_aad.as_bytes())
-        .context("encrypt refreshed credentials")?;
+        .map_err(|_| {
+            RefreshFailure::temporary(
+                "refresh_storage_failed",
+                "The refreshed authorization could not be stored. Token refresh will retry automatically.",
+                "encrypt refreshed credentials failed",
+            )
+        })?;
 
     sqlx::query(
         "UPDATE workspace_connection \
             SET credentials = $1, token_expires_at = $2, \
-                status = 'active', updated_at = now() \
+                status = 'active', refresh_error_code = NULL, \
+                refresh_error_message = NULL, refresh_error_at = NULL, \
+                refresh_failure_count = 0, refresh_retry_at = NULL, \
+                updated_at = now() \
           WHERE id = $3",
     )
     .bind(blob)
@@ -306,9 +567,70 @@ async fn refresh_one(
     .bind(id)
     .execute(pool)
     .await
-    .context("failed to persist refreshed credentials")?;
+    .map_err(|_| {
+        RefreshFailure::temporary(
+            "refresh_storage_failed",
+            "The refreshed authorization could not be stored. Token refresh will retry automatically.",
+            "persist refreshed credentials failed",
+        )
+    })?;
 
     Ok(())
+}
+
+fn merge_refreshed_credentials(
+    current: &serde_json::Value,
+    token: TokenResponse,
+    now: DateTime<Utc>,
+) -> Result<(serde_json::Value, Option<DateTime<Utc>>), RefreshFailure> {
+    let mut merged = current.as_object().cloned().ok_or_else(|| {
+        RefreshFailure::reconnect(
+            "stored_credentials_invalid",
+            "Stored authorization data could not be read. Reconnect this account.",
+            "credentials are not a JSON object",
+        )
+    })?;
+    let access_token = token
+        .access_token
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| {
+            RefreshFailure::temporary(
+                "refresh_response_invalid",
+                "The authorization service returned an invalid response. Token refresh will retry automatically.",
+                "refresh response had no access_token",
+            )
+        })?;
+    merged.insert(
+        "access_token".to_string(),
+        serde_json::Value::String(access_token),
+    );
+    if let Some(refresh_token) = token.refresh_token.filter(|value| !value.is_empty()) {
+        merged.insert(
+            "refresh_token".to_string(),
+            serde_json::Value::String(refresh_token),
+        );
+    }
+    if let Some(scope) = token.scope {
+        merged.insert("scope".to_string(), serde_json::Value::String(scope));
+    }
+    if let Some(token_type) = token.token_type {
+        merged.insert(
+            "token_type".to_string(),
+            serde_json::Value::String(token_type),
+        );
+    }
+    let expires_at = token
+        .expires_in
+        .map(|seconds| now + Duration::seconds(seconds));
+    if let Some(expires_at) = expires_at {
+        merged.insert(
+            "expires_at".to_string(),
+            serde_json::Value::String(expires_at.to_rfc3339()),
+        );
+    } else {
+        merged.remove("expires_at");
+    }
+    Ok((serde_json::Value::Object(merged), expires_at))
 }
 
 /// Read + decrypt the bring-your-own OAuth client (client_id + client_secret)
@@ -619,5 +941,119 @@ mod tests {
             "token endpoint"
         )
         .is_err());
+    }
+
+    #[test]
+    fn refresh_replaces_expired_access_and_rotated_refresh_tokens() {
+        let now = DateTime::parse_from_rfc3339("2026-08-30T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let current = serde_json::json!({
+            "access_token": "old-access",
+            "refresh_token": "old-refresh",
+            "client_id": "keep-client",
+            "client_secret": "keep-secret",
+            "custom": "keep-custom"
+        });
+        let token = TokenResponse {
+            access_token: Some("new-access".to_string()),
+            refresh_token: Some("new-refresh".to_string()),
+            expires_in: Some(3600),
+            scope: Some("read write".to_string()),
+            token_type: Some("Bearer".to_string()),
+        };
+
+        let (merged, expires_at) = merge_refreshed_credentials(&current, token, now).unwrap();
+
+        assert_eq!(merged["access_token"], "new-access");
+        assert_eq!(merged["refresh_token"], "new-refresh");
+        assert_eq!(merged["client_id"], "keep-client");
+        assert_eq!(merged["client_secret"], "keep-secret");
+        assert_eq!(merged["custom"], "keep-custom");
+        assert_eq!(expires_at, Some(now + Duration::seconds(3600)));
+    }
+
+    #[test]
+    fn expiry_triggers_refresh_and_bypasses_transient_retry_delay() {
+        let now = DateTime::parse_from_rfc3339("2026-08-30T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let threshold = now + Duration::seconds(REFRESH_SKEW_SECS);
+
+        assert!(refresh_is_due(
+            "active",
+            Some(now - Duration::seconds(1)),
+            Some(now + Duration::minutes(5)),
+            now,
+            threshold,
+        ));
+        assert!(!refresh_is_due(
+            "active",
+            Some(now + Duration::seconds(60)),
+            Some(now + Duration::minutes(5)),
+            now,
+            threshold,
+        ));
+        assert!(!refresh_is_due(
+            "active",
+            Some(now + Duration::minutes(10)),
+            None,
+            now,
+            threshold,
+        ));
+    }
+
+    #[test]
+    fn refresh_keeps_existing_refresh_token_when_server_does_not_rotate() {
+        let current = serde_json::json!({
+            "access_token": "old-access",
+            "refresh_token": "keep-refresh"
+        });
+        let token = TokenResponse {
+            access_token: Some("new-access".to_string()),
+            refresh_token: None,
+            expires_in: None,
+            scope: None,
+            token_type: None,
+        };
+
+        let (merged, expires_at) =
+            merge_refreshed_credentials(&current, token, Utc::now()).unwrap();
+
+        assert_eq!(merged["refresh_token"], "keep-refresh");
+        assert_eq!(expires_at, None);
+        assert!(merged.get("expires_at").is_none());
+    }
+
+    #[test]
+    fn invalid_grant_is_revoked_without_storing_provider_description() {
+        let failure = classify_refresh_rejection(StatusCode::BAD_REQUEST, Some("invalid_grant"));
+
+        assert_eq!(failure.kind, RefreshFailureKind::Revoked);
+        assert_eq!(failure.code, "refresh_token_rejected");
+        assert!(!failure.message.contains("invalid_grant"));
+    }
+
+    #[test]
+    fn rate_limits_and_server_errors_are_retryable() {
+        for status in [
+            StatusCode::REQUEST_TIMEOUT,
+            StatusCode::TOO_MANY_REQUESTS,
+            StatusCode::BAD_GATEWAY,
+        ] {
+            let failure = classify_refresh_rejection(status, None);
+            assert_eq!(failure.kind, RefreshFailureKind::Temporary);
+            assert_eq!(failure.code, "refresh_temporarily_unavailable");
+        }
+        assert!(retry_delay(1) > retry_delay(0));
+    }
+
+    #[test]
+    fn unsupported_refresh_requires_reconnect() {
+        let failure =
+            classify_refresh_rejection(StatusCode::BAD_REQUEST, Some("unsupported_grant_type"));
+
+        assert_eq!(failure.kind, RefreshFailureKind::Reconnect);
+        assert_eq!(failure.code, "refresh_not_supported");
     }
 }
