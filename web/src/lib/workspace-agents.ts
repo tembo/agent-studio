@@ -6,6 +6,7 @@ import {
   ownerHandle,
   parseAgentContent,
   parseAgentFile,
+  validateAgentName,
   type AgentConnection,
   type AgentFileFormat,
   type AgentSpec,
@@ -43,6 +44,12 @@ const FRAMEWORK_DIRS: Record<Framework, string> = {
 };
 
 const FRAMEWORK_DIR_VALUES = Object.values(FRAMEWORK_DIRS);
+
+const DIRECT_AGENT_FILES = [
+  { dir: FRAMEWORK_DIRS["pydantic-agentspec"], extension: "yaml" },
+  { dir: FRAMEWORK_DIRS["pydantic-agentspec"], extension: "yml" },
+  { dir: FRAMEWORK_DIRS["cargo-ai"], extension: "json" },
+] as const;
 
 // ── Sidecar tools module ─────────────────────────────────────────────
 //
@@ -215,6 +222,31 @@ type AgentLookupResult =
   | { ok: true; found: AgentRecord | null }
   | { ok: false; error: AgentSourceError; detail?: string };
 
+function listedAgentFromContent(
+  filename: string,
+  path: string,
+  content: string,
+): ListedAgent {
+  const parsed = parseAgentFile(filename, content);
+  if (!parsed.ok) {
+    return {
+      filename,
+      path,
+      format: detectFormat(filename),
+      ok: false,
+      error: parsed.error,
+      detail: parsed.detail,
+    };
+  }
+  return {
+    filename,
+    path,
+    format: parsed.format,
+    ok: true,
+    spec: parsed.spec,
+  };
+}
+
 /**
  * Walk the connected repo's `agents/` tree and parse every file we find.
  *
@@ -266,24 +298,7 @@ export async function listAgents(workspaceId: string): Promise<ListAgentsResult>
           detail: read.detail ?? read.error,
         };
       }
-      const parsed = parseAgentFile(entry.name, read.content);
-      if (!parsed.ok) {
-        return {
-          filename: entry.name,
-          path: entry.path,
-          format: detectFormat(entry.name),
-          ok: false,
-          error: parsed.error,
-          detail: parsed.detail,
-        };
-      }
-      return {
-        filename: entry.name,
-        path: entry.path,
-        format: parsed.format,
-        ok: true,
-        spec: parsed.spec,
-      };
+      return listedAgentFromContent(entry.name, entry.path, read.content);
     }),
   );
 
@@ -309,22 +324,58 @@ async function lookupAgentByName(
   workspaceId: string,
   agentName: string,
 ): Promise<AgentLookupResult> {
-  const list = await listAgents(workspaceId);
-  if (!list.ok) return list;
-
-  const match = list.agents.find((a) => {
-    if (a.ok) return a.spec.name === agentName;
-    const base = a.filename.replace(/\.(yaml|yml|json)$/i, "");
-    return base === agentName;
-  });
-  if (!match) return { ok: true, found: null };
-
   const reader = await resolveAgentReader(workspaceId);
   if (!reader) return { ok: false, error: "no-repo" };
-  const read = await reader.readFile(match.path);
-  if (!read.ok) {
-    if (read.error === "not-found") return { ok: true, found: null };
-    return { ok: false, error: read.error, detail: read.detail };
+
+  let match: ListedAgent | undefined;
+  let raw: string | undefined;
+
+  // Agent files normally share their validated agent name. Resolve those
+  // canonical paths directly so opening one agent doesn't read every file in
+  // a large repository. The inventory fallback preserves support for legacy
+  // files whose filename differs from their declared name.
+  if (validateAgentName(agentName)) {
+    const candidates = await Promise.all(
+      DIRECT_AGENT_FILES.map(async ({ dir, extension }) => {
+        const filename = `${agentName}.${extension}`;
+        const path = `${AGENTS_DIR}/${dir}/${filename}`;
+        return { filename, path, read: await reader.readFile(path) };
+      }),
+    );
+    for (const candidate of candidates) {
+      if (!candidate.read.ok) continue;
+      const agent = listedAgentFromContent(
+        candidate.filename,
+        candidate.path,
+        candidate.read.content,
+      );
+      if (!agent.ok || agent.spec.name === agentName) {
+        match = agent;
+        raw = candidate.read.content;
+        break;
+      }
+    }
+  }
+
+  if (!match) {
+    const list = await listAgents(workspaceId);
+    if (!list.ok) return list;
+
+    match = list.agents.find((agent) => {
+      if (agent.ok) return agent.spec.name === agentName;
+      const base = agent.filename.replace(/\.(yaml|yml|json)$/i, "");
+      return base === agentName;
+    });
+    if (!match) return { ok: true, found: null };
+  }
+
+  if (raw === undefined) {
+    const read = await reader.readFile(match.path);
+    if (!read.ok) {
+      if (read.error === "not-found") return { ok: true, found: null };
+      return { ok: false, error: read.error, detail: read.detail };
+    }
+    raw = read.content;
   }
 
   let toolsModuleContent: string | undefined;
@@ -345,7 +396,7 @@ async function lookupAgentByName(
     ok: true,
     found: {
       agent: match,
-      raw: read.content,
+      raw,
       toolsModuleContent,
       skillsContent,
     },
