@@ -1,6 +1,7 @@
 import "server-only";
 
 import { notFound, redirect } from "next/navigation";
+import { cache } from "react";
 
 import { isAgentLocked } from "@/lib/agent-lock";
 import { getServerSession } from "@/lib/session";
@@ -28,7 +29,7 @@ export type AgentPageContext = {
   locked: boolean;
 };
 
-export async function loadAgentContext(
+export const loadAgentContext = cache(async function loadAgentContext(
   slug: string,
   agentName: string,
 ): Promise<AgentPageContext> {
@@ -62,4 +63,4 @@ export async function loadAgentContext(
     canonicalName,
     locked,
   };
-}
+});
