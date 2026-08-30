@@ -5,6 +5,7 @@ vi.mock("@/lib/api-v1/actions", () => ({
 }));
 vi.mock("@/lib/automations-api", () => ({
   listEnabledAutomations: vi.fn(),
+  pauseAutomationsWithMissingOwners: vi.fn().mockResolvedValue(0),
   setAutomationFired: vi.fn(),
   setAutomationRetrying: vi.fn(),
   setAutomationSkipped: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock("@/lib/workspace-agents", () => ({
 
 import {
   listEnabledAutomations,
+  pauseAutomationsWithMissingOwners,
   setAutomationRetrying,
   setAutomationSkipped,
   type Automation,
@@ -37,6 +39,7 @@ import { startScheduler, stopScheduler } from "@/lib/scheduler";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 
 const mockListEnabled = vi.mocked(listEnabledAutomations);
+const mockPauseMissingOwners = vi.mocked(pauseAutomationsWithMissingOwners);
 const mockResolveDispatch = vi.mocked(resolveAgentForDispatch);
 const mockSetRetrying = vi.mocked(setAutomationRetrying);
 const mockSetSkipped = vi.mocked(setAutomationSkipped);
@@ -64,6 +67,7 @@ const automation: Automation = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockPauseMissingOwners.mockResolvedValue(0);
   mockListEnabled.mockResolvedValue([automation]);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
@@ -111,5 +115,20 @@ describe("scheduler agent-source failures", () => {
 
     await vi.waitFor(() => expect(mockSetSkipped).toHaveBeenCalledOnce());
     expect(mockSetRetrying).not.toHaveBeenCalled();
+  });
+});
+
+describe("scheduler owner membership", () => {
+  it("pauses orphaned schedules before listing runnable automations", async () => {
+    mockPauseMissingOwners.mockResolvedValue(1);
+    mockListEnabled.mockResolvedValue([]);
+
+    startScheduler();
+
+    await vi.waitFor(() => expect(mockListEnabled).toHaveBeenCalledOnce());
+    expect(mockPauseMissingOwners).toHaveBeenCalledOnce();
+    expect(mockPauseMissingOwners.mock.invocationCallOrder[0]).toBeLessThan(
+      mockListEnabled.mock.invocationCallOrder[0],
+    );
   });
 });

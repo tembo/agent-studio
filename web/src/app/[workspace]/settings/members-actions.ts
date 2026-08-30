@@ -17,10 +17,10 @@ import {
   resetPasswordPath,
 } from "@/lib/password-reset";
 import { isWorkspaceRole, type WorkspaceRole } from "@/lib/rbac";
+import { offboardWorkspaceMember } from "@/lib/member-offboarding";
 import {
   changeMemberRole,
   listWorkspaceMembers,
-  removeWorkspaceMember,
 } from "@/lib/workspace";
 
 // Member management actions, extracted from the settings grab-bag
@@ -228,13 +228,19 @@ export async function removeMemberAction(
 ): Promise<MemberFormState> {
   const slug = String(formData.get("workspace") ?? "");
   const targetUserId = String(formData.get("user_id") ?? "").trim();
+  const replacementUserId =
+    String(formData.get("reassign_user_id") ?? "").trim() || null;
   if (!targetUserId) return { error: "Missing user id." };
 
   const auth = await authorizeWorkspace(slug, "workspace_admin");
   if (auth.denied) return { error: DENIED_MESSAGE };
   const { workspace, userId } = auth;
 
-  const result = await removeWorkspaceMember(workspace.id, targetUserId);
+  const result = await offboardWorkspaceMember(
+    workspace.id,
+    targetUserId,
+    replacementUserId,
+  );
   if (!result.ok) {
     switch (result.error) {
       case "not-found":
@@ -243,6 +249,11 @@ export async function removeMemberAction(
         return {
           error:
             "Can't remove the last workspace admin. Promote someone else first.",
+        };
+      case "invalid-replacement":
+        return {
+          error:
+            "Choose another current workspace member to own these automations.",
         };
     }
   }
@@ -258,6 +269,10 @@ export async function removeMemberAction(
     payload: {
       target: result.target,
       previousRole: result.previousRole,
+      automationCount: result.automationCount,
+      reassignedAutomationCount: result.reassignedAutomationCount,
+      pausedAutomationCount: result.pausedAutomationCount,
+      replacementUserId: result.replacementUserId,
     },
   });
 

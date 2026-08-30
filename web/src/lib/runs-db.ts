@@ -19,6 +19,8 @@ export type ChildRun = {
   tokensInput: number | null;
   tokensOutput: number | null;
   createdAt: Date;
+  createdByName: string | null;
+  createdByEmail: string | null;
 };
 
 // Distinct tool names invoked across every sub-run a given run spawned via
@@ -77,11 +79,16 @@ export async function listChildRuns(
     tokens_input: number | null;
     tokens_output: number | null;
     created_at: Date;
+    created_by_name: string | null;
+    created_by_email: string | null;
   }>(
-    `SELECT id, agent_name, status, cost_usd, tokens_input, tokens_output, created_at
-       FROM run
-      WHERE workspace_id = $1 AND parent_run_id = $2
-      ORDER BY created_at ASC`,
+    `SELECT r.id, r.agent_name, r.status, r.cost_usd, r.tokens_input,
+            r.tokens_output, r.created_at,
+            u.name AS created_by_name, u.email AS created_by_email
+       FROM run r
+       LEFT JOIN "user" u ON u.id = r.created_by
+      WHERE r.workspace_id = $1 AND r.parent_run_id = $2
+      ORDER BY r.created_at ASC`,
     [workspaceId, parentRunId],
   );
   return rows.map((r) => ({
@@ -93,6 +100,8 @@ export async function listChildRuns(
     tokensInput: r.tokens_input,
     tokensOutput: r.tokens_output,
     createdAt: r.created_at,
+    createdByName: r.created_by_name,
+    createdByEmail: r.created_by_email,
   }));
 }
 
@@ -104,6 +113,8 @@ export type RunSummary = {
   completedAt: Date | null;
   trigger: RunTrigger;
   automationId: string | null;
+  createdByName: string | null;
+  createdByEmail: string | null;
 };
 
 export type AgentSummary = {
@@ -1019,37 +1030,5 @@ export async function listToolCallsForWorkspace(
         ? r.error_message.slice(0, 240)
         : null,
     createdAt: r.created_at,
-  }));
-}
-
-export async function listRecentRunsForAgent(
-  workspaceId: string,
-  agentName: string,
-  limit = 10,
-): Promise<RunSummary[]> {
-  const { rows } = await db.query<{
-    id: string;
-    agent_name: string;
-    status: RunSummary["status"];
-    created_at: Date;
-    completed_at: Date | null;
-    trigger: RunTrigger;
-    automation_id: string | null;
-  }>(
-    `SELECT id, agent_name, status, created_at, completed_at, trigger, automation_id
-       FROM run
-      WHERE workspace_id = $1 AND agent_name = $2
-      ORDER BY created_at DESC
-      LIMIT $3`,
-    [workspaceId, agentName, limit],
-  );
-  return rows.map((r) => ({
-    id: r.id,
-    agentName: r.agent_name,
-    status: r.status,
-    createdAt: r.created_at,
-    completedAt: r.completed_at,
-    trigger: r.trigger,
-    automationId: r.automation_id,
   }));
 }

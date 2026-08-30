@@ -19,6 +19,7 @@ import {
   type RunListItem,
 } from "@/lib/runs-db";
 import { listMemberActivity } from "@/lib/member-stats";
+import { runIdentityLabel } from "@/lib/run-identity";
 import { listAgentOwners } from "@/lib/agent-versions";
 import { listAgents } from "@/lib/workspace-agents";
 import { getServerSession } from "@/lib/session";
@@ -224,11 +225,13 @@ export default async function DashboardPage({
                     <span>
                       <LocalTime iso={r.createdAt.toISOString()} style="relative" />
                     </span>
-                    {(r.createdByName ?? r.createdByEmail) && (
-                      <span className="text-foreground-muted max-w-[12rem] truncate text-xs">
-                        {r.createdByName ?? r.createdByEmail}
-                      </span>
-                    )}
+                    <span
+                      className="text-foreground-muted max-w-[12rem] truncate text-xs"
+                      title={`Run as ${runIdentityLabel(r.createdByName, r.createdByEmail)}`}
+                    >
+                      Run as{" "}
+                      {runIdentityLabel(r.createdByName, r.createdByEmail)}
+                    </span>
                   </div>
                 </li>
               );
