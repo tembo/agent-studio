@@ -77,11 +77,14 @@ async function loadDispatchSkills(
   workspaceId: string,
   skills: string[],
 ): Promise<
-  { ok: true; content?: Record<string, string> } | { ok: false; detail: string }
+  | { ok: true; content?: Record<string, string> }
+  | { ok: false; detail: string; sourceError?: AgentSourceError }
 > {
   if (skills.length === 0) return { ok: true };
   const repo = await getWorkspaceRepo(workspaceId);
-  if (!repo) return { ok: false, detail: "no connected repo" };
+  if (!repo) {
+    return { ok: false, detail: "no connected repo", sourceError: "no-repo" };
+  }
   const token = await getWorkspaceSecretPlaintext(workspaceId, "github_pat");
   const ref: RepoRef = {
     owner: repo.owner,
@@ -92,7 +95,13 @@ async function loadDispatchSkills(
   let total = 0;
   for (const name of skills) {
     const folder = await readSkillFolder(token, ref, name);
-    if (!folder.ok) return { ok: false, detail: `skill "${name}": ${folder.detail}` };
+    if (!folder.ok) {
+      return {
+        ok: false,
+        detail: `skill "${name}": ${folder.detail}`,
+        sourceError: folder.sourceError,
+      };
+    }
     for (const [path, body] of Object.entries(folder.files)) {
       total += body.length;
       if (total > SKILLS_TOTAL_MAX_BYTES) {
@@ -115,7 +124,10 @@ async function readToolsModuleContent(
   reader: AgentReader,
   agentPath: string,
   toolsModule: string,
-): Promise<{ ok: true; content: string } | { ok: false; detail: string }> {
+): Promise<
+  | { ok: true; content: string }
+  | { ok: false; detail: string; sourceError?: AgentSourceError }
+> {
   const path = siblingPath(agentPath, toolsModule);
   const read = await reader.readFile(path);
   if (!read.ok) {
@@ -125,6 +137,7 @@ async function readToolsModuleContent(
         read.error === "not-found"
           ? `referenced tools module "${path}" was not found in the repo`
           : (read.detail ?? read.error),
+      sourceError: read.error === "not-found" ? undefined : read.error,
     };
   }
   if (read.content.length > TOOLS_MODULE_MAX_BYTES) {
@@ -152,10 +165,15 @@ async function loadDispatchToolsModule(
   workspaceId: string,
   agentPath: string,
   toolsModule: string | undefined,
-): Promise<{ ok: true; content?: string } | { ok: false; detail: string }> {
+): Promise<
+  | { ok: true; content?: string }
+  | { ok: false; detail: string; sourceError?: AgentSourceError }
+> {
   if (!toolsModule) return { ok: true };
   const reader = await resolveAgentReader(workspaceId);
-  if (!reader) return { ok: false, detail: "no connected repo" };
+  if (!reader) {
+    return { ok: false, detail: "no connected repo", sourceError: "no-repo" };
+  }
   const res = await readToolsModuleContent(reader, agentPath, toolsModule);
   if (!res.ok) return res;
   return { ok: true, content: res.content };
@@ -181,6 +199,21 @@ export type ListedAgent =
 export type ListAgentsResult =
   | { ok: true; agents: ListedAgent[] }
   | { ok: false; error: GitHubFileError | "no-repo"; detail?: string };
+
+type AgentSourceError = GitHubFileError | "no-repo";
+
+type AgentRecord = {
+  agent: ListedAgent;
+  raw: string;
+  /** Source of the declared tools module, when present and readable. */
+  toolsModuleContent?: string;
+  /** Files from the agent's opted-in skills, when present and readable. */
+  skillsContent?: Record<string, string>;
+};
+
+type AgentLookupResult =
+  | { ok: true; found: AgentRecord | null }
+  | { ok: false; error: AgentSourceError; detail?: string };
 
 /**
  * Walk the connected repo's `agents/` tree and parse every file we find.
@@ -266,39 +299,33 @@ export async function listAgents(workspaceId: string): Promise<ListAgentsResult>
 }
 
 /**
- * Find one agent by its declared name. Returns:
+ * Find one agent by its declared name while preserving repository failures:
  *  - the agent (valid or invalid) if a file in agents/** parses to that name
  *  - the invalid file if its filename basename matches (so broken specs
  *    are still inspectable on the detail page)
- *  - null otherwise
+ *  - a successful null result only when the repository was read successfully
  */
-export async function getAgentByName(
+async function lookupAgentByName(
   workspaceId: string,
   agentName: string,
-): Promise<{
-  agent: ListedAgent;
-  raw: string;
-  /** Source of the declared `tools_module` sibling, if present + readable.
-   *  Best-effort here (undefined on any failure) — dispatch does the
-   *  strict load that surfaces a missing module as a run error. */
-  toolsModuleContent?: string;
-  /** Files of the agent's opted-in skills, best-effort (same caveat). */
-  skillsContent?: Record<string, string>;
-} | null> {
+): Promise<AgentLookupResult> {
   const list = await listAgents(workspaceId);
-  if (!list.ok) return null;
+  if (!list.ok) return list;
 
   const match = list.agents.find((a) => {
     if (a.ok) return a.spec.name === agentName;
     const base = a.filename.replace(/\.(yaml|yml|json)$/i, "");
     return base === agentName;
   });
-  if (!match) return null;
+  if (!match) return { ok: true, found: null };
 
   const reader = await resolveAgentReader(workspaceId);
-  if (!reader) return null;
+  if (!reader) return { ok: false, error: "no-repo" };
   const read = await reader.readFile(match.path);
-  if (!read.ok) return null;
+  if (!read.ok) {
+    if (read.error === "not-found") return { ok: true, found: null };
+    return { ok: false, error: read.error, detail: read.detail };
+  }
 
   let toolsModuleContent: string | undefined;
   const toolsModule = match.ok ? specToolsModule(match.spec) : undefined;
@@ -314,7 +341,24 @@ export async function getAgentByName(
     if (loaded.ok) skillsContent = loaded.content;
   }
 
-  return { agent: match, raw: read.content, toolsModuleContent, skillsContent };
+  return {
+    ok: true,
+    found: {
+      agent: match,
+      raw: read.content,
+      toolsModuleContent,
+      skillsContent,
+    },
+  };
+}
+
+/** Best-effort nullable lookup for interactive paths that predate typed errors. */
+export async function getAgentByName(
+  workspaceId: string,
+  agentName: string,
+): Promise<AgentRecord | null> {
+  const result = await lookupAgentByName(workspaceId, agentName);
+  return result.ok ? result.found : null;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -354,11 +398,38 @@ export type ResolvedDispatch = {
 export type ResolveDispatchError =
   | { kind: "not-found"; message: string }
   | { kind: "invalid"; message: string }
-  | { kind: "no-model"; message: string };
+  | { kind: "no-model"; message: string }
+  | {
+      kind: "source-unavailable";
+      message: string;
+      sourceError: AgentSourceError;
+      retryable: boolean;
+    };
 
 export type ResolveDispatchResult =
   | { ok: true; resolved: ResolvedDispatch }
   | { ok: false; error: ResolveDispatchError };
+
+function sourceUnavailable(
+  error: AgentSourceError,
+  detail?: string,
+): Extract<ResolveDispatchError, { kind: "source-unavailable" }> {
+  const retryable = error === "network" || error === "rate-limited";
+  const reason =
+    error === "rate-limited"
+      ? "GitHub rate-limited the request"
+      : error === "invalid-token"
+        ? "the GitHub token is no longer valid"
+        : error === "no-repo"
+          ? "no repository is connected"
+          : detail || "the repository could not be reached";
+  return {
+    kind: "source-unavailable",
+    message: `Could not read the connected agent repository: ${reason}.`,
+    sourceError: error,
+    retryable,
+  };
+}
 
 export async function resolveAgentForDispatch(
   workspaceId: string,
@@ -393,6 +464,12 @@ export async function resolveAgentForDispatch(
         stableToolsModule,
       );
       if (!stableMod.ok) {
+        if (stableMod.sourceError) {
+          return {
+            ok: false,
+            error: sourceUnavailable(stableMod.sourceError, stableMod.detail),
+          };
+        }
         return {
           ok: false,
           error: {
@@ -406,6 +483,15 @@ export async function resolveAgentForDispatch(
         stableParsed.ok ? specSkills(stableParsed.spec) : [],
       );
       if (!stableSkills.ok) {
+        if (stableSkills.sourceError) {
+          return {
+            ok: false,
+            error: sourceUnavailable(
+              stableSkills.sourceError,
+              stableSkills.detail,
+            ),
+          };
+        }
         return {
           ok: false,
           error: {
@@ -439,8 +525,14 @@ export async function resolveAgentForDispatch(
   }
 
   // Draft / fallback path: the live default-branch file.
-  const found = await getAgentByName(workspaceId, agentName);
-  if (!found) {
+  const lookup = await lookupAgentByName(workspaceId, agentName);
+  if (!lookup.ok) {
+    return {
+      ok: false,
+      error: sourceUnavailable(lookup.error, lookup.detail),
+    };
+  }
+  if (!lookup.found) {
     return {
       ok: false,
       error: {
@@ -449,6 +541,7 @@ export async function resolveAgentForDispatch(
       },
     };
   }
+  const found = lookup.found;
   if (!found.agent.ok) {
     return {
       ok: false,
@@ -475,6 +568,12 @@ export async function resolveAgentForDispatch(
     specToolsModule(spec),
   );
   if (!mod.ok) {
+    if (mod.sourceError) {
+      return {
+        ok: false,
+        error: sourceUnavailable(mod.sourceError, mod.detail),
+      };
+    }
     return {
       ok: false,
       error: {
@@ -485,6 +584,12 @@ export async function resolveAgentForDispatch(
   }
   const skills = await loadDispatchSkills(workspaceId, specSkills(spec));
   if (!skills.ok) {
+    if (skills.sourceError) {
+      return {
+        ok: false,
+        error: sourceUnavailable(skills.sourceError, skills.detail),
+      };
+    }
     return {
       ok: false,
       error: {

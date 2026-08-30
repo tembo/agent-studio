@@ -17,15 +17,16 @@ import "server-only";
 //   - Run creation goes through the API's /internal/runs endpoint so
 //     execution is identical to a manual run; the only difference is
 //     the trigger='schedule' + automation_id columns on the run row.
-//   - Failures (bad cron, missing agent file, parse error, network)
-//     are recorded on the automation row via last_fire_error and the
-//     last_fired_at floor is advanced anyway so we don't retry-storm
-//     the same broken state on every tick.
+//   - Permanent failures (bad cron, missing agent file, parse error)
+//     are recorded on the automation row and advance the last_fired_at
+//     floor so they don't retry-storm. Transient repository failures keep
+//     the window due and retry with bounded exponential backoff.
 
 import { requestAgentChangeSystem } from "@/lib/api-v1/actions";
 import {
   listEnabledAutomations,
   setAutomationFired,
+  setAutomationRetrying,
   setAutomationSkipped,
   type Automation,
 } from "@/lib/automations-api";
@@ -45,6 +46,7 @@ import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 import { maybeReconcileToolCaches } from "@/lib/tool-reconcile";
 
 const TICK_MS = 30_000;
+const SOURCE_RETRY_MAX_MS = 15 * 60_000;
 // Boot reconcile floor — a fresh process re-syncs tool caches unless one ran in
 // the last 10 min. Deploys (minutes+ apart) always run; a crash-looping restart
 // within 10 min doesn't re-storm provider APIs.
@@ -59,6 +61,10 @@ const MAX_LEARNING_CASES = 20;
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
+const sourceRetries = new Map<
+  string,
+  { attempts: number; retryAfter: number }
+>();
 
 export function startScheduler() {
   if (started) return;
@@ -92,6 +98,7 @@ export function stopScheduler() {
   if (timer) clearInterval(timer);
   timer = null;
   started = false;
+  sourceRetries.clear();
 }
 
 async function tick() {
@@ -103,6 +110,7 @@ async function tick() {
       await maybeFire(a, now);
     } catch (e) {
       console.error("[scheduler] maybeFire threw", a.id, e);
+      sourceRetries.delete(a.id);
       await setAutomationSkipped({
         id: a.id,
         firedAt: now,
@@ -119,6 +127,12 @@ async function maybeFire(a: Automation, now: Date) {
   const floor = a.lastFiredAt ?? a.createdAt;
   if (!hasFiringInWindow(a.cron, floor, now)) return;
 
+  // Editing an automation clears its persisted error and should also cancel
+  // any in-memory delay left from the previous source failure.
+  if (!a.lastFireError) sourceRetries.delete(a.id);
+  const pendingRetry = sourceRetries.get(a.id);
+  if (pendingRetry && pendingRetry.retryAfter > now.getTime()) return;
+
   // Resolve the agent — the stable snapshot by default, or the live draft
   // when the automation opts in. listEnabledAutomations doesn't pre-fetch
   // this because most automations don't fire on most ticks.
@@ -126,9 +140,30 @@ async function maybeFire(a: Automation, now: Date) {
     preferDraft: a.useDraft,
   });
   if (!dispatch.ok) {
+    if (dispatch.error.kind === "source-unavailable" && dispatch.error.retryable) {
+      const previousAttempts = sourceRetries.get(a.id)?.attempts ?? 0;
+      const attempts = previousAttempts + 1;
+      const delay = Math.min(
+        TICK_MS * 2 ** Math.min(attempts - 1, 10),
+        SOURCE_RETRY_MAX_MS,
+      );
+      sourceRetries.set(a.id, {
+        attempts,
+        retryAfter: now.getTime() + delay,
+      });
+      console.warn(
+        "[scheduler] transient source failure; retrying",
+        a.id,
+        `in ${delay}ms`,
+        dispatch.error.message,
+      );
+      await setAutomationRetrying({ id: a.id, error: dispatch.error.message });
+      return;
+    }
     await recordSkipAndAdvance(a, now, dispatch.error.message);
     return;
   }
+  sourceRetries.delete(a.id);
   const r = dispatch.resolved;
 
   // POST directly to /internal/runs with the new spec_content /
@@ -199,6 +234,7 @@ async function recordSkipAndAdvance(
   now: Date,
   error: string,
 ): Promise<void> {
+  sourceRetries.delete(a.id);
   console.warn("[scheduler] skip fire", a.id, error);
   await setAutomationSkipped({ id: a.id, firedAt: now, error });
 }

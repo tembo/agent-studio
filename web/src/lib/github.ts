@@ -247,6 +247,9 @@ export async function readFile(
   }
   if (res.status === 401) return { ok: false, error: "invalid-token" };
   if (res.status === 404) return { ok: false, error: "not-found" };
+  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
+    return { ok: false, error: "rate-limited" };
+  }
   if (!res.ok) {
     return { ok: false, error: "network", detail: `GitHub returned ${res.status}` };
   }
