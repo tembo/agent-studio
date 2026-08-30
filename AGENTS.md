@@ -123,6 +123,12 @@ The phase tag is whatever phase is in flight per
 [`ROADMAP.md`](./ROADMAP.md). Drop the tag for non-product changes
 (docs-only, tooling).
 
+## Pull requests
+
+After completing and verifying any coding task, commit the changes, push the
+branch, and open a pull request. Do not wait for a separate request to open the
+pull request.
+
 ## What to leave alone
 
 - `node_modules/`, `target/`, `.next/`, `dist/` — build outputs.
