@@ -4,8 +4,10 @@
 // demand (button) it fetches an LLM summary + a line diff of stable -> draft
 // so the owner can see what a promotion would release.
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 
+import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 
 import { summarizeDraftAction, type DraftChangesResult } from "./actions";
@@ -13,9 +15,26 @@ import { summarizeDraftAction, type DraftChangesResult } from "./actions";
 type Props = {
   workspaceSlug: string;
   agentName: string;
+  reviewHref: string;
+  canPromote: boolean;
+  stableVersionNumber: number | null;
+  stableChangedAtIso: string | null;
+  draftChangedAtIso: string | null;
+  addedLines: number;
+  removedLines: number;
 };
 
-export function DraftChangesBanner({ workspaceSlug, agentName }: Props) {
+export function DraftChangesBanner({
+  workspaceSlug,
+  agentName,
+  reviewHref,
+  canPromote,
+  stableVersionNumber,
+  stableChangedAtIso,
+  draftChangedAtIso,
+  addedLines,
+  removedLines,
+}: Props) {
   const [result, setResult] = useState<DraftChangesResult | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -28,20 +47,48 @@ export function DraftChangesBanner({ workspaceSlug, agentName }: Props) {
   return (
     <div className="rounded-lg border border-[var(--color-sentiment-caution)] bg-[var(--color-sentiment-caution-subtle)] px-3 py-2.5 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-foreground">
-          The draft has changes not yet released to Stable.
-        </span>
-        {result === null && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="small"
-            disabled={pending}
-            onClick={load}
-          >
-            {pending ? "Summarizing…" : "View changes"}
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="text-foreground font-medium">
+            {stableVersionNumber === null
+              ? "This draft has not been promoted yet."
+              : "The draft has changes not yet released to Stable."}
+          </span>
+          <span className="text-foreground-weak text-xs">
+            +{addedLines} −{removedLines}
+            {draftChangedAtIso && (
+              <>
+                {" "}
+                · Draft changed{" "}
+                <LocalTime iso={draftChangedAtIso} style="relative" />
+              </>
+            )}
+            {stableVersionNumber !== null && stableChangedAtIso && (
+              <>
+                {" "}
+                · Stable v{stableVersionNumber} promoted{" "}
+                <LocalTime iso={stableChangedAtIso} style="relative" />
+              </>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {result === null && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="small"
+              disabled={pending}
+              onClick={load}
+            >
+              {pending ? "Summarizing…" : "View diff"}
+            </Button>
+          )}
+          <Button asChild variant="orange" size="small">
+            <Link href={reviewHref}>
+              {canPromote ? "Review & promote" : "Review draft"}
+            </Link>
           </Button>
-        )}
+        </div>
       </div>
 
       {result && !result.ok && (

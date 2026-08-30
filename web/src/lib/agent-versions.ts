@@ -114,6 +114,22 @@ export async function getStableVersion(
   return rows[0] ? rowToVersion(rows[0]) : null;
 }
 
+/** Current stable version for each requested agent, in one workspace query. */
+export async function listStableVersions(
+  workspaceId: string,
+  agentNames: string[],
+): Promise<Map<string, AgentVersion>> {
+  if (agentNames.length === 0) return new Map();
+  const { rows } = await db.query<Row>(
+    `SELECT ${SELECT_V}
+       FROM agent_release r
+       JOIN agent_version v ON v.id = r.stable_version_id
+      WHERE r.workspace_id = $1 AND r.agent_name = ANY($2::text[])`,
+    [workspaceId, agentNames],
+  );
+  return new Map(rows.map((row) => [row.agent_name, rowToVersion(row)]));
+}
+
 /** One version by number, for the per-version detail view + diff. */
 export async function getAgentVersion(
   workspaceId: string,

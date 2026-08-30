@@ -18,6 +18,7 @@ import {
   AgentInventoryNameCell,
   inventoryAgentSearchText,
 } from "./agent-inventory-name-cell";
+import { AgentInventoryPromotionFilter } from "./agent-inventory-promotion-filter";
 import { dismissPendingCreateAction } from "./inventory-actions";
 
 // Workspace agent inventory. Replaces the card grid (better for ~10
@@ -72,6 +73,15 @@ export type InventoryAgent =
       isStarred: boolean;
       /** This user owns the agent (its agent_owner row). */
       isMine: boolean;
+      /** Live draft differs from stable, or has never been promoted. */
+      pendingPromotion: {
+        href: string;
+        stableVersionNumber: number | null;
+        stableChangedAtIso: string | null;
+        draftChangedAtIso: string | null;
+        addedLines: number;
+        removedLines: number;
+      } | null;
     }
   | {
       kind: "invalid";
@@ -115,6 +125,8 @@ type Props = {
   workspaceSlug: string;
   /** Operator+; gates the "Dismiss" action on pending-create rows. */
   canEdit: boolean;
+  /** Deep links from the sidebar open the complete pending-promotion set. */
+  initialPromotionOnly?: boolean;
 };
 
 export function AgentsInventory({
@@ -123,6 +135,7 @@ export function AgentsInventory({
   canCreate,
   workspaceSlug,
   canEdit,
+  initialPromotionOnly = false,
 }: Props) {
   const [query, setQuery] = useState("");
   // null = "all" (no facet selected). Selecting a pill switches the
@@ -131,6 +144,7 @@ export function AgentsInventory({
   const [labelFilter, setLabelFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
   const [mcpFilter, setMcpFilter] = useState("");
+  const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
   // Default sort: alphabetical by name. The user can re-sort by clicking
   // column headers.
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -139,7 +153,8 @@ export function AgentsInventory({
   // shows everyone's. Falls back to "all" when I own/star nothing yet, so the
   // list is never empty.
   const [view, setView] = useState<"mine" | "all">(
-    agents.some((a) => a.kind === "live" && (a.isMine || a.isStarred))
+    !initialPromotionOnly &&
+      agents.some((a) => a.kind === "live" && (a.isMine || a.isStarred))
       ? "mine"
       : "all",
   );
@@ -161,6 +176,14 @@ export function AgentsInventory({
     for (const { bucket } of enriched) c[bucket]++;
     return c;
   }, [enriched]);
+  const pendingPromotionCount = useMemo(
+    () =>
+      enriched.filter(
+        ({ agent }) =>
+          agent.kind === "live" && agent.pendingPromotion !== null,
+      ).length,
+    [enriched],
+  );
 
   // Distinct labels + models across live agents, for the filter dropdowns.
   const labelOptions = useMemo(() => {
@@ -212,6 +235,12 @@ export function AgentsInventory({
         ({ agent }) => agent.kind !== "live" || agent.isMine || agent.isStarred,
       );
     }
+    if (promotionOnly) {
+      rows = rows.filter(
+        ({ agent }) =>
+          agent.kind === "live" && agent.pendingPromotion !== null,
+      );
+    }
     if (bucket !== null) rows = rows.filter((e) => e.bucket === bucket);
     if (labelFilter) {
       rows = rows.filter(
@@ -238,6 +267,7 @@ export function AgentsInventory({
     enriched,
     query,
     view,
+    promotionOnly,
     bucket,
     labelFilter,
     modelFilter,
@@ -529,6 +559,14 @@ export function AgentsInventory({
             All
           </button>
         </div>
+        <AgentInventoryPromotionFilter
+          count={pendingPromotionCount}
+          active={promotionOnly}
+          onChange={(active) => {
+            setPromotionOnly(active);
+            if (active) setView("all");
+          }}
+        />
         <FacetPills counts={counts} active={bucket} onChange={setBucket} />
         {labelOptions.length > 1 && (
           <Select

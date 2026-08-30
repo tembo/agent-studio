@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/toaster";
+import { listPendingAgentDrafts } from "@/lib/agent-draft-status";
 import { listErroredEnabledAutomations } from "@/lib/automations-api";
 import {
   buildConnectionSlotSets,
@@ -12,6 +13,7 @@ import {
 import { listConnectionsForUser } from "@/lib/composio-connections";
 import { listNativeConnectionsForUser } from "@/lib/connections";
 import { FAVICON_ASSET_VERSION } from "@/lib/favicon-constants";
+import { meetsMinRole } from "@/lib/rbac";
 import { listSecretConnections } from "@/lib/secret-connections";
 import { listFailingAgents24h } from "@/lib/runs-db";
 import { getServerSession } from "@/lib/session";
@@ -125,6 +127,10 @@ export default async function WorkspaceLayout({
   // every run fails immediately. Surface a sidebar CTA so a new
   // workspace's first job is obvious.
   const hasLlmProvider = anthropicKey !== null || openaiKey !== null;
+  const pendingDrafts = await listPendingAgentDrafts(
+    workspace.id,
+    agentsListing,
+  );
   const switcherList = workspaces.map((w) => ({ slug: w.slug, name: w.name }));
   // Slot inventory + the missing-slot predicate are shared with the run-blocking
   // pre-flight (findMissingConnections) so the sidebar and the runtime agree —
@@ -189,6 +195,11 @@ export default async function WorkspaceLayout({
         name: a.name,
         agentName: a.agentName,
       }))}
+      pendingPromotions={
+        meetsMinRole(role, "operator")
+          ? pendingDrafts.map((draft) => ({ agentName: draft.agentName }))
+          : []
+      }
       hasLlmProvider={hasLlmProvider}
     >
       {children}
