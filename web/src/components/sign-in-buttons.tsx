@@ -7,9 +7,8 @@ import { Button } from "@/components/ui/button";
 
 // One button per configured provider. The server passes the plain list
 // (so the client never imports the server-only provider module). Social
-// providers (Google) go through signIn.social; genericOAuth providers
-// (Microsoft Entra, OIDC) go through signIn.oauth2.
-type Provider = { id: string; label: string; kind: "social" | "oauth2" };
+// Better Auth 1.7 exposes generic OAuth providers through signIn.social too.
+type Provider = { id: string; label: string };
 
 export function SignInButtons({
   providers,
@@ -29,16 +28,10 @@ export function SignInButtons({
     setError(null);
     setActiveId(p.id);
     startTransition(async () => {
-      const result =
-        p.kind === "social"
-          ? await authClient.signIn.social({
-              provider: p.id as "google",
-              callbackURL,
-            })
-          : await authClient.signIn.oauth2({
-              providerId: p.id,
-              callbackURL,
-            });
+      const result = await authClient.signIn.social({
+        provider: p.id,
+        callbackURL,
+      });
       if (result.error) {
         setError(result.error.message ?? "Sign-in failed.");
         setActiveId(null);

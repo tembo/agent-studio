@@ -223,7 +223,10 @@ describe("MCP OAuth provider wiring", () => {
     await loadAuthConfig();
     const options = mocks.oauthProvider.mock.calls[0][0] as {
       scopes: string[];
-      validAudiences: string[];
+      resources: string[];
+      enforcePerClientResources: boolean;
+      clientRegistrationDefaultResources: string[];
+      clientRegistrationAllowedResources: string[];
       allowDynamicClientRegistration: boolean;
       allowUnauthenticatedClientRegistration: boolean;
       postLogin: {
@@ -240,7 +243,14 @@ describe("MCP OAuth provider wiring", () => {
       }) => Record<string, unknown>;
     };
 
-    expect(options.validAudiences).toEqual(["https://tas.example.com/mcp"]);
+    expect(options.resources).toEqual(["https://tas.example.com/mcp"]);
+    expect(options.enforcePerClientResources).toBe(false);
+    expect(options.clientRegistrationDefaultResources).toEqual([
+      "https://tas.example.com/mcp",
+    ]);
+    expect(options.clientRegistrationAllowedResources).toEqual([
+      "https://tas.example.com/mcp",
+    ]);
     expect(options.scopes).toEqual([
       "mcp:read",
       "mcp:write",

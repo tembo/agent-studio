@@ -97,6 +97,7 @@ describe("auth provider configuration", () => {
       OIDC_CLIENT_SECRET: "oidc-secret",
       OIDC_DISCOVERY_URL: "https://idp.example.com/.well-known/openid-configuration",
       OIDC_SCOPES: "openid profile email groups",
+      BETTER_AUTH_URL: "https://tas.example.com",
     });
 
     expect(microsoftDiscoveryUrl()).toBe(
@@ -110,6 +111,8 @@ describe("auth provider configuration", () => {
         clientId: "microsoft-id",
         clientSecret: "microsoft-secret",
         scopes: ["openid", "profile", "email"],
+        redirectURI:
+          "https://tas.example.com/api/auth/oauth2/callback/microsoft",
       },
       {
         providerId: "oidc",
@@ -117,6 +120,7 @@ describe("auth provider configuration", () => {
         clientId: "oidc-id",
         clientSecret: "oidc-secret",
         scopes: ["openid", "profile", "email", "groups"],
+        redirectURI: "https://tas.example.com/api/auth/oauth2/callback/oidc",
       },
     ]);
   });

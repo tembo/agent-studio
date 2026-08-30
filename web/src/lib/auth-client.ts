@@ -1,12 +1,10 @@
 import { createAuthClient } from "better-auth/react";
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 
 export const authClient = createAuthClient({
-  // genericOAuth (Microsoft Entra + generic OIDC) → signIn.oauth2().
   // oauthProviderClient forwards the signed OAuth query through login,
   // workspace selection, and consent without storing it in application state.
-  plugins: [oauthProviderClient(), genericOAuthClient()],
+  plugins: [oauthProviderClient()],
   // Resolve the base URL from the browser's actual origin at runtime.
   // The auth API (`/api/auth/*`) is always same-origin as the app, so the
   // current origin is correct for any deploy. We can't rely on
