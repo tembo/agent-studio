@@ -378,11 +378,11 @@ export async function listImprovementsForAgent(
     `SELECT ${COLUMNS}
      ${FROM_JOIN}
      WHERE i.workspace_id = $1 AND i.agent_name = $2
-     ORDER BY i.created_at ASC
+     ORDER BY i.created_at DESC
      LIMIT $3`,
     [workspaceId, agentName, limit],
   );
-  return res.rows.map(rowToImprovement);
+  return res.rows.toReversed().map(rowToImprovement);
 }
 
 export async function listImprovementsForRun(

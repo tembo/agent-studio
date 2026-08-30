@@ -13,6 +13,17 @@ three sentences"). TAS hands the feedback to the
 [Tembo Coding Agent Platform](https://tembo.io), which opens a pull request
 against your repo. (This needs a Tembo API key in **Settings**.)
 
+From an agent's **Chat to edit** tab, use the composer at the top of the thread
+and choose an explicit intent:
+
+- **Test agent** runs the current definition with your message and does not
+  change it.
+- **Request change** sends your message to the coding agent to open a PR, or to
+  commit directly when the workspace uses YOLO delivery mode.
+
+The six most recent turns stay visible. Earlier activity and unusually long
+messages are collapsed by default and can be expanded in place.
+
 ## Tracking
 
 The **Improvements** page lists submissions and their status. TAS correlates the

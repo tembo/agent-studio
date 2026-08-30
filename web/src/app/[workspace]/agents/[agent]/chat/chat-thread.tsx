@@ -4,12 +4,12 @@
 //
 // Two distinct intents share a single composer:
 //
-//   "Send to agent"        → runs the agent with the typed message
+//   "Test agent"           → runs the agent with the typed message
 //                             so the user can probe its behavior
 //                             before deciding what to change.
 //                             Cheap, frequent. Creates a Run row.
 //
-//   "Submit change request" → packages the message and ships it to
+//   "Request change"       → packages the message and ships it to
 //                             Tembo as a task → opens a PR for
 //                             review. Slow, rare. Creates an
 //                             improvement row tied to the agent
@@ -21,11 +21,12 @@
 // lands without the user reloading.
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { LocalTime } from "@/components/local-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { type ChatRun } from "@/lib/chat-runs-db";
 import type { CommitMode } from "@/lib/commit-mode-constants";
 import { improvementSubmitterLabel } from "@/lib/improvement-display";
 import {
@@ -33,8 +34,8 @@ import {
   type ImprovementDelivery,
   type ImprovementStatus,
 } from "@/lib/improvements-api";
-import { type ChatRun } from "@/lib/runs-db";
 import { cn } from "@/lib/utils";
+import { useMountEffect } from "@/lib/use-mount-effect";
 
 import {
   chatSubmitAction,
@@ -46,6 +47,11 @@ import {
 export type ChatTurn =
   | { kind: "run"; createdAt: Date; run: ChatRun }
   | { kind: "improvement"; createdAt: Date; improvement: Improvement };
+
+type ComposerIntent = "test" | "change";
+
+const RECENT_TURN_COUNT = 6;
+const COLLAPSE_TEXT_AFTER = 600;
 
 export function ChatThread({
   workspaceSlug,
@@ -61,6 +67,7 @@ export function ChatThread({
   const direct = commitMode === "direct";
   const router = useRouter();
   const [message, setMessage] = useState("");
+  const [intent, setIntent] = useState<ComposerIntent>("test");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -70,11 +77,9 @@ export function ChatThread({
   const hasInFlight = turns.some(
     (t) => t.kind === "run" && (t.run.status === "queued" || t.run.status === "running"),
   );
-  useEffect(() => {
-    if (!hasInFlight) return;
-    const id = setInterval(() => router.refresh(), 2000);
-    return () => clearInterval(id);
-  }, [hasInFlight, router]);
+  const recentStart = Math.max(0, turns.length - RECENT_TURN_COUNT);
+  const earlierTurns = turns.slice(0, recentStart);
+  const recentTurns = turns.slice(recentStart);
 
   const onSendToAgent = () => {
     setError(null);
@@ -110,75 +115,96 @@ export function ChatThread({
     });
   };
 
+  const submitMessage = () => {
+    if (pending || !message.trim()) return;
+    if (intent === "change") {
+      onSubmitChange();
+    } else {
+      onSendToAgent();
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      {turns.length === 0 ? (
-        <EmptyState direct={direct} />
-      ) : (
-        <ul className="flex flex-col gap-4">
-          {turns.map((t) =>
-            t.kind === "run" ? (
-              <RunBubble
-                key={`r:${t.run.id}`}
-                run={t.run}
-              />
-            ) : (
-              <ImprovementBubble
-                key={`i:${t.improvement.id}`}
-                improvement={t.improvement}
-                workspaceSlug={workspaceSlug}
-                agentName={agentName}
-              />
-            ),
-          )}
-        </ul>
-      )}
+      {hasInFlight && <RunRefreshPoller />}
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          onSendToAgent();
+          submitMessage();
         }}
-        className="border-border bg-surface-raised flex flex-col gap-2 rounded-lg border p-3"
+        className="border-border bg-surface-raised sticky top-4 z-20 flex flex-col gap-3 rounded-lg border p-3 shadow-lg"
       >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            className="border-border bg-surface flex items-center gap-1 rounded-lg border p-1"
+            role="group"
+            aria-label="Message intent"
+          >
+            <Button
+              type="button"
+              size="medium"
+              variant={intent === "test" ? "secondary" : "ghost"}
+              aria-pressed={intent === "test"}
+              onClick={() => setIntent("test")}
+              disabled={pending}
+            >
+              Test agent
+            </Button>
+            <Button
+              type="button"
+              size="medium"
+              variant={intent === "change" ? "secondary" : "ghost"}
+              aria-pressed={intent === "change"}
+              onClick={() => setIntent("change")}
+              disabled={pending}
+            >
+              Request change
+            </Button>
+          </div>
+          <span className="text-foreground-weak text-sm">
+            {intent === "test"
+              ? "Runs the current agent without changing it."
+              : direct
+                ? "Commits this request directly to the default branch."
+                : "Sends this request to open a PR for review."}
+          </span>
+        </div>
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Talk to the agent, or describe a change you'd like to make…"
+          placeholder={
+            intent === "test"
+              ? "Message the current agent to test its behavior…"
+              : "Describe the change you want the coding agent to make…"
+          }
           rows={3}
           disabled={pending}
           onKeyDown={(e) => {
-            // Cmd/Ctrl-Enter = Send to agent (the default action).
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
-              onSendToAgent();
+              submitMessage();
             }
           }}
-          className="bg-surface border-border text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)] rounded-md border px-3 py-2 text-sm leading-6 resize-y"
+          className="bg-surface border-border text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)] resize-y rounded-md border px-3 py-2 text-sm leading-6"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-foreground-weak text-sm">
-            Cmd/Ctrl-Enter sends to the agent. Submit a change to{" "}
-            {direct
-              ? "commit it directly to the default branch."
-              : "open a PR for review."}
+            Cmd/Ctrl-Enter uses the selected action.
           </span>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={onSubmitChange}
-              disabled={pending || !message.trim()}
-            >
-              Submit change
-            </Button>
-            <Button
-              type="submit"
-              disabled={pending || !message.trim()}
-            >
-              {pending ? "Sending…" : "Send to agent"}
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={pending || !message.trim()}
+          >
+            {pending
+              ? intent === "test"
+                ? "Sending…"
+                : "Submitting…"
+              : intent === "test"
+                ? "Send test message"
+                : "Submit change request"}
+          </Button>
         </div>
         {error && (
           <div className="border-sentiment-negative bg-[var(--color-input-error)] flex flex-col gap-1 rounded-lg border p-3 text-sm">
@@ -191,7 +217,73 @@ export function ChatThread({
           </div>
         )}
       </form>
+
+      {turns.length === 0 ? (
+        <EmptyState direct={direct} />
+      ) : (
+        <div className="flex flex-col gap-4">
+          {earlierTurns.length > 0 && (
+            <details className="border-border bg-surface-raised rounded-lg border">
+              <summary className="text-foreground hover:bg-surface flex cursor-pointer items-center justify-between rounded-lg px-4 py-3 text-sm font-medium">
+                Earlier activity
+                <span className="text-foreground-muted font-normal">
+                  {earlierTurns.length} {earlierTurns.length === 1 ? "turn" : "turns"}
+                </span>
+              </summary>
+              <TurnList
+                turns={earlierTurns}
+                workspaceSlug={workspaceSlug}
+                agentName={agentName}
+                className="border-border border-t px-4 py-4"
+              />
+            </details>
+          )}
+          <TurnList
+            turns={recentTurns}
+            workspaceSlug={workspaceSlug}
+            agentName={agentName}
+          />
+        </div>
+      )}
     </div>
+  );
+}
+
+function RunRefreshPoller() {
+  const router = useRouter();
+  useMountEffect(() => {
+    const id = setInterval(() => router.refresh(), 2000);
+    return () => clearInterval(id);
+  });
+  return null;
+}
+
+function TurnList({
+  turns,
+  workspaceSlug,
+  agentName,
+  className,
+}: {
+  turns: ChatTurn[];
+  workspaceSlug: string;
+  agentName: string;
+  className?: string;
+}) {
+  return (
+    <ul className={cn("flex flex-col gap-4", className)}>
+      {turns.map((turn) =>
+        turn.kind === "run" ? (
+          <RunBubble key={`r:${turn.run.id}`} run={turn.run} />
+        ) : (
+          <ImprovementBubble
+            key={`i:${turn.improvement.id}`}
+            improvement={turn.improvement}
+            workspaceSlug={workspaceSlug}
+            agentName={agentName}
+          />
+        ),
+      )}
+    </ul>
   );
 }
 
@@ -213,9 +305,10 @@ function RunBubble({ run }: { run: ChatRun }) {
       {/* User message — right-aligned. */}
       <div className="flex justify-end">
         <div className="bg-interactive text-foreground-on-accent flex max-w-[80%] flex-col gap-1 rounded-lg px-3 py-2">
-          <p className="whitespace-pre-wrap text-sm leading-5">
-            {run.userMessage}
-          </p>
+          <CollapsibleText
+            text={run.userMessage}
+            className="text-foreground-on-accent"
+          />
           <span className="text-foreground-on-accent/70 text-sm">
             <LocalTime iso={run.createdAt.toISOString()} />
           </span>
@@ -235,9 +328,7 @@ function RunBubble({ run }: { run: ChatRun }) {
               {run.errorMessage ?? "Run failed."}
             </p>
           ) : (
-            <p className="text-foreground whitespace-pre-wrap text-sm leading-5">
-              {stripStopReason(run.output)}
-            </p>
+            <CollapsibleText text={stripStopReason(run.output)} />
           )}
         </div>
       </div>
@@ -268,9 +359,10 @@ function ImprovementBubble({
               Change request
             </span>
           </div>
-          <p className="whitespace-pre-wrap text-sm leading-5">
-            {improvement.improvementText}
-          </p>
+          <CollapsibleText
+            text={improvement.improvementText}
+            className="text-foreground-on-accent"
+          />
           <span className="text-foreground-on-accent/70 text-sm">
             {improvementSubmitterLabel(improvement)} ·{" "}
             <LocalTime iso={improvement.createdAt.toISOString()} />
@@ -333,6 +425,51 @@ function ImprovementBubble({
       </div>
     </li>
   );
+}
+
+function CollapsibleText({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  if (text.length <= COLLAPSE_TEXT_AFTER && text.split("\n").length <= 12) {
+    return (
+      <p className={cn("text-foreground whitespace-pre-wrap text-sm leading-5", className)}>
+        {text}
+      </p>
+    );
+  }
+
+  return (
+    <details className="group">
+      <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        <span
+          className={cn(
+            "text-foreground whitespace-pre-wrap text-sm leading-5 group-open:hidden",
+            className,
+          )}
+        >
+          {previewText(text)}
+        </span>
+        <span className={cn("mt-1 block text-sm underline underline-offset-2", className)}>
+          <span className="group-open:hidden">Show full message</span>
+          <span className="hidden group-open:inline">Hide full message</span>
+        </span>
+      </summary>
+      <p className={cn("text-foreground mt-2 whitespace-pre-wrap text-sm leading-5", className)}>
+        {text}
+      </p>
+    </details>
+  );
+}
+
+function previewText(text: string): string {
+  const compact = text.slice(0, 320).trimEnd();
+  const lastSpace = compact.lastIndexOf(" ");
+  const preview = lastSpace > 240 ? compact.slice(0, lastSpace) : compact;
+  return `${preview}…`;
 }
 
 function statusBlurb(
