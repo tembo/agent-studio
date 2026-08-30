@@ -75,7 +75,8 @@ connector.
 - `validate_agent_spec` — parse a draft spec *without* writing it. Use this
   before committing.
 - `list_runs` — recent runs, filterable by status / agent / trigger.
-- `get_run` — full output, error, and token usage for one run.
+- `get_run` — full output, safe failure guidance, and token usage for one run.
+  Workspace admins additionally receive technical failure diagnostics.
 - `list_tools` — your cached tool catalog. Each tool's `slug` is what goes into
   an agent's `connections: tools: [...]`.
 - `list_connections` — your connection status across Composio + Native MCP.
@@ -116,6 +117,9 @@ files directly, that's usually the faster path.
 
 - **Stateless.** The server runs in stateless mode — there's no session to keep
   alive; each call is authenticated by the bearer token on its own.
+- **Failure details follow your live role.** `get_run` gives every member a safe
+  failure summary and recommendation. Raw `errorDetails` are additive for
+  workspace admins and omitted for viewers and operators.
 - **Per-user connections.** A run triggered through the MCP server uses the
   connections *you* authorized. If a run fails on a missing connection, check
   `list_connections` and authorize it under Connections.

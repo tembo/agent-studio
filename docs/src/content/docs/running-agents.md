@@ -46,10 +46,22 @@ replayed.
 
 ## When a run fails
 
-Failed runs keep their captured output and tool calls so you can diagnose them.
-The agent and workspace dashboards group recent failures, and the run page links
-to related context. Common causes — a missing provider key, an unauthorized or
-stale connection, or a truncated response — are covered in
+Failed runs keep their captured output and tool calls. The run page explains the
+failure in plain language, recommends what to do next, and links directly to the
+relevant connection, provider, or agent settings when possible. The agent and
+workspace dashboards group failures by these safe summaries instead of by raw
+runtime output.
+
+Workspace admins see the same simple explanation and role-appropriate recovery
+guidance as everyone else, plus a collapsed **Technical details** section for
+investigating the underlying runtime trace. Technical details are not sent to
+viewers or operators through the run page, Runs list, chat, audit timeline, REST
+API, MCP, or Slack failure notifications. Runs created before structured failure
+summaries were introduced show a generic explanation while retaining their
+admin-only diagnostics.
+
+Common causes — a missing provider key, an unauthorized or stale connection, or
+a truncated response — are covered in
 [Troubleshooting](/agent-studio/troubleshooting/).
 
 ## Improving an agent from a run

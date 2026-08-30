@@ -69,7 +69,12 @@ export type SerializedRun = {
   status: RunRecord["status"];
   output: string;
   streamedOutput: string | null;
+  /** Safe user-facing failure copy. */
   errorMessage: string | null;
+  failureCode: string | null;
+  failureRecommendation: string | null;
+  /** Privileged runner diagnostics; omitted for non-admin callers. */
+  errorDetails?: string | null;
   createdBy: string;
   createdAt: string;
   startedAt: string | null;
@@ -81,9 +86,12 @@ export type SerializedRun = {
   agentVersionLabel: string | null;
 };
 
-/** Full run record (output, stream, error, tokens) — the GET /runs/[id] body. */
-export function serializeRunRecord(r: RunRecord): SerializedRun {
-  return {
+/** Full run record (output, stream, safe failure copy, tokens). */
+export function serializeRunRecord(
+  r: RunRecord,
+  options: { includeDiagnostics?: boolean } = {},
+): SerializedRun {
+  const serialized: SerializedRun = {
     id: r.id,
     agentName: r.agentName,
     agentPath: r.agentPath,
@@ -92,7 +100,17 @@ export function serializeRunRecord(r: RunRecord): SerializedRun {
     status: r.status,
     output: r.output,
     streamedOutput: r.streamedOutput,
-    errorMessage: r.errorMessage,
+    errorMessage:
+      r.status === "failed"
+        ? (r.failureSummary ?? "The run ended unexpectedly.")
+        : null,
+    failureCode:
+      r.status === "failed" ? (r.failureCode ?? "unknown") : null,
+    failureRecommendation:
+      r.status === "failed"
+        ? (r.failureRecommendation ??
+          "Try again. If it keeps failing, ask a workspace admin to investigate.")
+        : null,
     createdBy: r.createdBy,
     createdAt: r.createdAt,
     startedAt: r.startedAt,
@@ -103,6 +121,10 @@ export function serializeRunRecord(r: RunRecord): SerializedRun {
     automationId: r.automationId,
     agentVersionLabel: r.agentVersionLabel,
   };
+  if (options.includeDiagnostics && r.status === "failed" && r.errorMessage) {
+    serialized.errorDetails = r.errorMessage;
+  }
+  return serialized;
 }
 
 export type SerializedRunListItem = {

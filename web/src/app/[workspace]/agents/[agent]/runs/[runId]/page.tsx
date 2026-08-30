@@ -12,6 +12,7 @@ import { toolkitLabel } from "@/lib/composio-label";
 import { getMcpProvider } from "@/lib/mcp-providers";
 import { listWorkspaceToolProviders } from "@/lib/mcp-tools";
 import { getRun, type RunRecord } from "@/lib/runs-api";
+import type { WorkspaceRole } from "@/lib/rbac";
 import {
   listChildRuns,
   listChildRunToolNames,
@@ -20,7 +21,7 @@ import {
 } from "@/lib/runs-db";
 import { getServerSession } from "@/lib/session";
 import { isTemboConfiguredForUser } from "@/lib/tembo-credentials";
-import { getWorkspaceBySlug } from "@/lib/workspace";
+import { getWorkspaceBySlug, getWorkspaceRole } from "@/lib/workspace";
 
 import { CancelRunButton } from "./cancel-run-button";
 import { CopyOutputButton } from "./copy-output-button";
@@ -43,6 +44,9 @@ export default async function RunDetailPage({
 
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
+
+  const role = await getWorkspaceRole(workspace.id, session.user.id);
+  if (!role) notFound();
 
   const run = await getRun(runId, workspace.id);
   if (!run) notFound();
@@ -494,9 +498,13 @@ export default async function RunDetailPage({
         </Section>
       )}
 
-      {run.status === "failed" && run.errorMessage && (
+      {run.status === "failed" && (
         <Section title="Failure">
-          <FailedReason run={run} workspaceSlug={workspace.slug} />
+          <FailedReason
+            run={run}
+            workspaceSlug={workspace.slug}
+            role={role}
+          />
         </Section>
       )}
 
@@ -524,44 +532,44 @@ export default async function RunDetailPage({
 function FailedReason({
   run,
   workspaceSlug,
+  role,
 }: {
   run: RunRecord;
   workspaceSlug: string;
+  role: WorkspaceRole;
 }) {
-  // First slice of the error message used as the "similar failures"
-  // search term. Matches the prefix the per-agent dashboard uses for
-  // its failure groups (120 chars), so the same root cause across
-  // runs lands in the same bucket. Truncate to ~80 chars for the URL
-  // — anything longer just shows up as a less specific match anyway.
-  const errorSearchTerm =
-    run.errorMessage?.slice(0, 80).trim() ?? "";
+  const summary = run.failureSummary ?? "The run ended unexpectedly.";
+  const recommendation =
+    role === "viewer"
+      ? viewerRecommendation(run.failureCode)
+      : (run.failureRecommendation ??
+        "Try again. If it keeps failing, ask a workspace admin to investigate.");
+  const errorSearchTerm = summary.slice(0, 80).trim();
   const similarHref = `/${workspaceSlug}/runs?${new URLSearchParams({
     status: "failed",
     agent: run.agentName,
     q: errorSearchTerm,
   }).toString()}`;
   const failureGroupsHref = `/${workspaceSlug}/agents/${encodeURIComponent(run.agentName)}#failures`;
+  const action = recoveryAction(run.failureCode, workspaceSlug, run.agentName, role);
+  const canViewDiagnostics = role === "workspace_admin";
 
   return (
-    <div className="group relative mt-3 flex flex-col gap-2 rounded-lg border border-[var(--color-sentiment-negative)] bg-[var(--color-input-error)] p-3 text-sm">
-      <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
-        <CopyOutputButton text={run.errorMessage ?? ""} />
+    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-[var(--color-sentiment-negative)] bg-[var(--color-input-error)] p-4 text-sm">
+      <div className="flex flex-col gap-1">
+        <span className="text-sentiment-negative font-medium">Run failed</span>
+        <p className="text-foreground font-medium">{summary}</p>
+        <p className="text-foreground-weak">{recommendation}</p>
       </div>
-      <span className="text-sentiment-negative font-medium">
-        Failure reason
-      </span>
-      {/* max-height + overflow so a long stack trace doesn't push the
-          rest of the page (Improve form, recent runs) off-screen; the
-          Copy button above is the escape hatch for sharing the full
-          text elsewhere. */}
-      <pre className="text-foreground max-h-96 overflow-auto whitespace-pre-wrap font-mono text-sm leading-5">
-        {run.errorMessage}
-      </pre>
-      {/* Two investigation jumps. "Similar runs" pulls every failed
-          run on this agent with the same error prefix in /runs;
-          "Failure groups" jumps to the per-agent dashboard's
-          grouped-by-error rollup. Same data, two pivots. */}
-      <div className="flex flex-wrap items-center gap-3 pt-1 text-sm">
+      <div className="flex flex-wrap items-center gap-3">
+        {action && (
+          <Link
+            href={action.href}
+            className="bg-interactive text-foreground-on-accent hover:bg-interactive-hover rounded-md px-3 py-1.5 font-medium"
+          >
+            {action.label}
+          </Link>
+        )}
         {errorSearchTerm && (
           <Link
             href={similarHref}
@@ -577,8 +585,82 @@ function FailedReason({
           View {run.agentName} failure groups →
         </Link>
       </div>
+      {canViewDiagnostics && run.errorMessage && (
+        <details className="border-border mt-1 border-t pt-3">
+          <summary className="text-foreground cursor-pointer font-medium">
+            Technical details
+          </summary>
+          <div className="group relative mt-3 rounded-md bg-surface-raised p-3">
+            <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-150 group-hover:opacity-100 focus-within:opacity-100">
+              <CopyOutputButton
+                text={run.errorMessage}
+                ariaLabel="Copy technical details to clipboard"
+              />
+            </div>
+            <pre className="text-foreground max-h-96 overflow-auto whitespace-pre-wrap pr-8 font-mono text-sm leading-5">
+              {run.errorMessage}
+            </pre>
+          </div>
+        </details>
+      )}
     </div>
   );
+}
+
+function viewerRecommendation(failureCode: string | null): string {
+  switch (failureCode) {
+    case "connection_stale":
+    case "connection_required":
+      return "Ask an operator or workspace admin to reconnect the required service.";
+    case "agent_configuration":
+      return "Ask an operator or workspace admin to review the agent definition.";
+    case "rate_limited":
+    case "provider_unavailable":
+    case "run_start_failed":
+    case "interrupted":
+      return "Ask an operator or workspace admin to run the agent again.";
+    default:
+      return "Ask a workspace admin to investigate.";
+  }
+}
+
+function recoveryAction(
+  failureCode: string | null,
+  workspaceSlug: string,
+  agentName: string,
+  role: WorkspaceRole,
+): { label: string; href: string } | null {
+  if (role === "viewer") return null;
+
+  switch (failureCode) {
+    case "connection_stale":
+    case "connection_required":
+      return { label: "Open connections", href: `/${workspaceSlug}/connections` };
+    case "connection_provider_setup":
+      return role === "workspace_admin"
+        ? {
+            label: "Configure connection provider",
+            href: `/${workspaceSlug}/connections/providers`,
+          }
+        : null;
+    case "provider_credentials":
+      return role === "workspace_admin"
+        ? {
+            label: "Open LLM provider settings",
+            href: `/${workspaceSlug}/settings/providers`,
+          }
+        : null;
+    case "agent_configuration":
+      return {
+        label: "Review agent definition",
+        href: `/${workspaceSlug}/agents/${encodeURIComponent(agentName)}/definition`,
+      };
+    default:
+      return {
+        label: "Open agent to run again",
+        href: `/${workspaceSlug}/agents/${encodeURIComponent(agentName)}`,
+      };
+  }
 }
 
 const STATUS_LABELS: Record<RunRecord["status"], string> = {

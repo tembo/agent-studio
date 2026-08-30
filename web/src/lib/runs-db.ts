@@ -221,11 +221,11 @@ export async function listChatRunsForAgent(
     status: ChatRun["status"];
     user_message: string;
     output: string;
-    error_message: string | null;
+    failure_summary: string | null;
     created_at: Date;
     completed_at: Date | null;
   }>(
-    `SELECT id, agent_name, status, user_message, output, error_message, created_at, completed_at
+    `SELECT id, agent_name, status, user_message, output, failure_summary, created_at, completed_at
        FROM run
       WHERE workspace_id = $1 AND agent_name = $2
         AND user_message IS NOT NULL AND user_message <> ''
@@ -239,7 +239,7 @@ export async function listChatRunsForAgent(
     status: r.status,
     userMessage: r.user_message,
     output: r.output,
-    errorMessage: r.error_message,
+    errorMessage: r.failure_summary ?? "The run ended unexpectedly.",
     createdAt: r.created_at,
     completedAt: r.completed_at,
   }));
@@ -248,7 +248,8 @@ export async function listChatRunsForAgent(
 // Workspace-wide run list with optional filters. Status / trigger
 // arrays use ANY() so an empty array means "no filter" via NULL
 // coalescing on the parameter; agentName is a scalar; search runs an
-// ILIKE on user_message + output + error_message. Pagination is
+// ILIKE on user_message + output + safe failure summary + privileged
+// diagnostics. Pagination is
 // cursor-by-created_at (descending), passing the last seen createdAt
 // as `before` for the next page. limit is enforced server-side to
 // keep queries cheap.
@@ -275,7 +276,7 @@ export type RunListItem = {
   // input without round-tripping to the run detail page. Empty when
   // the run had no input (the manual "Run now" path).
   userMessagePreview: string;
-  // First slice of error_message for failed runs — lets the table
+  // Safe failure summary for failed runs — lets the table
   // surface why a run failed without clicking through. Null on rows
   // that didn't fail or didn't carry an error string.
   errorMessagePreview: string | null;
@@ -337,13 +338,14 @@ export async function listRunsForWorkspace(
   }
   if (filters.search && filters.search.trim()) {
     // Single placeholder reused across the OR; ILIKE on user_message,
-    // output, and error_message so a triager can grep across input,
-    // success output, and failure text in one shot. Caller is
+    // output, safe failure summary, and diagnostics so an admin can grep
+    // across input, success output, and failure text in one shot. Only the
+    // safe summary is returned to the caller. Caller is
     // expected to keep the search term short (~200 chars) — the UI
     // input enforces that.
     params.push(`%${filters.search.trim()}%`);
     where.push(
-      `(r.user_message ILIKE $${params.length} OR r.output ILIKE $${params.length} OR r.error_message ILIKE $${params.length})`,
+      `(r.user_message ILIKE $${params.length} OR r.output ILIKE $${params.length} OR r.failure_summary ILIKE $${params.length} OR r.error_message ILIKE $${params.length})`,
     );
   }
   if (options.before) {
@@ -363,7 +365,7 @@ export async function listRunsForWorkspace(
     started_at: Date | null;
     completed_at: Date | null;
     user_message: string;
-    error_message: string | null;
+    failure_summary: string | null;
     // pg returns NUMERIC as a string by default to preserve precision.
     // Parse on the way out.
     cost_usd: string | null;
@@ -377,7 +379,7 @@ export async function listRunsForWorkspace(
   }>(
     `SELECT r.id, r.agent_name, r.status, r.trigger, r.automation_id,
             r.created_at, r.started_at, r.completed_at, r.user_message,
-            r.error_message, r.cost_usd, r.agent_version_label,
+            r.failure_summary, r.cost_usd, r.agent_version_label,
             u.name AS created_by_name, u.email AS created_by_email,
             sa.name AS slack_app_name, sd.slack_user_id,
             sd.permalink AS slack_permalink, sd.channel AS slack_channel
@@ -402,8 +404,8 @@ export async function listRunsForWorkspace(
     completedAt: r.completed_at,
     userMessagePreview: (r.user_message ?? "").slice(0, 200),
     errorMessagePreview:
-      r.error_message && r.error_message.length > 0
-        ? r.error_message.slice(0, 240)
+      r.status === "failed"
+        ? (r.failure_summary ?? "The run ended unexpectedly.")
         : null,
     costUsd: r.cost_usd === null ? null : Number(r.cost_usd),
     createdByName: r.created_by_name,
@@ -568,7 +570,7 @@ export async function getAgentDailyRunBands30d(
 }
 
 export type AgentFailureGroup = {
-  /** First 120 chars of error_message, used as the grouping key. */
+  /** Safe failure summary, used as the grouping key. */
   errorPrefix: string;
   occurrences: number;
   lastSeen: Date;
@@ -577,9 +579,9 @@ export type AgentFailureGroup = {
 };
 
 /**
- * Top-K failure prefixes from the last 30 days for one agent.
- * Groups by SUBSTRING(error_message FROM 1 FOR 120) so different
- * verbose tails of the same root cause collapse into one row.
+ * Top-K safe failure summaries from the last 30 days for one agent.
+ * The runner assigns stable summaries, so repeated root causes collapse
+ * without exposing diagnostic traces to the dashboard.
  */
 export type FailingAgentRecent = {
   agentName: string;
@@ -809,8 +811,7 @@ export async function listAgentFailureGroups30d(
     example_run_id: string;
   }>(
     `SELECT
-        SUBSTRING(COALESCE(error_message, '(no error message)')
-                   FROM 1 FOR 120)                                  AS error_prefix,
+        COALESCE(failure_summary, 'The run ended unexpectedly.')    AS error_prefix,
         COUNT(*)::TEXT                                              AS occurrences,
         MAX(created_at)                                             AS last_seen,
         (ARRAY_AGG(id ORDER BY created_at DESC))[1]                 AS example_run_id
