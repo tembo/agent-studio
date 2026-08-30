@@ -438,8 +438,8 @@ async fn run_cargo_ai(
         transcript.push_str(reply.trim_end());
     }
     // cargo-ai's stderr is operational noise ("Initialized Cargo AI
-    // Home at …") — keep it out of the user transcript; it still
-    // lands in docker logs if anything goes wrong.
+    // Home at …") — keep it out of the user transcript. On failure,
+    // invoke surfaces stderr through the run's error message.
 
     Ok(RunOutcome {
         output: transcript,
