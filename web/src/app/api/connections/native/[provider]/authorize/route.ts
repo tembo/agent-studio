@@ -27,6 +27,10 @@ import {
   trustedOAuthUrl,
 } from "@/lib/native-oauth-security";
 import {
+  dcrRegistrationFailureMessage,
+  getReusableDcrRegistration,
+} from "@/lib/native-dcr-registration";
+import {
   DEFAULT_INSTANCE,
   getNativeOAuthClientPreview,
 } from "@/lib/native-oauth-clients";
@@ -48,10 +52,9 @@ import { signNativeMcpState } from "@/lib/oauth-state";
 //   2. Fetch /.well-known/oauth-authorization-server from the
 //      provider's auth server to get registration / authorize /
 //      token endpoints + supported scopes.
-//   3. Dynamic Client Registration (RFC 7591): POST our redirect URI
-//      to registration_endpoint, get back a fresh client_id. Using
-//      token_endpoint_auth_method=none + PKCE means no client_secret
-//      is needed — we're a public client.
+//   3. Reuse this connection's registered OAuth client when reconnecting.
+//      Otherwise, Dynamic Client Registration (RFC 7591) POSTs our redirect
+//      URI to registration_endpoint and returns a client_id.
 //   4. Generate a PKCE verifier and its S256 challenge. The verifier
 //      lands in the signed state token (opaque to the provider);
 //      the challenge goes in the /authorize redirect URL.
@@ -514,75 +517,90 @@ export async function GET(
     }
     clientId = byo.clientId;
   } else {
-    // Dynamic Client Registration. The server decides public vs confidential:
-    // a public client gets no secret (we use PKCE only); a confidential one
-    // (Avoma) returns a client_secret we capture for token exchange + refresh.
-    let registrationEndpoint: URL;
-    try {
-      registrationEndpoint = await trustedOAuthUrl(
-        asMeta.registration_endpoint as string,
-        allowedOauthOrigins,
-        "Registration endpoint",
-      );
-    } catch (e) {
-      return back(
-        workspace.slug,
-        provider.slug,
-        `Registration endpoint is not trusted: ${(e as Error).message}`,
-      );
-    }
-    try {
-      const dcrRes = await fetch(
-        registrationEndpoint,
-        noRedirectFetchInit({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            client_name: "Tembo Agent Studio",
-            redirect_uris: [redirectUri],
-            token_endpoint_auth_method: "none",
-            grant_types: ["authorization_code", "refresh_token"],
-            response_types: ["code"],
+    const reusable = await getReusableDcrRegistration({
+      workspaceId: workspace.id,
+      userId,
+      provider: provider.slug,
+      connectionName,
+      mcpServerUrl,
+    });
+    if (reusable) {
+      clientId = reusable.clientId;
+      dcrClientSecret = reusable.clientSecret;
+    } else {
+      // The server decides public vs confidential: a public client gets no
+      // secret (PKCE only); a confidential one returns a client_secret we keep
+      // for token exchange, refresh, and future reconnects.
+      let registrationEndpoint: URL;
+      try {
+        registrationEndpoint = await trustedOAuthUrl(
+          asMeta.registration_endpoint as string,
+          allowedOauthOrigins,
+          "Registration endpoint",
+        );
+      } catch (e) {
+        return back(
+          workspace.slug,
+          provider.slug,
+          `Registration endpoint is not trusted: ${(e as Error).message}`,
+        );
+      }
+      try {
+        const dcrRes = await fetch(
+          registrationEndpoint,
+          noRedirectFetchInit({
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              client_name: "Tembo Agent Studio",
+              redirect_uris: [redirectUri],
+              token_endpoint_auth_method: "none",
+              grant_types: ["authorization_code", "refresh_token"],
+              response_types: ["code"],
+            }),
           }),
-        }),
-      );
-      if (!dcrRes.ok) {
-        const body = await dcrRes.text().catch(() => "");
+        );
+        if (!dcrRes.ok) {
+          const body = await dcrRes.text().catch(() => "");
+          console.error(
+            `[native-mcp/${provider.slug}] dynamic client registration failed (${dcrRes.status}): ${body.slice(0, 500)}`,
+          );
+          return back(
+            workspace.slug,
+            provider.slug,
+            dcrRegistrationFailureMessage(provider.displayName, dcrRes.status),
+          );
+        }
+        const dcrJson = (await dcrRes.json()) as DcrResponse;
+        if (!dcrJson.client_id) {
+          return back(
+            workspace.slug,
+            provider.slug,
+            `DCR succeeded but no client_id in the response.`,
+          );
+        }
+        clientId = dcrJson.client_id;
+        if (dcrJson.client_secret) {
+          dcrClientSecret = dcrJson.client_secret;
+        }
+      } catch (e) {
         return back(
           workspace.slug,
           provider.slug,
-          `Dynamic client registration failed (${dcrRes.status}): ${body.slice(0, 150)}`,
+          `DCR fetch failed: ${(e as Error).message}`,
         );
       }
-      const dcrJson = (await dcrRes.json()) as DcrResponse;
-      if (!dcrJson.client_id) {
-        return back(
-          workspace.slug,
-          provider.slug,
-          `DCR succeeded but no client_id in the response.`,
-        );
-      }
-      clientId = dcrJson.client_id;
-      // Confidential DCR: the server issued a client_secret. We'll present it via
-      // HTTP Basic. If there's NO secret and the server doesn't support public
-      // ("none"), we can't authenticate the client at all.
-      if (dcrJson.client_secret) {
-        dcrClientSecret = dcrJson.client_secret;
-      } else if (!authMethods.some((m) => m === "none")) {
-        return back(
-          workspace.slug,
-          provider.slug,
-          `${provider.displayName} auth server requires a confidential client but DCR returned no client_secret.`,
-        );
-      }
-    } catch (e) {
+    }
+    // Confidential DCR returns a secret. Without one, the authorization server
+    // must explicitly support public clients authenticated by PKCE.
+    if (!dcrClientSecret && !authMethods.some((m) => m === "none")) {
       return back(
         workspace.slug,
         provider.slug,
-        `DCR fetch failed: ${(e as Error).message}`,
+        `${provider.displayName} auth server requires a confidential client but DCR returned no client_secret.`,
       );
     }
   }
