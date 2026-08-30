@@ -14,8 +14,16 @@ message, and an **owner** — the automation runs as that owner, so it uses the
 owner's [connection](/agent-studio/connections/) credentials. You can also choose
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
-The automations list shows an **Run as** column so you can see whose credentials
+The automations list shows a **Run as** column so you can see whose credentials
 each schedule uses.
+
+If a schedule cannot start, its status changes to **Error** and it appears under
+**Action needed** in the sidebar. Temporary failures while reading the connected
+GitHub repository are retried with backoff; the scheduled window remains due so
+TAS starts one catch-up run when the repository becomes available again. Errors
+that require configuration changes, such as an invalid repository token or a
+deleted agent, remain visible until you correct the automation or repository
+connection.
 
 ## Composio event triggers
 

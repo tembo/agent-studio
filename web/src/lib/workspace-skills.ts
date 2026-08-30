@@ -8,6 +8,7 @@ import {
   listDirectory,
   readFile,
   updateFile,
+  type GitHubFileError,
   type RepoRef,
 } from "@/lib/github";
 import { getWorkspaceRepo, getWorkspaceSecretPlaintext } from "@/lib/workspace";
@@ -177,17 +178,30 @@ export async function readSkillFolder(
   token: string,
   ref: RepoRef,
   name: string,
-): Promise<{ ok: true; files: SkillFiles } | { ok: false; detail: string }> {
+): Promise<
+  | { ok: true; files: SkillFiles }
+  | { ok: false; detail: string; sourceError?: GitHubFileError }
+> {
   const root = `${SKILLS_DIR}/${name}`;
   const files: SkillFiles = {};
   let total = 0;
 
-  async function walk(path: string, depth: number): Promise<string | null> {
+  async function walk(
+    path: string,
+    depth: number,
+  ): Promise<{ detail: string; sourceError?: GitHubFileError } | null> {
     if (depth > MAX_DEPTH) return null;
     const listing = await listDirectory(token, ref, path);
-    if (!listing.ok) return listing.detail ?? listing.error;
+    if (!listing.ok) {
+      return {
+        detail: listing.detail ?? listing.error,
+        sourceError: listing.error,
+      };
+    }
     if ("missing" in listing && listing.missing) {
-      return depth === 0 ? `skill folder "${root}" not found` : null;
+      return depth === 0
+        ? { detail: `skill folder "${root}" not found` }
+        : null;
     }
     for (const entry of listing.entries) {
       if (entry.type === "dir") {
@@ -195,13 +209,22 @@ export async function readSkillFolder(
         if (err) return err;
       } else if (entry.type === "file") {
         if (entry.size > SKILL_FILE_MAX_BYTES) {
-          return `"${entry.path}" exceeds the ${SKILL_FILE_MAX_BYTES}-byte file limit`;
+          return {
+            detail: `"${entry.path}" exceeds the ${SKILL_FILE_MAX_BYTES}-byte file limit`,
+          };
         }
         const file = await readFile(token, ref, entry.path);
-        if (!file.ok) return file.detail ?? file.error;
+        if (!file.ok) {
+          return {
+            detail: file.detail ?? file.error,
+            sourceError: file.error,
+          };
+        }
         total += file.content.length;
         if (total > SKILL_TOTAL_MAX_BYTES) {
-          return `skill "${name}" exceeds the ${SKILL_TOTAL_MAX_BYTES}-byte total limit`;
+          return {
+            detail: `skill "${name}" exceeds the ${SKILL_TOTAL_MAX_BYTES}-byte total limit`,
+          };
         }
         files[entry.path] = file.content;
       }
@@ -210,7 +233,7 @@ export async function readSkillFolder(
   }
 
   const err = await walk(root, 0);
-  if (err) return { ok: false, detail: err };
+  if (err) return { ok: false, ...err };
   if (!files[`${root}/SKILL.md`]) {
     return { ok: false, detail: `skill "${name}" has no SKILL.md` };
   }

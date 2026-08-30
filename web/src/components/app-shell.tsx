@@ -42,6 +42,12 @@ type FailingAgentAlert = {
   lastFailureAtIso: string;
 };
 
+type ErroredAutomationAlert = {
+  id: string;
+  name: string;
+  agentName: string;
+};
+
 type Props = {
   workspace: Workspace;
   workspaces: { slug: string; name: string }[];
@@ -62,6 +68,8 @@ type Props = {
    * doesn't grow unbounded.
    */
   failingAgents: FailingAgentAlert[];
+  /** Enabled schedules whose most recent firing attempt was skipped. */
+  erroredAutomations: ErroredAutomationAlert[];
   /** False when the workspace has neither an Anthropic nor OpenAI key —
    *  agents can't run, so the sidebar shows a "add an LLM key" CTA. */
   hasLlmProvider: boolean;
@@ -75,6 +83,7 @@ export async function AppShell({
   role,
   missingConnections,
   failingAgents,
+  erroredAutomations,
   hasLlmProvider,
   children,
 }: Props) {
@@ -129,7 +138,11 @@ export async function AppShell({
           <SidebarNav home={home} inboxCount={inboxCount} />
 
           <ActionNeeded
-            hasStaticContent={!hasLlmProvider || failingAgents.length > 0}
+            hasStaticContent={
+              !hasLlmProvider ||
+              erroredAutomations.length > 0 ||
+              failingAgents.length > 0
+            }
             staticContent={
               <>
                 {!hasLlmProvider && (
@@ -153,6 +166,30 @@ export async function AppShell({
                     </div>
                   </div>
                 )}
+                {erroredAutomations.map((automation) => (
+                  <div
+                    key={`automation:${automation.id}`}
+                    className="flex items-start gap-2 rounded-md bg-[var(--color-sentiment-negative-subtle)] px-2 py-2"
+                  >
+                    <IconExclamationTriangle
+                      size={14}
+                      className="text-sentiment-negative mt-0.5 shrink-0"
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                      <span className="text-sentiment-negative text-sm leading-tight">
+                        <span className="font-semibold">{automation.name}</span>{" "}
+                        did not fire for {automation.agentName}
+                      </span>
+                      <Button asChild variant="destructive" size="small">
+                        <Link
+                          href={`/${workspace.slug}/automations/${automation.id}`}
+                        >
+                          Open
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
                 {failingAgents.map((f) => {
                   const agentHref = `/${workspace.slug}/agents/${encodeURIComponent(f.agentName)}`;
                   return (

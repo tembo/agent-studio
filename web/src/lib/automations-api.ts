@@ -209,6 +209,21 @@ export async function setAutomationSkipped(input: {
   );
 }
 
+// Transient source failures stay due so the scheduler can catch up after its
+// bounded backoff. Persist the error for operators without moving the firing
+// floor; a successful retry clears it through setAutomationFired.
+export async function setAutomationRetrying(input: {
+  id: string;
+  error: string;
+}): Promise<void> {
+  await db.query(
+    `UPDATE automation
+     SET last_fire_error = $2, updated_at = NOW()
+     WHERE id = $1`,
+    [input.id, input.error.slice(0, 1000)],
+  );
+}
+
 export async function getAutomation(id: string): Promise<Automation | null> {
   const res = await db.query<Row>(
     `SELECT ${COLUMNS} ${FROM_JOIN} WHERE a.id = $1`,
@@ -240,6 +255,23 @@ export async function listAutomationsForAgent(
      WHERE a.workspace_id = $1 AND a.agent_name = $2
      ORDER BY a.created_at DESC`,
     [workspaceId, agentName],
+  );
+  return res.rows.map(rowToAutomation);
+}
+
+export async function listErroredEnabledAutomations(
+  workspaceId: string,
+  limit = 5,
+): Promise<Automation[]> {
+  const res = await db.query<Row>(
+    `SELECT ${COLUMNS}
+     ${FROM_JOIN}
+     WHERE a.workspace_id = $1
+       AND a.enabled = TRUE
+       AND a.last_fire_error IS NOT NULL
+     ORDER BY a.updated_at DESC
+     LIMIT $2`,
+    [workspaceId, limit],
   );
   return res.rows.map(rowToAutomation);
 }

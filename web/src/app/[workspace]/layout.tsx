@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app-shell";
 import { Toaster } from "@/components/toaster";
+import { listErroredEnabledAutomations } from "@/lib/automations-api";
 import {
   buildConnectionSlotSets,
   isAgentConnectionMissing,
@@ -102,6 +103,7 @@ export default async function WorkspaceLayout({
     myNativeConnections,
     workspaceSecrets,
     failingAgents,
+    erroredAutomations,
     anthropicKey,
     openaiKey,
     role,
@@ -112,6 +114,7 @@ export default async function WorkspaceLayout({
     listNativeConnectionsForUser(workspace.id, session.user.id).catch(() => []),
     listSecretConnections(workspace.id).catch(() => []),
     listFailingAgents24h(workspace.id, session.user.id).catch(() => []),
+    listErroredEnabledAutomations(workspace.id).catch(() => []),
     getWorkspaceSecretPreview(workspace.id, "anthropic_api_key").catch(
       () => null,
     ),
@@ -181,6 +184,11 @@ export default async function WorkspaceLayout({
       role={role}
       missingConnections={missingConnections}
       failingAgents={failingAlerts}
+      erroredAutomations={erroredAutomations.map((a) => ({
+        id: a.id,
+        name: a.name,
+        agentName: a.agentName,
+      }))}
       hasLlmProvider={hasLlmProvider}
     >
       {children}
