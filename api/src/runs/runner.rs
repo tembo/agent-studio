@@ -1,7 +1,8 @@
 //! The actual run task. Lifecycle:
 //!   queued → running → succeeded | failed
-//! Output and error_message are written back to the run row so the web
-//! poller can render them. Both supported frameworks (Pydantic AI,
+//! Output, safe failure guidance, and privileged diagnostics are written back
+//! to the run row so the web poller can render the right view for each role.
+//! Both supported frameworks (Pydantic AI,
 //! Cargo AI) run as passthrough subprocess calls into the upstream
 //! tool — see the per-framework modules for the wire details.
 
@@ -82,6 +83,131 @@ struct RunOutcome {
     usage: Option<Usage>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RunFailure {
+    code: &'static str,
+    summary: &'static str,
+    recommendation: &'static str,
+    details: String,
+}
+
+impl RunFailure {
+    /// Convert framework/provider diagnostics into a stable category and
+    /// constant user-facing copy. Summaries deliberately never interpolate the
+    /// raw error: traces can contain internal paths, provider payloads, or
+    /// connection identifiers and are reserved for workspace admins.
+    fn classify(details: impl Into<String>) -> Self {
+        let details = details.into();
+        let normalized = details.to_ascii_lowercase();
+
+        let (code, summary, recommendation) = if normalized.contains("cached connection")
+            || normalized.contains("toolrouterv2_invalidconnectedaccountids")
+        {
+            (
+                "connection_stale",
+                "A connected service needs to be reauthorized.",
+                "Reconnect the service, then run the agent again.",
+            )
+        } else if (normalized.contains("no active") && normalized.contains("connection"))
+            || normalized.contains("agent declares native-mcp connections")
+        {
+            (
+                "connection_required",
+                "The agent is missing a required connection.",
+                "Connect the required service, then run the agent again.",
+            )
+        } else if normalized.contains("composio api key") {
+            (
+                "connection_provider_setup",
+                "The workspace connection provider is not configured.",
+                "Ask a workspace admin to configure the connection provider.",
+            )
+        } else if normalized.contains("mcp")
+            && (normalized.contains("status 401")
+                || normalized.contains("status code: 401")
+                || normalized.contains("unauthorized"))
+        {
+            (
+                "connection_stale",
+                "A connected service needs to be reauthorized.",
+                "Reconnect the service, then run the agent again.",
+            )
+        } else if normalized.contains("api key")
+            || normalized.contains("authentication_error")
+            || normalized.contains("authenticationerror")
+            || normalized.contains("authentication failed")
+            || normalized.contains("unauthorized")
+            || normalized.contains("status code: 401")
+            || normalized.contains("status 401")
+        {
+            (
+                "provider_credentials",
+                "The model provider rejected or is missing its credentials.",
+                "Ask a workspace admin to check the LLM provider settings.",
+            )
+        } else if normalized.contains("failed to parse spec")
+            || normalized.contains("agentspec")
+            || normalized.contains("tools_module")
+            || normalized.contains("agent's model field")
+            || normalized.contains("agent json")
+        {
+            (
+                "agent_configuration",
+                "The agent definition could not be loaded.",
+                "Review the agent definition, correct it, and run the agent again.",
+            )
+        } else if normalized.contains("rate limit")
+            || normalized.contains("rate_limit")
+            || normalized.contains("status code: 429")
+            || normalized.contains("status 429")
+        {
+            (
+                "rate_limited",
+                "A provider temporarily rate-limited the run.",
+                "Wait briefly, then run the agent again.",
+            )
+        } else if normalized.contains("timed out")
+            || normalized.contains("timeout")
+            || normalized.contains("connection error")
+            || normalized.contains("connectionerror")
+            || normalized.contains("service unavailable")
+        {
+            (
+                "provider_unavailable",
+                "A provider was temporarily unavailable.",
+                "Run the agent again. If it keeps failing, ask a workspace admin to investigate.",
+            )
+        } else if normalized.contains("failed to spawn")
+            || normalized.contains("process failed to complete")
+        {
+            (
+                "run_start_failed",
+                "The agent runtime could not start.",
+                "Run the agent again. If it keeps failing, ask a workspace admin to investigate.",
+            )
+        } else if normalized.starts_with("interrupted") {
+            (
+                "interrupted",
+                "The run was interrupted before it finished.",
+                "Run the agent again.",
+            )
+        } else {
+            (
+                "unknown",
+                "The run ended unexpectedly.",
+                "Try again. If it keeps failing, ask a workspace admin to investigate.",
+            )
+        };
+
+        Self {
+            code,
+            summary,
+            recommendation,
+            details,
+        }
+    }
+}
+
 // Provider-neutral usage shape. Both pydantic-ai's usage and any
 // future framework's normalise into this before crossing into the
 // run row so the column semantics ({tokens_input, tokens_output})
@@ -143,7 +269,8 @@ pub async fn recover_orphaned_runs(state: &AppState) {
             } else {
                 "Interrupted — this run predates durable execution and cannot be resumed."
             };
-            if let Err(e) = mark_failed(state, row.id, reason).await {
+            let failure = RunFailure::classify(reason);
+            if let Err(e) = mark_failed(state, row.id, &failure).await {
                 tracing::error!(run_id = %row.id, ?e, "failed to finalize non-resumable orphan");
             }
             continue;
@@ -151,7 +278,9 @@ pub async fn recover_orphaned_runs(state: &AppState) {
 
         let updated = sqlx::query(
             "UPDATE run SET status = 'queued', completed_at = NULL, \
-                    error_message = NULL, streamed_output = NULL, \
+                    error_message = NULL, failure_code = NULL, \
+                    failure_summary = NULL, failure_recommendation = NULL, \
+                    streamed_output = NULL, \
                     resume_count = resume_count + 1, resumed_at = now() \
               WHERE id = $1 AND status IN ('queued', 'running')",
         )
@@ -265,7 +394,8 @@ async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &Cancellat
         Err(e) => {
             tracing::error!(run_id = %ctx.run_id, ?e, "mark_running failed");
             // Best-effort write the failure to the run row so the UI sees it.
-            let _ = mark_failed(state, ctx.run_id, &format!("internal: {e}")).await;
+            let failure = RunFailure::classify(format!("internal: {e}"));
+            let _ = mark_failed(state, ctx.run_id, &failure).await;
             return;
         }
     }
@@ -311,14 +441,18 @@ async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &Cancellat
                 return;
             }
             let reason = format!("{e:#}");
+            let failure = RunFailure::classify(reason.clone());
             tracing::warn!(run_id = %ctx.run_id, ?e, "run failed");
-            if let Err(db_err) = mark_failed(state, ctx.run_id, &reason).await {
+            if let Err(db_err) = mark_failed(state, ctx.run_id, &failure).await {
                 tracing::error!(run_id = %ctx.run_id, ?db_err, "mark_failed failed");
             }
             deliver_slack_result(
                 state,
                 ctx.run_id,
-                &format!(":warning: Run failed: {reason}"),
+                &format!(
+                    ":warning: Run failed: {} {}",
+                    failure.summary, failure.recommendation
+                ),
             )
             .await;
         }
@@ -821,7 +955,7 @@ async fn mark_succeeded(
 
 #[cfg(test)]
 mod tests {
-    use super::extract_emit_reply;
+    use super::{extract_emit_reply, RunFailure};
 
     #[test]
     fn extracts_reply_lines_drops_progress_lines() {
@@ -866,15 +1000,69 @@ Run complete · 3.7s total
         let stdout = "Run complete · 1.0s total\n";
         assert!(extract_emit_reply(stdout).is_empty());
     }
+
+    #[test]
+    fn classifies_stale_connections_without_exposing_details() {
+        let failure = RunFailure::classify(
+            "Composio rejected the cached connection for: gmail/default. raw token ca_secret",
+        );
+        assert_eq!(failure.code, "connection_stale");
+        assert_eq!(
+            failure.summary,
+            "A connected service needs to be reauthorized."
+        );
+        assert!(!failure.summary.contains("gmail"));
+        assert!(failure.details.contains("ca_secret"));
+    }
+
+    #[test]
+    fn classifies_agent_configuration_failures() {
+        let failure = RunFailure::classify(
+            "pydantic-ai wrapper exited: failed to parse spec: AgentSpec is invalid",
+        );
+        assert_eq!(failure.code, "agent_configuration");
+    }
+
+    #[test]
+    fn classifies_common_recoverable_failures() {
+        let cases = [
+            (
+                "Agent declares native-MCP connections ['github'] but the run's acting user has no active connection",
+                "connection_required",
+            ),
+            ("AuthenticationError: invalid API key", "provider_credentials"),
+            ("ModelHTTPError: status code: 429 rate limit", "rate_limited"),
+            ("request timed out", "provider_unavailable"),
+            ("failed to spawn pydantic-ai wrapper", "run_start_failed"),
+            ("Interrupted — runtime stopped", "interrupted"),
+            ("MCP server returned status 401", "connection_stale"),
+        ];
+
+        for (details, expected_code) in cases {
+            assert_eq!(RunFailure::classify(details).code, expected_code);
+        }
+    }
+
+    #[test]
+    fn unknown_failures_use_a_safe_generic_summary() {
+        let failure = RunFailure::classify("Traceback: customer payload and internal path");
+        assert_eq!(failure.code, "unknown");
+        assert_eq!(failure.summary, "The run ended unexpectedly.");
+        assert!(!failure.summary.contains("customer payload"));
+    }
 }
 
-async fn mark_failed(state: &AppState, run_id: Uuid, reason: &str) -> anyhow::Result<()> {
+async fn mark_failed(state: &AppState, run_id: Uuid, failure: &RunFailure) -> anyhow::Result<()> {
     sqlx::query(
-        "UPDATE run SET status = 'failed', error_message = $1, completed_at = $2, \
-                        streamed_output = NULL \
-                  WHERE id = $3 AND status IN ('queued', 'running')",
+        "UPDATE run SET status = 'failed', error_message = $1, failure_code = $2, \
+                        failure_summary = $3, failure_recommendation = $4, \
+                        completed_at = $5, streamed_output = NULL \
+                  WHERE id = $6 AND status IN ('queued', 'running')",
     )
-    .bind(reason)
+    .bind(&failure.details)
+    .bind(failure.code)
+    .bind(failure.summary)
+    .bind(failure.recommendation)
     .bind(Utc::now())
     .bind(run_id)
     .execute(&state.db)

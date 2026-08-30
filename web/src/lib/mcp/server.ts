@@ -173,9 +173,9 @@ export function buildMcpServer(
     "get_run",
     {
       description:
-        "Get one run by id with its full output, live streamed output, error " +
-        "message, and token usage. Use after trigger_run, or to inspect why a " +
-        "run failed.",
+        "Get one run by id with its full output, live streamed output, safe " +
+        "failure guidance, and token usage. Workspace admins also receive " +
+        "technical diagnostics for failed runs.",
       inputSchema: { id: z.string().describe("The run id.") },
     },
     async ({ id }) => {
@@ -186,7 +186,11 @@ export function buildMcpServer(
         return errorResult("Could not reach the run service.");
       }
       if (!run) return errorResult(`No run with id "${id}" in this workspace.`);
-      return json({ run: serializeRunRecord(run) });
+      return json({
+        run: serializeRunRecord(run, {
+          includeDiagnostics: ctx.role === "workspace_admin",
+        }),
+      });
     },
   );
 

@@ -6,7 +6,10 @@ description: Common run failures and where to look when something isn't working.
 When something's off, the [run detail page](/agent-studio/running-agents/) and
 the [Tool uses](/agent-studio/tools-and-tool-uses/) view are the first places to
 look — they show the agent's output and exactly which tools it called (even on
-failed runs).
+failed runs). Failure cards give every member a safe summary and recommended
+action. Workspace admins can expand **Technical details** on the run page when
+the summary is not enough; viewers and operators do not receive raw runtime
+traces.
 
 ## Common issues
 

@@ -312,7 +312,7 @@ async function fetchRunEvents(
     agent_name: string;
     duration_ms: string | null;
     cost_usd: string | null;
-    error_message: string | null;
+    failure_summary: string | null;
   }>(
     `SELECT r.id, r.workspace_id, r.created_by,
             u.name AS actor_name, u.email AS actor_email,
@@ -320,7 +320,7 @@ async function fetchRunEvents(
             r.status, r.trigger, r.agent_name,
             (EXTRACT(EPOCH FROM (r.completed_at - r.started_at)) * 1000)::TEXT AS duration_ms,
             r.cost_usd::TEXT AS cost_usd,
-            r.error_message
+            r.failure_summary
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
       WHERE ${where.join(" AND ")}
@@ -346,7 +346,10 @@ async function fetchRunEvents(
       trigger: r.trigger,
       durationMs: r.duration_ms ? Number(r.duration_ms) : null,
       costUsd: r.cost_usd ? Number(r.cost_usd) : null,
-      errorMessage: r.error_message,
+      errorMessage:
+        r.status === "failed"
+          ? (r.failure_summary ?? "The run ended unexpectedly.")
+          : null,
     },
     referencesEventId: null,
   }));

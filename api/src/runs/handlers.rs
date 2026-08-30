@@ -146,12 +146,14 @@ pub async fn create_run(
     sqlx::query(
         r#"INSERT INTO run
             (id, workspace_id, agent_name, agent_path, model, status,
+             failure_code, failure_summary, failure_recommendation,
              created_by, user_message, trigger, automation_id,
              agent_version_id, agent_version_label, parent_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
              execution_skills_content)
-            VALUES ($1, $2, $3, $4, $5, 'queued', $6, $7, $8, $9, $10, $11, $12,
+            VALUES ($1, $2, $3, $4, $5, 'queued', NULL, NULL, NULL,
+                    $6, $7, $8, $9, $10, $11, $12,
                     $13, $14, $15, $16, $17)"#,
     )
     .bind(run_id)
@@ -239,6 +241,10 @@ pub struct RunRecord {
     /// Live partial output while status='running' (NULL once terminal).
     pub streamed_output: Option<String>,
     pub error_message: Option<String>,
+    /// Stable category plus safe copy for non-admin failure surfaces.
+    pub failure_code: Option<String>,
+    pub failure_summary: Option<String>,
+    pub failure_recommendation: Option<String>,
     pub created_by: String,
     pub created_at: DateTime<Utc>,
     pub started_at: Option<DateTime<Utc>>,
@@ -269,7 +275,8 @@ pub async fn get_run(
 ) -> Result<Json<RunRecord>, StatusCode> {
     let row: Option<RunRecord> = sqlx::query_as(
         r#"SELECT id, workspace_id, agent_name, agent_path, user_message, model, status,
-                  output, streamed_output, error_message, created_by, created_at,
+                  output, streamed_output, error_message, failure_code,
+                  failure_summary, failure_recommendation, created_by, created_at,
                   started_at, completed_at, tokens_input, tokens_output,
                   scaledown_original_tokens, scaledown_compressed_tokens,
                   trigger, automation_id, agent_version_id, agent_version_label,
