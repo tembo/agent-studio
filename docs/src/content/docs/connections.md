@@ -93,7 +93,10 @@ connections:
 
 Authorize and manage connections under **Connections**. If a credential expires
 or is revoked, the connection is marked stale and runs that need it fail with a
-clear message — reconnect from the same page. See
+clear message — reconnect from the same page. Reconnecting a Native MCP account
+normally reuses its existing registered OAuth client instead of consuming
+another provider registration. If a provider rate-limits a first-time
+connection, wait and retry later. See
 [Troubleshooting](/agent-studio/troubleshooting/).
 
 ### Viewing another member's connections (admins)

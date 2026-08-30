@@ -57,9 +57,9 @@ export type NativeMcpStatePayload = {
    *  our trust boundary — state is HMAC-signed and opaque to the
    *  provider. */
   pkceVerifier: string;
-  /** OAuth client_id that Dynamic Client Registration just issued
-   *  for this flow. New per Connect attempt (MCP DCR is cheap;
-   *  caching adds complexity without much payoff at v1). */
+  /** OAuth client_id issued by Dynamic Client Registration. Reconnects reuse
+   *  the connection's saved client so provider registration limits are not
+   *  consumed for every new authorization grant. */
   clientId: string;
   /** Authorization server token endpoint, captured during
    *  discovery so the callback doesn't need to re-discover. */
