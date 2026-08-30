@@ -13,12 +13,14 @@ Every agent has two runtime surfaces:
 
 | Surface | What it is | Used by |
 | ------- | ---------- | ------- |
-| **Draft** | The live file on your repo's default branch | The agent **chat** surface (probe and iterate) |
-| **Stable** | A numbered snapshot frozen in the database after promotion | **Run now**, schedules, [Slack](/agent-studio/slack-apps/), [webhooks](/agent-studio/automations-triggers/), and [triggers](/agent-studio/automations-triggers/) by default |
+| **Draft** | The live file on your repo's default branch | The agent **chat** surface and **Run now** by default (probe and iterate) |
+| **Stable** | A numbered snapshot frozen in the database after promotion | Schedules, [Slack](/agent-studio/slack-apps/), [webhooks](/agent-studio/automations-triggers/), and [triggers](/agent-studio/automations-triggers/) by default; optional for **Run now** |
 
 Until you promote a stable version, everything runs the draft. After promotion,
-automated paths use stable for predictability while chat keeps running the draft
-so you can iterate without surprising production.
+automated paths use stable for predictability while chat and manual runs default
+to the draft so you can test changes without surprising production. The manual
+run confirmation names the exact version and can switch to a numbered stable
+snapshot.
 
 See [Core concepts → versioning](/agent-studio/core-concepts/) for the mental
 model.

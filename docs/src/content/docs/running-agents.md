@@ -10,8 +10,11 @@ covers running on demand and reading the result.
 ## Run an agent now
 
 Open an agent and use **Run** to execute it once. You can optionally pass an
-input message; agents with no input run their instructions directly. By default
-a run uses the agent's **stable** version; the chat surface runs the live draft.
+input message; agents with no input run their instructions directly. Manual
+runs default to the live **draft** so your latest repository edits are what get
+tested. The confirmation dialog names the selected version and lets you choose
+the numbered stable snapshot instead. Schedules and other automated runs still
+default to stable.
 
 The API limits how many agents execute simultaneously. When all execution slots
 are occupied, newly accepted runs stay **queued** and start automatically as
