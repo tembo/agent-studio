@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Improvement } from "@/lib/improvements-api";
 
+const scheduleAfterResponse = vi.fn();
+vi.mock("next/server", () => ({
+  after: (callback: () => Promise<void>) => scheduleAfterResponse(callback),
+}));
+
 const setImprovementPr = vi.fn();
 const setImprovementCommit = vi.fn();
 vi.mock("@/lib/improvements-api", () => ({
@@ -19,7 +24,10 @@ vi.mock("@/lib/workspace", () => ({
     getWorkspaceSecretPlaintext(...a),
 }));
 
-import { scanImprovementsForPRs } from "./improvement-scan";
+import {
+  scanImprovementsForPRs,
+  scheduleImprovementScan,
+} from "./improvement-scan";
 
 function improvement(over: Partial<Improvement> & { id: string }): Improvement {
   return {
@@ -49,6 +57,7 @@ let wsCounter = 0;
 const nextWorkspace = () => `ws-${++wsCounter}`;
 
 beforeEach(() => {
+  scheduleAfterResponse.mockReset();
   setImprovementPr.mockReset().mockResolvedValue(undefined);
   setImprovementCommit.mockReset().mockResolvedValue(undefined);
   getWorkspaceRepo.mockReset().mockResolvedValue({ owner: "o", name: "r" });
@@ -207,5 +216,41 @@ describe("scanImprovementsForPRs", () => {
     expect(out[0].status).toBe("merged");
     expect(out[0].prNumber).toBe(7);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("scheduleImprovementScan", () => {
+  it("defers GitHub reconciliation until after the response", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        number: 1,
+        html_url: "https://github.com/o/r/pull/1",
+        state: "open",
+        merged_at: null,
+        merged: false,
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    scheduleImprovementScan(nextWorkspace(), [
+      improvement({ id: "a", prNumber: 1 }),
+    ]);
+
+    expect(scheduleAfterResponse).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const callback = scheduleAfterResponse.mock.calls[0][0];
+    await callback();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("does not schedule work when every improvement is terminal", () => {
+    scheduleImprovementScan(nextWorkspace(), [
+      improvement({ id: "a", status: "merged" }),
+      improvement({ id: "b", status: "closed" }),
+    ]);
+
+    expect(scheduleAfterResponse).not.toHaveBeenCalled();
   });
 });

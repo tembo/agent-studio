@@ -6,7 +6,7 @@ import { agentDisplayName } from "@/lib/agent-format";
 import { listStarredAgentNames } from "@/lib/agent-stars";
 import { listOwnedAgentNames } from "@/lib/agent-versions";
 import { toolkitLabel } from "@/lib/composio-label";
-import { scanImprovementsForPRs } from "@/lib/improvement-scan";
+import { scheduleImprovementScan } from "@/lib/improvement-scan";
 import {
   listPendingCreatesForWorkspace,
   reconcileLandedCreates,
@@ -150,16 +150,10 @@ export default async function WorkspacePage({
     if (icons.length > 0) subMcpsByAgent.set(parent, icons);
   }
 
-  // Refresh pending creates' PR status (submitted → pr_opened → merged)
-  // so the inventory reflects reality without a separate poll. The
-  // scanner writes back to postgres, so the in-memory array is stale
-  // — re-derive `pending` from the scanner's return value and then
-  // drop rows that have moved past the non-terminal window.
-  const pendingScanned = await scanImprovementsForPRs(
-    workspace.id,
-    pendingActive,
-  );
-  const pending = pendingScanned.filter(
+  // Refresh PR state after this response. Pending creates remain visible for
+  // at most one extra navigation while GitHub reconciliation catches up.
+  scheduleImprovementScan(workspace.id, pendingActive);
+  const pending = pendingActive.filter(
     (p) =>
       p.status === "submitted" ||
       p.status === "pr_opened" ||
