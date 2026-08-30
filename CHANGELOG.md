@@ -16,6 +16,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Cargo AI provider keys no longer appear in process command lines.**
+  Cargo AI runs now load credentials from an isolated, per-run profile. The
+  key is supplied over standard input, the child environment is cleared, and
+  the temporary profile is removed when the run finishes.
 - **Native MCP OAuth refreshes survive rotation and explain failures.**
   Concurrent runs now serialize refreshes so they cannot spend the same rotating
   refresh token. Retryable authorization-service failures use bounded backoff;
