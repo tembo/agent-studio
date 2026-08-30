@@ -191,6 +191,7 @@ export type ListedAgent =
       filename: string;
       path: string;
       format: AgentFileFormat;
+      sourceContent: string;
       ok: true;
       spec: AgentSpec;
     }
@@ -198,6 +199,7 @@ export type ListedAgent =
       filename: string;
       path: string;
       format: AgentFileFormat | null;
+      sourceContent: string | null;
       ok: false;
       error: ParseAgentError;
       detail?: string;
@@ -233,6 +235,7 @@ function listedAgentFromContent(
       filename,
       path,
       format: detectFormat(filename),
+      sourceContent: content,
       ok: false,
       error: parsed.error,
       detail: parsed.detail,
@@ -242,6 +245,7 @@ function listedAgentFromContent(
     filename,
     path,
     format: parsed.format,
+    sourceContent: content,
     ok: true,
     spec: parsed.spec,
   };
@@ -293,6 +297,7 @@ export async function listAgents(workspaceId: string): Promise<ListAgentsResult>
           filename: entry.name,
           path: entry.path,
           format: detectFormat(entry.name),
+          sourceContent: null,
           ok: false,
           error: "invalid-yaml",
           detail: read.detail ?? read.error,

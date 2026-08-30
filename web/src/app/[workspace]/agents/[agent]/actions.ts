@@ -322,18 +322,15 @@ export async function summarizeDraftAction(args: {
   const { workspace } = auth;
 
   const stable = await getStableVersion(workspace.id, args.agentName);
-  if (!stable) {
-    return { ok: false, error: "This agent has no stable version yet." };
-  }
   const found = await getAgentByName(workspace.id, args.agentName);
   if (!found) {
     return { ok: false, error: "Agent no longer exists in the connected repo." };
   }
-  const diff = diffLines(stable.specContent, found.raw);
+  const diff = diffLines(stable?.specContent ?? "", found.raw);
   const summary = await summarizeSpecDiff({
     workspaceId: workspace.id,
     agentName: args.agentName,
-    previous: stable.specContent,
+    previous: stable?.specContent ?? null,
     next: found.raw,
   });
   return { ok: true, summary, diff, invalid: !found.agent.ok };

@@ -48,6 +48,10 @@ type ErroredAutomationAlert = {
   agentName: string;
 };
 
+type PendingPromotionAlert = {
+  agentName: string;
+};
+
 type Props = {
   workspace: Workspace;
   workspaces: { slug: string; name: string }[];
@@ -70,6 +74,8 @@ type Props = {
   failingAgents: FailingAgentAlert[];
   /** Enabled schedules whose most recent firing attempt was skipped. */
   erroredAutomations: ErroredAutomationAlert[];
+  /** Agent drafts that differ from stable and need an explicit promotion. */
+  pendingPromotions: PendingPromotionAlert[];
   /** False when the workspace has neither an Anthropic nor OpenAI key —
    *  agents can't run, so the sidebar shows a "add an LLM key" CTA. */
   hasLlmProvider: boolean;
@@ -84,6 +90,7 @@ export async function AppShell({
   missingConnections,
   failingAgents,
   erroredAutomations,
+  pendingPromotions,
   hasLlmProvider,
   children,
 }: Props) {
@@ -141,6 +148,7 @@ export async function AppShell({
             hasStaticContent={
               !hasLlmProvider ||
               erroredAutomations.length > 0 ||
+              pendingPromotions.length > 0 ||
               failingAgents.length > 0
             }
             staticContent={
@@ -161,6 +169,37 @@ export async function AppShell({
                       <Button asChild variant="orange" size="small">
                         <Link href={`/${workspace.slug}/settings/providers`}>
                           Add a key
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {pendingPromotions.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-[var(--color-sentiment-caution-subtle)] px-2 py-2">
+                    <IconExclamationTriangle
+                      size={14}
+                      className="mt-0.5 shrink-0 text-[var(--color-icon-sentiment-caution)]"
+                    />
+                    <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+                      <span className="text-sm leading-tight text-[var(--color-foreground-sentiment-caution)]">
+                        <span className="font-semibold">
+                          {pendingPromotions.length === 1
+                            ? pendingPromotions[0].agentName
+                            : `${pendingPromotions.length} agent drafts`}
+                        </span>{" "}
+                        {pendingPromotions.length === 1
+                          ? "has changes awaiting promotion"
+                          : "are awaiting promotion"}
+                      </span>
+                      <Button asChild variant="orange" size="small">
+                        <Link
+                          href={
+                            pendingPromotions.length === 1
+                              ? `/${workspace.slug}/agents/${encodeURIComponent(pendingPromotions[0].agentName)}/versions`
+                              : `/${workspace.slug}?promotion=pending`
+                          }
+                        >
+                          Review
                         </Link>
                       </Button>
                     </div>

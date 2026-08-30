@@ -65,6 +65,7 @@ describe("GET /api/v1/agents", () => {
           filename: "greet.yaml",
           path: "agents/pydantic-agentspec/greet.yaml",
           format: "yaml",
+          sourceContent: "name: greet\n",
           spec: { framework: "pydantic-agentspec", name: "greet" } as never,
         },
         {
@@ -72,6 +73,7 @@ describe("GET /api/v1/agents", () => {
           filename: "broken.yaml",
           path: "agents/pydantic-agentspec/broken.yaml",
           format: "yaml",
+          sourceContent: "name: broken\n",
           error: "missing-model",
           detail: "no model field",
         },

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { FRAMEWORK_LABELS } from "@/lib/agent-framework";
 import { agentDisplayName } from "@/lib/agent-format";
+import { listPendingAgentDrafts } from "@/lib/agent-draft-status";
 import { listStarredAgentNames } from "@/lib/agent-stars";
 import { listOwnedAgentNames } from "@/lib/agent-versions";
 import { toolkitLabel } from "@/lib/composio-label";
@@ -42,6 +43,7 @@ export default async function WorkspacePage({
   const sp = await searchParams;
   const deletedAgentName =
     typeof sp.deleted === "string" ? sp.deleted : null;
+  const initialPromotionOnly = sp.promotion === "pending";
 
   const session = await getServerSession();
   if (!session) notFound();
@@ -72,6 +74,14 @@ export default async function WorkspacePage({
     listOwnedAgentNames(workspace.id, session.user.id),
   ]);
   const canEdit = meetsMinRole(currentUserRole, "operator");
+  const pendingDrafts = await listPendingAgentDrafts(
+    workspace.id,
+    agentsResult,
+    { includeDraftChangedAt: true },
+  );
+  const pendingDraftsByName = new Map(
+    pendingDrafts.map((draft) => [draft.agentName, draft]),
+  );
 
   const validNames = agentsResult.ok
     ? agentsResult.agents.filter((a) => a.ok).map((a) => a.spec.name)
@@ -190,6 +200,7 @@ export default async function WorkspacePage({
             };
           }
           const s = summaries.get(a.spec.name);
+          const pendingDraft = pendingDraftsByName.get(a.spec.name) ?? null;
           return {
             kind: "live",
             path: a.path,
@@ -216,6 +227,18 @@ export default async function WorkspacePage({
                 : null,
             isStarred: starredNames.has(a.spec.name),
             isMine: ownedNames.has(a.spec.name),
+            pendingPromotion: pendingDraft
+              ? {
+                  href: `/${workspace.slug}/agents/${encodeURIComponent(a.spec.name)}/versions`,
+                  stableVersionNumber: pendingDraft.stableVersionNumber,
+                  stableChangedAtIso:
+                    pendingDraft.stableChangedAt?.toISOString() ?? null,
+                  draftChangedAtIso:
+                    pendingDraft.draftChangedAt?.toISOString() ?? null,
+                  addedLines: pendingDraft.diffStats.added,
+                  removedLines: pendingDraft.diffStats.removed,
+                }
+              : null,
           };
         })
     : [];
@@ -300,11 +323,13 @@ export default async function WorkspacePage({
         </div>
       ) : (
         <AgentsInventory
+          key={initialPromotionOnly ? "pending-promotions" : "all-agents"}
           agents={inventoryAgents}
           newAgentHref={`/${workspace.slug}/agents/new`}
           canCreate={canEdit && temboConfigured}
           workspaceSlug={workspace.slug}
           canEdit={canEdit}
+          initialPromotionOnly={initialPromotionOnly}
         />
       )}
     </div>

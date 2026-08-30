@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import { LocalTime } from "@/components/local-time";
+import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
@@ -20,15 +22,56 @@ export function AgentInventoryNameCell({
 }) {
   const identity = (
     <>
-      <Link
-        href={agent.detailHref}
-        className="text-foreground font-medium hover:underline"
-      >
-        {agent.displayName}
-      </Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={agent.detailHref}
+          className="text-foreground font-medium hover:underline"
+        >
+          {agent.displayName}
+        </Link>
+        {agent.pendingPromotion && (
+          <Link
+            href={agent.pendingPromotion.href}
+            onClick={(event) => event.stopPropagation()}
+            title="Review draft changes and promotion"
+          >
+            <Badge variant="yellow" size="small">
+              Draft +{agent.pendingPromotion.addedLines} −
+              {agent.pendingPromotion.removedLines}
+            </Badge>
+          </Link>
+        )}
+      </div>
       {agent.displayName !== agent.name && (
         <div className="text-foreground-muted font-mono text-xs">
           {agent.filename}
+        </div>
+      )}
+      {agent.pendingPromotion && (
+        <div className="text-foreground-muted mt-1 text-xs">
+          Draft changed{" "}
+          {agent.pendingPromotion.draftChangedAtIso ? (
+            <LocalTime
+              iso={agent.pendingPromotion.draftChangedAtIso}
+              style="relative"
+            />
+          ) : (
+            "recently"
+          )}
+          {agent.pendingPromotion.stableVersionNumber !== null &&
+            agent.pendingPromotion.stableChangedAtIso && (
+              <>
+                {" "}
+                · Stable v{agent.pendingPromotion.stableVersionNumber} promoted{" "}
+                <LocalTime
+                  iso={agent.pendingPromotion.stableChangedAtIso}
+                  style="relative"
+                />
+              </>
+            )}
+          {agent.pendingPromotion.stableVersionNumber === null && (
+            <> · No stable version yet</>
+          )}
         </div>
       )}
     </>
@@ -70,6 +113,7 @@ export function inventoryAgentSearchText(agent: InventoryAgent): string {
     agent.name,
     agent.filename,
     agent.description,
+    agent.pendingPromotion ? "unpromoted draft needs promotion" : null,
   ]
     .filter(Boolean)
     .join(" ");

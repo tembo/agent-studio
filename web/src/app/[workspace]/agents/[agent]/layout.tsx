@@ -5,6 +5,10 @@ import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FRAMEWORK_LABELS } from "@/lib/agent-framework";
+import {
+  getDraftChangedAt,
+  pendingDraftFromContent,
+} from "@/lib/agent-draft-status";
 import { agentDisplayName } from "@/lib/agent-format";
 import { getAgentOwner, getStableVersion } from "@/lib/agent-versions";
 import { toolkitLabel } from "@/lib/composio-label";
@@ -71,7 +75,21 @@ export default async function AgentLayout({
     return (nameCounts.get(m.name) ?? 0) > 1 ? `${m.name} (${m.email})` : m.name;
   };
   const ownerLabel = owner ? nameFor(owner.ownerUserId) : null;
-  const draftChanged = agent.ok && (!stable || stable.specContent !== raw);
+  const pendingDraft = agent.ok
+    ? pendingDraftFromContent({
+        agentName: canonicalName,
+        agentPath: agent.path,
+        sourceContent: raw,
+        stable,
+      })
+    : null;
+  const draftChangedAt = pendingDraft
+    ? await getDraftChangedAt(workspace.id, agent.path)
+    : null;
+  const canPromote =
+    canEdit &&
+    !locked &&
+    (!owner || owner.ownerUserId === session.user.id || isAdmin);
   // No GitHub source URL for local-agents dev mode (no connected repo).
   const sourceHref = repo
     ? `https://github.com/${repo.owner}/${repo.name}/blob/${repo.defaultBranch}/${agent.path}`
@@ -209,10 +227,23 @@ export default async function AgentLayout({
         )}
       </div>
 
-      {stable && draftChanged && canEdit && (
+      {pendingDraft && canEdit && (
         <DraftChangesBanner
           workspaceSlug={workspace.slug}
           agentName={canonicalName}
+          reviewHref={
+            locked
+              ? `/${workspace.slug}/agents/${encodeURIComponent(canonicalName)}/definition`
+              : `/${workspace.slug}/agents/${encodeURIComponent(canonicalName)}/versions`
+          }
+          canPromote={canPromote}
+          stableVersionNumber={pendingDraft.stableVersionNumber}
+          stableChangedAtIso={
+            pendingDraft.stableChangedAt?.toISOString() ?? null
+          }
+          draftChangedAtIso={draftChangedAt?.toISOString() ?? null}
+          addedLines={pendingDraft.diffStats.added}
+          removedLines={pendingDraft.diffStats.removed}
         />
       )}
 
@@ -223,6 +254,7 @@ export default async function AgentLayout({
           workspaceSlug={workspace.slug}
           agentName={canonicalName}
           locked={locked}
+          pendingPromotion={pendingDraft !== null}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-8">{children}</div>
       </div>

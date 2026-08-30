@@ -30,6 +30,16 @@ model.
 On the agent detail page, **Promote to Stable (vN)** snapshots the current draft
 as the next numbered version and makes it the default for automated runs.
 
+When a draft differs from stable, TAS marks it as **Needs promotion** in the
+Agents inventory and on the agent's **Versions** navigation. The inventory badge
+shows the number of added and removed lines, along with when the draft and
+stable version last changed. Operators and admins also see an **Action needed**
+entry in the workspace sidebar. Use its **Review** link to open the affected
+agent directly, or to filter the inventory to all drafts awaiting promotion.
+
+These notices never promote a draft automatically. They clear after you promote
+the draft, or after you revert the live file so its content matches stable.
+
 - **Who can promote** — the agent's **owner**, or any workspace **admin**. An
   admin who isn't the owner sees a warning before confirming.
 - **When it's available** — only when the draft differs from the current stable

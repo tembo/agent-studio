@@ -27,10 +27,12 @@ export function AgentNav({
   workspaceSlug,
   agentName,
   locked,
+  pendingPromotion,
 }: {
   workspaceSlug: string;
   agentName: string;
   locked: boolean;
+  pendingPromotion: boolean;
 }) {
   const pathname = usePathname();
   const base = `/${workspaceSlug}/agents/${encodeURIComponent(agentName)}`;
@@ -58,7 +60,16 @@ export function AgentNav({
                 : "text-foreground-weak hover:bg-surface hover:text-foreground rounded-md px-3 py-2 text-base"
             }
           >
-            {item.label}
+            <span className="flex items-center justify-between gap-2">
+              {item.label}
+              {item.slug === "versions" && pendingPromotion && (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-sentiment-caution)]"
+                  title="Draft changes need promotion"
+                  aria-label="Draft changes need promotion"
+                />
+              )}
+            </span>
           </Link>
         );
       })}
