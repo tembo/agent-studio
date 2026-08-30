@@ -54,7 +54,6 @@ pub struct CargoAiArgs<'a> {
 
 pub struct CargoAiResult {
     pub stdout: String,
-    pub stderr: String,
 }
 
 pub async fn invoke(args: CargoAiArgs<'_>) -> anyhow::Result<CargoAiResult> {
@@ -112,7 +111,7 @@ pub async fn invoke(args: CargoAiArgs<'_>) -> anyhow::Result<CargoAiResult> {
         );
     }
 
-    Ok(CargoAiResult { stdout, stderr })
+    Ok(CargoAiResult { stdout })
 }
 
 /// Take cargo-ai native JSON, inject the two extras the runner owns

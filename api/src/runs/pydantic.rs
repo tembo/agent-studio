@@ -241,8 +241,6 @@ pub struct PydanticUsage {
     pub request_tokens: Option<i32>,
     #[serde(default)]
     pub response_tokens: Option<i32>,
-    #[serde(default)]
-    pub total_tokens: Option<i32>,
     /// Anthropic prompt-cache counters. `cache_write_tokens` (cache creation)
     /// and `cache_read_tokens` are separate from `input_tokens` (uncached) and
     /// priced differently — the cost estimate weights them ~1.25x / ~0.1x.
