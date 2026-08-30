@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -43,11 +43,28 @@ export function SidebarNavItem({
         {icon}
       </span>
       <span>{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className="bg-category-neutral text-foreground-strong ml-auto min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums">
-          {count}
-        </span>
-      )}
+      <span className="ml-auto flex items-center gap-1.5">
+        {count !== undefined && count > 0 && (
+          <span className="bg-category-neutral text-foreground-strong min-w-[1.25rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums">
+            {count}
+          </span>
+        )}
+        <PendingHint />
+      </span>
     </Link>
+  );
+}
+
+function PendingHint() {
+  const { pending } = useLinkStatus();
+
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "bg-foreground-muted size-1.5 shrink-0 rounded-full opacity-0",
+        pending && "motion-safe:animate-pulse opacity-100",
+      )}
+    />
   );
 }
