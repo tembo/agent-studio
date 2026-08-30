@@ -1,0 +1,70 @@
+name: Backlog taxonomy
+
+on:
+  issues:
+    types: [opened, reopened, labeled, closed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  sync-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const action = context.payload.action;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issue_number = issue.number;
+            const names = new Set(issue.labels.map((label) => label.name));
+
+            async function add(name) {
+              if (names.has(name)) return;
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: [name],
+              });
+              names.add(name);
+            }
+
+            async function remove(name) {
+              if (!names.has(name)) return;
+              await github.rest.issues.removeLabel({
+                owner,
+                repo,
+                issue_number,
+                name,
+              });
+              names.delete(name);
+            }
+
+            const priorities = [...names].filter((name) =>
+              name.startsWith("priority: "),
+            );
+            const statuses = [...names].filter((name) =>
+              name.startsWith("status: "),
+            );
+
+            if (action === "closed") {
+              for (const status of statuses) await remove(status);
+              return;
+            }
+
+            if ((action === "opened" || action === "reopened") && statuses.length === 0) {
+              await add("status: triage");
+            }
+
+            const customerAdded =
+              action === "labeled" && context.payload.label?.name === "customer";
+            if (customerAdded && !names.has("priority: p0")) {
+              for (const priority of priorities) await remove(priority);
+              await add("priority: p1");
+            } else if ((action === "opened" || action === "reopened") && priorities.length === 0) {
+              await add(names.has("customer") ? "priority: p1" : "priority: p2");
+            }

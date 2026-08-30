@@ -129,6 +129,17 @@ After completing and verifying any coding task, commit the changes, push the
 branch, and open a pull request. Do not wait for a separate request to open the
 pull request.
 
+## Backlog prioritization
+
+GitHub Issues are the source of truth for backlog priority. When auditing,
+sequencing, or re-prioritizing issues, use
+[`.agents/skills/reprioritize-backlog/SKILL.md`](./.agents/skills/reprioritize-backlog/SKILL.md).
+Every open issue should have exactly one type, one `priority: *` label, and one
+`status: *` label. The additive `customer` label is validated-demand evidence
+and raises priority, but never overrides P0 safety work or a hard dependency.
+Re-prioritization remains a human judgment: automation may find drift and
+propose changes, but must not silently reorder the live backlog.
+
 ## What to leave alone
 
 - `node_modules/`, `target/`, `.next/`, `dist/` — build outputs.
