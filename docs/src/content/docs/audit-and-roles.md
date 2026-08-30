@@ -24,6 +24,10 @@ Workspace membership has three roles, enforced at the API layer:
 Manage members and their roles under **Settings → Members**. Workspace admins
 can open a [member detail view](/agent-studio/dashboard-and-runs/#member-detail-admins)
 to inspect connections, automations, and runs before offboarding someone.
+When removing a member, TAS shows how many automations run as that person. The
+admin can reassign all of them to another current member in the removal step;
+if no replacement is selected, enabled schedules are paused before membership
+is removed. The last workspace admin still cannot be removed.
 
 ## Instance admins
 

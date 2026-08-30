@@ -1,7 +1,10 @@
 import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
+import { RunHistoryList } from "@/components/run-history-list";
+import { Section } from "@/components/section";
 import { getAutomation } from "@/lib/automations-api";
+import { listRecentRunsForAutomation } from "@/lib/run-history-db";
 import { getServerSession } from "@/lib/session";
 import { getWorkspaceBySlug, listWorkspaceMembers } from "@/lib/workspace";
 import { listAgents } from "@/lib/workspace-agents";
@@ -27,9 +30,10 @@ export default async function EditAutomationPage({
   const automation = await getAutomation(id);
   if (!automation || automation.workspaceId !== workspace.id) notFound();
 
-  const [result, memberRows] = await Promise.all([
+  const [result, memberRows, recentRuns] = await Promise.all([
     listAgents(workspace.id),
     listWorkspaceMembers(workspace.id),
+    listRecentRunsForAutomation(workspace.id, automation.id, 10),
   ]);
   const agents = result.ok
     ? result.agents.filter((a) => a.ok).map((a) => ({ name: a.spec.name }))
@@ -67,6 +71,19 @@ export default async function EditAutomationPage({
         }}
         mode="edit"
       />
+
+      <hr className="border-[var(--color-border-weak)]" />
+
+      <Section
+        title="Run history"
+        description="Recent runs started by this automation, including the effective execution identity."
+      >
+        <RunHistoryList
+          runs={recentRuns}
+          workspaceSlug={workspace.slug}
+          emptyMessage="This automation has not run yet."
+        />
+      </Section>
 
       <hr className="border-[var(--color-border-weak)]" />
 

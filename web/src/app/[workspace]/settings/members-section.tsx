@@ -25,6 +25,8 @@ type Props = {
   currentUserRole: WorkspaceRole;
   /** Current viewer's user id; used to mark the "(you)" row. */
   currentUserId: string;
+  /** Number of schedules each member owns through automation.owner_user_id. */
+  automationOwnershipCounts: Record<string, number>;
 };
 
 export function MembersSection({
@@ -33,6 +35,7 @@ export function MembersSection({
   pendingInvitations,
   currentUserRole,
   currentUserId,
+  automationOwnershipCounts,
 }: Props) {
   const canManage = currentUserRole === "workspace_admin";
   return (
@@ -53,6 +56,13 @@ export function MembersSection({
               member={m}
               canManage={canManage}
               isSelf={m.userId === currentUserId}
+              ownedAutomationCount={automationOwnershipCounts[m.userId] ?? 0}
+              reassignmentCandidates={members
+                .filter((candidate) => candidate.userId !== m.userId)
+                .map((candidate) => ({
+                  userId: candidate.userId,
+                  label: candidate.name ?? candidate.email,
+                }))}
             />
           ))}
         </ul>

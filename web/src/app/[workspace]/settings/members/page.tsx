@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { listPendingInvitations } from "@/lib/invitations";
+import { listAutomationOwnershipCounts } from "@/lib/member-offboarding";
 import { getServerSession } from "@/lib/session";
 import {
   getWorkspaceBySlug,
@@ -30,10 +31,16 @@ export default async function MembersPage({
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
 
-  const [members, currentUserRole, pendingInvitations] = await Promise.all([
+  const [
+    members,
+    currentUserRole,
+    pendingInvitations,
+    automationOwnershipCounts,
+  ] = await Promise.all([
     listWorkspaceMembers(workspace.id),
     getWorkspaceRole(workspace.id, session.user.id),
     listPendingInvitations(workspace.id),
+    listAutomationOwnershipCounts(workspace.id),
   ]);
   if (!currentUserRole) notFound();
 
@@ -44,6 +51,7 @@ export default async function MembersPage({
       pendingInvitations={pendingInvitations}
       currentUserRole={currentUserRole}
       currentUserId={session.user.id}
+      automationOwnershipCounts={automationOwnershipCounts}
     />
   );
 }

@@ -25,6 +25,7 @@ import "server-only";
 import { requestAgentChangeSystem } from "@/lib/api-v1/actions";
 import {
   listEnabledAutomations,
+  pauseAutomationsWithMissingOwners,
   setAutomationFired,
   setAutomationRetrying,
   setAutomationSkipped,
@@ -102,6 +103,12 @@ export function stopScheduler() {
 }
 
 async function tick() {
+  const paused = await pauseAutomationsWithMissingOwners();
+  if (paused > 0) {
+    console.warn(
+      `[scheduler] paused ${paused} automation(s) whose owner is no longer a workspace member`,
+    );
+  }
   const automations = await listEnabledAutomations();
   if (automations.length === 0) return;
   const now = new Date();

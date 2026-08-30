@@ -32,11 +32,16 @@ someone who owns connections or automations.
 The **Runs** page is the full, filterable history of every run in the workspace.
 Filter by agent, status, and trigger to find what you're looking for, then open
 any run for its [detail page](/agent-studio/running-agents/) — output, tokens,
-cost, and tools used.
+cost, tools used, and the effective **Run as** identity. The workspace list,
+agent run lists and recent-run panels, automation history, and run detail all
+use the same identity. Parent run pages also show the identity for each
+sub-run. If a historical identity is no longer available, TAS displays
+**Unavailable member** instead of exposing an internal user identifier.
 
 ### Source column
 
-Each row shows **how the run was instigated** and **who it acted as**:
+Each row shows **how the run was instigated** and explicitly labels **who it
+acted as** with **Run as**:
 
 | Source | Meaning |
 | ------ | ------- |

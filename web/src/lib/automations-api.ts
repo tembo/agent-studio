@@ -2,6 +2,9 @@ import "server-only";
 
 import { db } from "@/lib/db";
 
+export const ORPHANED_AUTOMATION_ERROR =
+  "Paused because the Run as owner is no longer a workspace member.";
+
 // CRUD for the `automation` table. An automation is a saved
 // (agent, cron) pairing that fires runs on its own — see migration
 // 0015 for the table contract. v0.2 ships schedule triggers only;
@@ -276,6 +279,24 @@ export async function listErroredEnabledAutomations(
   return res.rows.map(rowToAutomation);
 }
 
+/** Disable enabled schedules whose Run as owner has left the workspace. */
+export async function pauseAutomationsWithMissingOwners(): Promise<number> {
+  const result = await db.query<{ id: string }>(
+    `UPDATE automation a
+        SET enabled = FALSE, last_fire_error = $1, updated_at = NOW()
+      WHERE a.enabled = TRUE
+        AND NOT EXISTS (
+          SELECT 1
+            FROM workspace_member m
+           WHERE m.workspace_id = a.workspace_id
+             AND m.user_id = a.owner_user_id
+        )
+      RETURNING a.id`,
+    [ORPHANED_AUTOMATION_ERROR],
+  );
+  return result.rows.length;
+}
+
 // All enabled automations across all workspaces. The scheduler tick
 // walks this once per cycle. Cheap given automations are scoped per
 // workspace and the table is small; if it ever grows we'd shard by
@@ -285,6 +306,12 @@ export async function listEnabledAutomations(): Promise<Automation[]> {
     `SELECT ${COLUMNS}
      ${FROM_JOIN}
      WHERE a.enabled = TRUE
+       AND EXISTS (
+         SELECT 1
+           FROM workspace_member m
+          WHERE m.workspace_id = a.workspace_id
+            AND m.user_id = a.owner_user_id
+       )
      ORDER BY a.created_at ASC`,
   );
   return res.rows.map(rowToAutomation);
