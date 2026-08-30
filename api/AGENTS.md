@@ -37,6 +37,19 @@ Both supported frameworks shell out to the upstream tool:
   `${PYDANTIC_AI_VENV}` running `scripts/run_pydantic.py`
   (`src/runs/pydantic.rs`).
 
+The Pydantic wrapper is split by responsibility:
+
+- `scripts/run_pydantic.py` — CLI entry point, agent construction, and run loop.
+- `scripts/pydantic_protocol.py` — stdout sentinels, checkpoints, streaming,
+  and terminal usage/tool/step serialization.
+- `scripts/pydantic_connections.py` — connection parsing plus Composio and
+  native-MCP toolset construction.
+- `scripts/pydantic_scaledown.py` — optional ScaleDown prompt compression.
+
+Keep protocol changes covered in `tests/test_run_pydantic_protocol.py`; those
+tests launch the real wrapper against a loopback provider and exercise the same
+stdin/stdout contract consumed by Rust.
+
 The Rust side does **not** call provider SDKs directly. If you're
 tempted to add a third framework, follow the same passthrough shape:
 hand the spec to the upstream tool, capture stdout, parse a small

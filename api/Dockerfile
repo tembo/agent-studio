@@ -47,8 +47,8 @@ ENV PYDANTIC_AI_PY="${PYDANTIC_AI_VENV}/bin/python3"
 # that's how Composio exposes its toolkits to pydantic-ai at run time.
 # Pydantic AI intentionally floats to its current release: its provider
 # adapters move with the Anthropic/OpenAI SDKs, and pinning it left rebuilds on
-# an adapter that did not support Anthropic 1.0. The CI runner smoke test is the
-# compatibility gate. `composio` is the Python SDK we use to spin up a
+# an adapter that did not support Anthropic 1.0. The CI runner contract tests are
+# the compatibility gate. `composio` is the Python SDK we use to spin up a
 # Composio session keyed by workspace + toolkit list and read the
 # MCP URL back; it remains pinned because its session API ships frequently.
 RUN python3 -m venv "${PYDANTIC_AI_VENV}" && \
@@ -68,6 +68,7 @@ RUN "${PYDANTIC_AI_VENV}/bin/pip" install --no-cache-dir \
 COPY --from=builder /app/tas-api /usr/local/bin/tas-api
 COPY --from=builder /opt/cargo-ai/bin/cargo-ai /usr/local/bin/cargo-ai
 COPY scripts/run_pydantic.py /usr/local/bin/run_pydantic.py
+COPY scripts/pydantic_*.py /usr/local/bin/
 # Sidecar-tools helper importable by tool modules (`import tas_tools`).
 # Lives next to the wrapper; the wrapper adds this dir to sys.path.
 COPY scripts/tas_tools.py /usr/local/bin/tas_tools.py
