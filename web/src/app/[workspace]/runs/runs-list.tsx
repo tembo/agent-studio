@@ -24,6 +24,7 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/pricing";
+import { runIdentityLabel } from "@/lib/run-identity";
 
 import { loadRunsAction } from "./actions";
 import type { LoadedRun } from "./shape";
@@ -425,7 +426,7 @@ export function RunsList({
 // back to the Slack conversation when one started it. Slack runs are
 // trigger=event *with* a slack_delivery row; other events are webhooks.
 function SourceCell({ run }: { run: LoadedRun }) {
-  const who = run.createdByName ?? run.createdByEmail ?? null;
+  const who = runIdentityLabel(run.createdByName, run.createdByEmail);
   const slack = run.slack;
   return (
     <div className="flex flex-col gap-0.5">
@@ -462,11 +463,12 @@ function SourceCell({ run }: { run: LoadedRun }) {
             <span className="text-foreground-muted text-sm">{slack.appName}</span>
           ))}
       </span>
-      {who && (
-        <span className="text-foreground-muted truncate text-sm" title={who}>
-          {who}
-        </span>
-      )}
+      <span
+        className="text-foreground-muted truncate text-sm"
+        title={`Run as ${who}`}
+      >
+        Run as {who}
+      </span>
       {run.agentVersionLabel && (
         <span className="text-foreground-muted font-mono text-xs">
           {run.agentVersionLabel}

@@ -1,17 +1,17 @@
 import Link from "next/link";
 
+import { RunHistoryList } from "@/components/run-history-list";
 import { Section } from "@/components/section";
+import { listRecentRunsForAgent } from "@/lib/run-history-db";
 import {
   getAgentDailyRunBands30d,
   getAgentStats30d,
   listAgentFailureGroups30d,
   listAgentToolUsage30d,
-  listRecentRunsForAgent,
 } from "@/lib/runs-db";
 
 import { AgentDashboard } from "./agent-dashboard";
 import { loadAgentContext } from "./agent-page-context";
-import { RecentRuns } from "./recent-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -62,10 +62,15 @@ export default async function AgentOverviewPage({
           ) : undefined
         }
       >
-        <RecentRuns
+        <RunHistoryList
           runs={recentRuns}
           workspaceSlug={workspace.slug}
-          agentName={canonicalName}
+          emptyMessage={
+            <>
+              No runs yet. Click{" "}
+              <strong className="text-foreground">Run now</strong> above.
+            </>
+          }
         />
       </Section>
     </>

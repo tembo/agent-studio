@@ -8,6 +8,8 @@ import { isAgentLocked } from "@/lib/agent-lock";
 import { scanImprovementsForPRs } from "@/lib/improvement-scan";
 import { listImprovementsForRun } from "@/lib/improvements-api";
 import { estimateRunCost, formatCurrency, formatTokens } from "@/lib/pricing";
+import { getRunExecutionIdentity } from "@/lib/run-history-db";
+import { runIdentityLabel } from "@/lib/run-identity";
 import { toolkitLabel } from "@/lib/composio-label";
 import { getMcpProvider } from "@/lib/mcp-providers";
 import { listWorkspaceToolProviders } from "@/lib/mcp-tools";
@@ -65,13 +67,21 @@ export default async function RunDetailPage({
   // Tools the agent called during this run (pydantic only; empty otherwise),
   // plus the per-step token usage so we can attribute tokens to the model step
   // that fired each call.
-  const [toolCalls, steps, toolProviderRows, childRuns, childToolNames] =
+  const [
+    toolCalls,
+    steps,
+    toolProviderRows,
+    childRuns,
+    childToolNames,
+    runIdentity,
+  ] =
     await Promise.all([
       listToolCallsForRun(workspace.id, run.id),
       listStepsForRun(workspace.id, run.id),
       listWorkspaceToolProviders(workspace.id),
       listChildRuns(workspace.id, run.id),
       listChildRunToolNames(workspace.id, run.id),
+      getRunExecutionIdentity(workspace.id, run.id),
     ]);
 
   // tool_name → provider (slug for the logo + label for the tooltip). First
@@ -255,6 +265,14 @@ export default async function RunDetailPage({
               )}
             </dd>
           </div>
+          <div className="flex gap-3">
+            <dt className="text-foreground-weak w-24 shrink-0 font-medium">
+              Run as
+            </dt>
+            <dd className="text-foreground">
+              {runIdentityLabel(runIdentity.name, runIdentity.email)}
+            </dd>
+          </div>
           {run.userMessage.trim() && (
             <div className="flex gap-3">
               <dt className="text-foreground-weak w-24 shrink-0 font-medium">
@@ -427,14 +445,23 @@ export default async function RunDetailPage({
                     )}/runs/${child.id}`}
                     className="hover:bg-background-weak flex items-center justify-between gap-3 px-1 py-2"
                   >
-                    <span className="flex items-center gap-2 truncate">
-                      <span className="text-foreground truncate font-medium">
-                        {child.agentName}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="text-foreground truncate font-medium">
+                          {child.agentName}
+                        </span>
+                        <span
+                          className={`${STATUS_TEXT_TONE[child.status]} text-sm`}
+                        >
+                          {STATUS_LABELS[child.status]}
+                        </span>
                       </span>
-                      <span
-                        className={`${STATUS_TEXT_TONE[child.status]} text-sm`}
-                      >
-                        {STATUS_LABELS[child.status]}
+                      <span className="text-foreground-muted truncate text-xs">
+                        Run as{" "}
+                        {runIdentityLabel(
+                          child.createdByName,
+                          child.createdByEmail,
+                        )}
                       </span>
                     </span>
                     <span className="text-foreground-weak shrink-0 text-sm">

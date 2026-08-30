@@ -122,7 +122,7 @@ export default async function MemberDetailPage({
 
       <Section
         title="Automations (Run as)"
-        description="Schedules that execute as this member. If they leave, these keep firing as them until the owner is reassigned."
+        description="Schedules that execute as this member. During removal, an admin can reassign them; otherwise enabled schedules are paused."
       >
         {ownedAutomations.length === 0 ? (
           <Empty>None.</Empty>

@@ -15,7 +15,16 @@ owner's [connection](/agent-studio/connections/) credentials. You can also choos
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
 The automations list shows a **Run as** column so you can see whose credentials
-each schedule uses.
+each schedule uses. Open an automation to see its recent run history; every row
+shows the effective **Run as** identity captured for that run, so reassignment
+does not make older executions ambiguous.
+
+Removing a workspace member includes an automation handoff step. An admin can
+reassign every automation owned by that member, or leave the default **Pause
+enabled schedules** choice. TAS also checks this invariant in the scheduler:
+if an enabled schedule's owner is no longer a workspace member, the schedule is
+paused before it can fire. Reassign the owner and re-enable the automation when
+it is ready to run again.
 
 If a schedule cannot start, its status changes to **Error** and it appears under
 **Action needed** in the sidebar. Temporary failures while reading the connected
