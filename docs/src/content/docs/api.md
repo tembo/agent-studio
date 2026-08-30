@@ -53,7 +53,7 @@ triggers a run, writes an automation, or kicks off the coding agent needs
 | `POST /agents/validate` | Parse a spec without writing it. | viewer |
 | `GET /runs` | List runs (`?status=`, `?agent=`, `?trigger=`, `?limit=`, `?before=`). | viewer |
 | `POST /runs` | Trigger a run → `202 { run_id }`. | operator |
-| `GET /runs/{id}` | Full run incl. output, error, tokens, cost. | viewer |
+| `GET /runs/{id}` | Full run incl. output, safe failure guidance, tokens, and cost. Workspace admins additionally receive `errorDetails`. | viewer |
 | `GET /tools` | Your cached tool catalog (slugs for `connections:`). | viewer |
 | `GET /connections` | Your per-user connection status (no tokens). | viewer |
 | `GET /automations` · `POST /automations` | List / create scheduled automations. | viewer / operator |
@@ -127,6 +127,9 @@ of the change.
 
 - **Runs are asynchronous.** `POST /runs` returns `202` with a `run_id`
   immediately; poll `GET /runs/{id}` until `status` is `succeeded` or `failed`.
+- **Failure details follow your live role.** Failed runs return `failureCode`,
+  a safe `errorMessage`, and `failureRecommendation` to every member. Only a
+  workspace-admin key receives the raw runner trace in `errorDetails`.
 - **Agent files live in your Git repo.** The API reads them through the
   connected repo and validates them, but it doesn't write them — committing is
   your repo's job (or the Tembo Coding Agent's via `POST /agent-changes`).

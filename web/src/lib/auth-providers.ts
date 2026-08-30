@@ -1,5 +1,7 @@
 import "server-only";
 
+import { getPublicOrigin } from "@/lib/config";
+
 // Configured sign-in providers, derived from env (each provider is
 // enabled by the presence of its credentials, like Google has always
 // been). Google is a built-in better-auth social provider; Microsoft
@@ -16,7 +18,7 @@ export type AuthProvider = {
   /** better-auth provider id / genericOAuth providerId. */
   id: string;
   label: string;
-  /** social → authClient.signIn.social; oauth2 → signIn.oauth2 (genericOAuth). */
+  /** Selects the provider's registered callback URI shape. */
   kind: AuthProviderKind;
 };
 
@@ -104,6 +106,7 @@ export type GenericOAuthProviderConfig = {
   clientId: string;
   clientSecret: string;
   scopes: string[];
+  redirectURI: string;
   getUserInfo?: (tokens: {
     idToken?: string;
   }) => Promise<OAuthUserInfo | null>;
@@ -167,6 +170,10 @@ export function genericOAuthConfigs(): GenericOAuthProviderConfig[] {
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
       scopes: ["openid", "profile", "email"],
+      redirectURI: authProviderRedirectUri(
+        { id: "microsoft", kind: "oauth2" },
+        getPublicOrigin(),
+      ),
       getUserInfo: microsoftGetUserInfo,
     });
   }
@@ -178,6 +185,10 @@ export function genericOAuthConfigs(): GenericOAuthProviderConfig[] {
       clientSecret: process.env.OIDC_CLIENT_SECRET!,
       scopes: (process.env.OIDC_SCOPES?.trim() || "openid profile email").split(
         /\s+/,
+      ),
+      redirectURI: authProviderRedirectUri(
+        { id: "oidc", kind: "oauth2" },
+        getPublicOrigin(),
       ),
     });
   }

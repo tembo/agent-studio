@@ -6,9 +6,9 @@ import { serializeRunRecord } from "@/lib/api-v1/serializers";
 import { getRun } from "@/lib/runs-api";
 
 // GET /api/v1/runs/[id] — full run record incl. output, live streamedOutput,
-// errorMessage, and token usage. This is how a client reads what an agent
-// actually did/returned after triggering a run. Min role viewer. Scoped to the
-// key's workspace so one workspace can't read another's run by id.
+// safe failure copy, and token usage. Raw diagnostics are included only for
+// workspace admins. Scoped to the key's workspace so one workspace can't read
+// another's run by id.
 
 export const dynamic = "force-dynamic";
 
@@ -30,5 +30,9 @@ export async function GET(
   }
   if (!run) return apiError(404, "run not found");
 
-  return NextResponse.json({ run: serializeRunRecord(run) });
+  return NextResponse.json({
+    run: serializeRunRecord(run, {
+      includeDiagnostics: auth.role === "workspace_admin",
+    }),
+  });
 }

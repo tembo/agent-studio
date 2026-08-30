@@ -70,7 +70,12 @@ export type RunRecord = {
   output: string;
   /** Live partial output while running (null once terminal). */
   streamedOutput: string | null;
+  /** Privileged runner diagnostics. Never serialize this to regular users. */
   errorMessage: string | null;
+  /** Stable failure category and safe copy for user-facing surfaces. */
+  failureCode: string | null;
+  failureSummary: string | null;
+  failureRecommendation: string | null;
   createdBy: string;
   createdAt: string;
   startedAt: string | null;
@@ -100,6 +105,9 @@ type ApiRunRecord = {
   output: string;
   streamed_output: string | null;
   error_message: string | null;
+  failure_code: string | null;
+  failure_summary: string | null;
+  failure_recommendation: string | null;
   created_by: string;
   created_at: string;
   started_at: string | null;
@@ -128,6 +136,9 @@ function fromApi(r: ApiRunRecord): RunRecord {
     output: r.output,
     streamedOutput: r.streamed_output,
     errorMessage: r.error_message,
+    failureCode: r.failure_code,
+    failureSummary: r.failure_summary,
+    failureRecommendation: r.failure_recommendation,
     createdBy: r.created_by,
     createdAt: r.created_at,
     startedAt: r.started_at,

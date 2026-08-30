@@ -249,6 +249,9 @@ describe("buildMcpServer", () => {
       output: "Hello!",
       streamedOutput: null,
       errorMessage: null,
+      failureCode: null,
+      failureSummary: null,
+      failureRecommendation: null,
       createdBy: "u-1",
       createdAt: "2026-06-13T00:00:00Z",
       startedAt: null,
@@ -270,6 +273,63 @@ describe("buildMcpServer", () => {
     };
     expect(out.run.output).toBe("Hello!");
     expect(mockGetRun).toHaveBeenCalledWith("run-1", "ws-1");
+  });
+
+  it("adds diagnostics only for workspace admins", async () => {
+    mockGetRun.mockResolvedValue({
+      id: "run-failed",
+      workspaceId: "ws-1",
+      agentName: "greet",
+      agentPath: "agents/pydantic-agentspec/greet.yaml",
+      userMessage: "hi",
+      model: "anthropic:claude-sonnet-5",
+      status: "failed",
+      output: "",
+      streamedOutput: null,
+      errorMessage: "Traceback: private diagnostic detail",
+      failureCode: "provider_unavailable",
+      failureSummary: "A provider was temporarily unavailable.",
+      failureRecommendation: "Run the agent again.",
+      createdBy: "u-1",
+      createdAt: "2026-06-13T00:00:00Z",
+      startedAt: null,
+      completedAt: "2026-06-13T00:00:01Z",
+      tokensInput: null,
+      tokensOutput: null,
+      scaledownOriginalTokens: null,
+      scaledownCompressedTokens: null,
+      trigger: "manual",
+      automationId: null,
+      agentVersionId: null,
+      agentVersionLabel: null,
+      resumeCount: 0,
+      resumedAt: null,
+    });
+
+    for (const role of ["viewer", "operator"] as const) {
+      const regularUser = await connectedClientFor(makeCtx(role));
+      const regularOut = parse(
+        await regularUser.callTool({
+          name: "get_run",
+          arguments: { id: "run-failed" },
+        }),
+      ) as { run: Record<string, unknown> };
+      expect(regularOut.run.errorMessage).toBe(
+        "A provider was temporarily unavailable.",
+      );
+      expect(regularOut.run).not.toHaveProperty("errorDetails");
+    }
+
+    const admin = await connectedClientFor(makeCtx("workspace_admin"));
+    const adminOut = parse(
+      await admin.callTool({ name: "get_run", arguments: { id: "run-failed" } }),
+    ) as { run: Record<string, unknown> };
+    expect(adminOut.run.errorMessage).toBe(
+      "A provider was temporarily unavailable.",
+    );
+    expect(adminOut.run.errorDetails).toBe(
+      "Traceback: private diagnostic detail",
+    );
   });
 
   it("validate_agent_spec is available to a viewer (read-only)", async () => {

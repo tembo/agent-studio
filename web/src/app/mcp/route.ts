@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { mcpHandler } from "@better-auth/oauth-provider";
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
+import { isAPIError } from "better-auth/api";
 
 import {
   authorizeApiRequest,
@@ -46,16 +47,18 @@ async function handleAuthorizedMcpRequest(
   return transport.handleRequest(request);
 }
 
-const handleOAuthMcpRequest = mcpHandler(
-  {
-    jwksUrl: `${mcpOAuthIssuer()}/jwks`,
-    verifyOptions: {
-      issuer: mcpOAuthIssuer(),
-      audience: mcpOAuthResource(),
-    },
-    scopes: [MCP_OAUTH_READ_SCOPE],
-  },
-  async (request, claims) => {
+const { verifyAccessTokenRequest } = oauthProviderResourceClient().getActions();
+
+async function handleOAuthMcpRequest(request: NextRequest): Promise<Response> {
+  try {
+    const claims = await verifyAccessTokenRequest(request, {
+      jwksUrl: `${mcpOAuthIssuer()}/jwks`,
+      verifyOptions: {
+        issuer: mcpOAuthIssuer(),
+        audience: mcpOAuthResource(),
+      },
+      requiredScopes: [MCP_OAUTH_READ_SCOPE],
+    });
     const auth = await authorizeOAuthMcpClaims(claims);
     if (!auth.ok) {
       return NextResponse.json(
@@ -63,9 +66,17 @@ const handleOAuthMcpRequest = mcpHandler(
         { status: auth.status },
       );
     }
-    return handleAuthorizedMcpRequest(request as NextRequest, auth);
-  },
-);
+    return handleAuthorizedMcpRequest(request, auth);
+  } catch (error) {
+    if (isAPIError(error)) {
+      return new Response(error.message, {
+        status: error.statusCode,
+        headers: error.headers,
+      });
+    }
+    throw error;
+  }
+}
 
 export async function POST(request: NextRequest): Promise<Response> {
   const authorization = request.headers.get("authorization")?.trim() ?? "";
