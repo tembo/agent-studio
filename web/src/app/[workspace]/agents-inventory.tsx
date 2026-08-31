@@ -6,12 +6,10 @@ import {
   useMemo,
   useState,
   useTransition,
-  type ReactNode,
 } from "react";
 
 import { IconApiConnection, IconPlusLarge, IconStar } from "central-icons";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column, type SortDir } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
@@ -151,8 +149,6 @@ export function AgentsInventory({
     initialPromotionOnly ? "changes" : "browse",
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [view, setView] = useState<"mine" | "all">(
@@ -304,8 +300,6 @@ export function AgentsInventory({
 
   function selectMode(nextMode: InventoryMode) {
     setMode(nextMode);
-    setSelectedKey(null);
-    setMobileDetailsOpen(false);
     if (nextMode === "changes") setView("all");
     if (nextMode === "performance") {
       setSortKey("last-run");
@@ -616,17 +610,10 @@ export function AgentsInventory({
           <MobilePerformanceList rows={filtered} />
         </>
       ) : filtered.length > 0 ? (
-        <InventoryBrowser
+        <InventoryBrowseList
           rows={filtered}
-          selectedKey={selectedKey}
-          mobileDetailsOpen={mobileDetailsOpen}
           workspaceSlug={workspaceSlug}
           canEdit={canEdit}
-          onSelect={(key) => {
-            setSelectedKey(key);
-            setMobileDetailsOpen(true);
-          }}
-          onCloseMobileDetails={() => setMobileDetailsOpen(false)}
           onSortName={() => onHeaderClick("name")}
           sortDir={sortDir}
         />
@@ -669,6 +656,7 @@ function MobilePerformanceList({ rows }: { rows: EnrichedRow[] }) {
                 <MobileMetric
                   label="Last run"
                   value={agent.lastRun ? formatRelativeAgo(agent.lastRun.createdAtIso) : "Never"}
+                  suppressHydrationWarning={agent.lastRun !== null}
                 />
               </div>
             )}
@@ -695,11 +683,24 @@ function MobilePerformanceList({ rows }: { rows: EnrichedRow[] }) {
   );
 }
 
-function MobileMetric({ label, value }: { label: string; value: string }) {
+function MobileMetric({
+  label,
+  value,
+  suppressHydrationWarning = false,
+}: {
+  label: string;
+  value: string;
+  suppressHydrationWarning?: boolean;
+}) {
   return (
     <span className="border-border min-w-0 rounded border bg-surface p-2">
       <span className="text-foreground-muted block uppercase tracking-wide">{label}</span>
-      <span className="text-foreground mt-1 block truncate font-mono">{value}</span>
+      <span
+        className="text-foreground mt-1 block truncate font-mono"
+        suppressHydrationWarning={suppressHydrationWarning}
+      >
+        {value}
+      </span>
     </span>
   );
 }
@@ -747,100 +748,84 @@ function InventoryTab({
   );
 }
 
-function InventoryBrowser({
+function InventoryBrowseList({
   rows,
-  selectedKey,
-  mobileDetailsOpen,
   workspaceSlug,
   canEdit,
-  onSelect,
-  onCloseMobileDetails,
   onSortName,
   sortDir,
 }: {
   rows: EnrichedRow[];
-  selectedKey: string | null;
-  mobileDetailsOpen: boolean;
   workspaceSlug: string;
   canEdit: boolean;
-  onSelect: (key: string) => void;
-  onCloseMobileDetails: () => void;
   onSortName: () => void;
   sortDir: SortDir;
 }) {
-  const selected =
-    rows.find(({ agent }) => rowKey(agent) === selectedKey) ?? rows[0];
-  const effectiveKey = rowKey(selected.agent);
-
   return (
-    <div className="border-border relative grid min-h-[34rem] overflow-hidden rounded-lg border bg-surface lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-      <section className="border-border min-w-0 border-r-0 lg:border-r">
-        <div className="border-border text-foreground-weak flex items-center justify-between border-b bg-surface-secondary px-4 py-2 text-xs font-medium uppercase tracking-wide">
-          <span>
-            {rows.length} {rows.length === 1 ? "agent" : "agents"}
-          </span>
-          <button
-            type="button"
-            onClick={onSortName}
-            className="hover:text-foreground"
-            aria-label={`Sort agent names ${sortDir === "asc" ? "descending" : "ascending"}`}
-          >
-            {sortDir === "asc" ? "A–Z ↑" : "Z–A ↓"}
-          </button>
-        </div>
-        <div className="max-h-[42rem] overflow-y-auto">
-          {rows.map((row) => (
-            <InventoryBrowseRow
-              key={rowKey(row.agent)}
-              row={row}
-              selected={rowKey(row.agent) === effectiveKey}
-              workspaceSlug={workspaceSlug}
-              onSelect={() => onSelect(rowKey(row.agent))}
-            />
-          ))}
-        </div>
-      </section>
-
-      <InventoryDetails
-        row={selected}
-        mobileOpen={mobileDetailsOpen}
-        workspaceSlug={workspaceSlug}
-        canEdit={canEdit}
-        onCloseMobile={onCloseMobileDetails}
-      />
-    </div>
+    <section className="border-border overflow-hidden rounded-lg border bg-surface">
+      <div className="border-border text-foreground-weak hidden grid-cols-[2rem_minmax(18rem,2fr)_8rem_minmax(11rem,1fr)_minmax(11rem,1fr)_auto] items-center gap-4 border-b bg-surface-secondary px-4 py-2 text-xs font-medium uppercase tracking-wide md:grid">
+        <span aria-hidden />
+        <button
+          type="button"
+          onClick={onSortName}
+          className="w-fit hover:text-foreground"
+          aria-label={`Sort agent names ${sortDir === "asc" ? "descending" : "ascending"}`}
+        >
+          Agent {sortDir === "asc" ? "↑" : "↓"}
+        </button>
+        <span>Status</span>
+        <span>Labels</span>
+        <span>Connections</span>
+        <span className="sr-only">Actions</span>
+      </div>
+      <div className="border-border text-foreground-weak flex items-center justify-between border-b bg-surface-secondary px-4 py-2 text-xs font-medium uppercase tracking-wide md:hidden">
+        <span>
+          {rows.length} {rows.length === 1 ? "agent" : "agents"}
+        </span>
+        <button
+          type="button"
+          onClick={onSortName}
+          className="hover:text-foreground"
+          aria-label={`Sort agent names ${sortDir === "asc" ? "descending" : "ascending"}`}
+        >
+          {sortDir === "asc" ? "A–Z ↑" : "Z–A ↓"}
+        </button>
+      </div>
+      {rows.map((row) => (
+        <InventoryBrowseRow
+          key={rowKey(row.agent)}
+          row={row}
+          workspaceSlug={workspaceSlug}
+          canEdit={canEdit}
+        />
+      ))}
+    </section>
   );
 }
 
 function InventoryBrowseRow({
   row,
-  selected,
   workspaceSlug,
-  onSelect,
+  canEdit,
 }: {
   row: EnrichedRow;
-  selected: boolean;
   workspaceSlug: string;
-  onSelect: () => void;
+  canEdit: boolean;
 }) {
   const { agent, bucket } = row;
-  const title =
-    agent.kind === "invalid" ? agent.filename : agent.kind === "live" ? agent.displayName : agent.name;
-  const subtitle = agent.kind === "live" ? agent.name : agent.path;
-  const labels = agent.kind === "live" ? agent.labels.slice(0, 2) : [];
-  const mcps = agent.kind === "live" ? [...agent.mcps, ...agent.subMcps].slice(0, 3) : [];
+  const title = agent.kind === "invalid" ? agent.filename : agent.kind === "live" ? agent.displayName : agent.name;
+  const labels = agent.kind === "live" ? agent.labels : [];
+  const connections = agent.kind === "live" ? [...agent.mcps, ...agent.subMcps] : [];
 
   return (
-    <div
+    <article
       className={cn(
-        "border-border-weak grid grid-cols-[2rem_minmax(0,1fr)] border-b bg-surface-raised transition-colors last:border-b-0",
-        selected
-          ? "bg-[var(--color-sentiment-positive-subtle)] shadow-[inset_3px_0_0_var(--color-sentiment-positive)]"
-          : "hover:bg-interactive-state-hover",
+        "border-border-weak grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-2 border-b bg-surface-raised px-4 py-3 transition-colors last:border-b-0 md:grid-cols-[2rem_minmax(18rem,2fr)_8rem_minmax(11rem,1fr)_minmax(11rem,1fr)_auto] md:items-center md:gap-4 md:py-3.5",
+        "hover:bg-interactive-state-hover",
         bucket === "invalid" && "bg-[var(--color-input-error)]/30",
       )}
     >
-      <div className="flex justify-center pt-4">
+      <div className="flex justify-center pt-0.5 md:pt-0">
         {agent.kind === "live" ? (
           <StarButton
             workspaceSlug={workspaceSlug}
@@ -851,110 +836,66 @@ function InventoryBrowseRow({
           <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--color-foreground-muted)]" />
         )}
       </div>
-      <button
-        type="button"
-        aria-pressed={selected}
-        onClick={onSelect}
-        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-3 py-3 pr-3 text-left"
-      >
-        <span className="min-w-0">
-          <span className="text-foreground block truncate text-sm font-medium">
-            {title}
-          </span>
-          <span className="text-foreground-muted mt-0.5 block truncate font-mono text-xs">
-            {subtitle}
-          </span>
-          <span className="mt-2 flex min-w-0 items-center gap-1 overflow-hidden">
-            <StatusPill bucket={bucket} />
-            {labels.map((label) => (
-              <span
-                key={label}
-                className="border-border text-foreground-weak max-w-28 truncate rounded border bg-surface px-1.5 py-0.5 text-xs"
-              >
-                {label}
-              </span>
-            ))}
-            {agent.kind === "live" && agent.labels.length > labels.length && (
-              <span className="text-foreground-muted text-xs">
-                +{agent.labels.length - labels.length}
-              </span>
-            )}
-          </span>
-        </span>
-        {mcps.length > 0 && (
-          <span className="hidden items-center gap-1 pt-1 sm:flex">
-            {mcps.map((m) => (
-              <span
-                key={m.slug}
-                className="border-border flex h-7 w-7 items-center justify-center rounded-md border bg-surface"
-              >
-                <McpLogo icon={m} />
-              </span>
-            ))}
-          </span>
-        )}
-      </button>
-    </div>
-  );
-}
 
-function InventoryDetails({
-  row,
-  mobileOpen,
-  workspaceSlug,
-  canEdit,
-  onCloseMobile,
-}: {
-  row: EnrichedRow;
-  mobileOpen: boolean;
-  workspaceSlug: string;
-  canEdit: boolean;
-  onCloseMobile: () => void;
-}) {
-  const { agent, bucket } = row;
-  return (
-    <aside
-      aria-label="Selected agent details"
-      className={cn(
-        "bg-surface-raised absolute inset-0 z-10 min-w-0 flex-col lg:static lg:flex",
-        mobileOpen ? "flex" : "hidden",
-      )}
-    >
-      <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <p className="text-foreground-category-green text-xs font-medium uppercase tracking-wide">
-              Selected agent
-            </p>
-            <h2 className="text-foreground-title mt-1 truncate text-xl font-semibold">
-              {agent.kind === "invalid"
-                ? agent.filename
-                : agent.kind === "live"
-                  ? agent.displayName
-                  : agent.name}
-            </h2>
-            <p className="text-foreground-muted mt-1 truncate font-mono text-xs">
-              {agent.kind === "live" ? agent.name : agent.path}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onCloseMobile}
-            aria-label="Close agent details"
-            className="border-border text-foreground-weak hover:text-foreground rounded-md border px-2 py-1 lg:hidden"
-          >
-            ×
-          </button>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-2">
+          {agent.kind === "live" ? (
+            <Link
+              href={agent.detailHref}
+              className="text-foreground truncate text-sm font-medium hover:underline"
+            >
+              {title}
+            </Link>
+          ) : (
+            <span className="text-foreground truncate text-sm font-medium">{title}</span>
+          )}
+          {agent.kind === "live" && agent.pendingPromotion && (
+            <Link
+              href={agent.pendingPromotion.href}
+              className="shrink-0 rounded-full bg-[var(--color-sentiment-caution-subtle)] px-2 py-0.5 text-xs text-[var(--color-foreground-sentiment-caution)] hover:underline"
+            >
+              Draft +{agent.pendingPromotion.addedLines} −{agent.pendingPromotion.removedLines}
+            </Link>
+          )}
         </div>
-
+        <p className="text-foreground-muted mt-0.5 truncate font-mono text-xs">
+          {agent.kind === "live" ? agent.name : agent.path}
+        </p>
         {agent.kind === "live" ? (
-          <LiveAgentDetails agent={agent} bucket={bucket} />
+          <p className="text-foreground-weak mt-1 line-clamp-1 text-xs leading-5">
+            {agent.description ?? `${shortModel(agent.model)} · ${agent.frameworkLabel}`}
+          </p>
         ) : agent.kind === "pending-create" ? (
-          <div className="mt-5 flex flex-col gap-4">
-            <StatusPill bucket={bucket} />
-            <p className="text-foreground-weak text-sm">
-              Submitted {formatRelativeAgo(agent.createdAtIso)} using {agent.frameworkLabel}.
-            </p>
+          <p className="text-foreground-weak mt-1 text-xs" suppressHydrationWarning>
+            Submitted {formatRelativeAgo(agent.createdAtIso)} · {agent.frameworkLabel}
+          </p>
+        ) : (
+          <p className="text-sentiment-negative mt-1 line-clamp-1 text-xs">
+            {agent.error}{agent.detail ? ` · ${agent.detail}` : ""}
+          </p>
+        )}
+      </div>
+
+      <div className="justify-self-end md:justify-self-start">
+        <StatusPill bucket={bucket} />
+      </div>
+
+      <BrowseTags labels={labels} />
+      <BrowseConnections
+        connections={connections}
+        ownConnectionCount={agent.kind === "live" ? agent.mcps.length : 0}
+      />
+
+      <div className="col-span-2 col-start-2 flex flex-wrap items-center gap-3 md:col-span-1 md:col-start-auto md:justify-self-end">
+        {agent.kind === "live" ? (
+          <Link
+            href={agent.detailHref}
+            className="text-foreground whitespace-nowrap text-sm font-medium hover:underline"
+          >
+            Open →
+          </Link>
+        ) : agent.kind === "pending-create" ? (
+          <>
             <PendingLinks agent={agent} />
             {canEdit && (
               <DismissPendingButton
@@ -963,133 +904,60 @@ function InventoryDetails({
                 agentName={agent.name}
               />
             )}
-          </div>
-        ) : (
-          <div className="mt-5 flex flex-col gap-3">
-            <StatusPill bucket={bucket} />
-            <p className="text-sentiment-negative text-sm">{agent.error}</p>
-            {agent.detail && (
-              <p className="text-foreground-weak whitespace-pre-wrap text-sm">{agent.detail}</p>
-            )}
-          </div>
-        )}
+          </>
+        ) : null}
       </div>
-
-      {agent.kind === "live" && (
-        <div className="border-border grid grid-cols-2 gap-2 border-t p-4">
-          <Button variant="secondary" asChild>
-            <Link href={`/${workspaceSlug}/runs?agent=${encodeURIComponent(agent.name)}`}>
-              Run history
-            </Link>
-          </Button>
-          <Button variant="primary" asChild>
-            <Link href={agent.detailHref}>Open agent</Link>
-          </Button>
-        </div>
-      )}
-    </aside>
+    </article>
   );
 }
 
-function LiveAgentDetails({
-  agent,
-  bucket,
-}: {
-  agent: Extract<InventoryAgent, { kind: "live" }>;
-  bucket: StatusBucket;
-}) {
-  const successRate =
-    agent.runs30d > 0 ? agent.succeeded30d / agent.runs30d : null;
+function BrowseTags({ labels }: { labels: string[] }) {
+  if (labels.length === 0) {
+    return <span className="text-foreground-muted hidden text-xs md:block">—</span>;
+  }
+  const visible = labels.slice(0, 3);
   return (
-    <div className="mt-5">
-      {agent.description && (
-        <p className="text-foreground-weak line-clamp-5 text-sm leading-6">
-          {agent.description}
-        </p>
-      )}
-
-      {agent.pendingPromotion && (
-        <Link
-          href={agent.pendingPromotion.href}
-          className="border-[var(--color-sentiment-caution)] bg-[var(--color-sentiment-caution-subtle)] mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+    <div className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1 md:col-span-1 md:col-start-auto">
+      {visible.map((label) => (
+        <span
+          key={label}
+          className="border-border text-foreground-weak max-w-32 truncate rounded border bg-surface px-1.5 py-0.5 text-xs"
         >
-          <span>
-            <span className="text-foreground block font-medium">Draft needs promotion</span>
-            <span className="text-foreground-weak text-xs">
-              +{agent.pendingPromotion.addedLines} −{agent.pendingPromotion.removedLines}
-            </span>
-          </span>
-          <span aria-hidden>→</span>
-        </Link>
+          {label}
+        </span>
+      ))}
+      {labels.length > visible.length && (
+        <span className="text-foreground-muted text-xs">+{labels.length - visible.length}</span>
       )}
-
-      <DetailSection title="Operational signals">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Status"><StatusCell bucket={bucket} /></Metric>
-          <Metric label="Runs 30d">{agent.runs30d.toLocaleString("en-US")}</Metric>
-          <Metric label="Success">
-            {successRate === null ? "—" : <SuccessCell rate={successRate} failed={agent.failed30d} />}
-          </Metric>
-          <Metric label="Avg cost">
-            {agent.avgCostUsd30d === null ? "—" : formatCurrency(agent.avgCostUsd30d)}
-          </Metric>
-        </div>
-        <p className="text-foreground-muted mt-2 text-xs" suppressHydrationWarning>
-          Last run: {agent.lastRun ? `${formatRelativeAgo(agent.lastRun.createdAtIso)} · ${agent.lastRun.status}` : "Never"}
-        </p>
-      </DetailSection>
-
-      <DetailSection title="Configuration">
-        <div className="flex flex-wrap gap-1.5">
-          <Badge variant="gray" size="small">{shortModel(agent.model)}</Badge>
-          <Badge variant="gray" size="small">{agent.frameworkLabel}</Badge>
-        </div>
-      </DetailSection>
-
-      <DetailSection title={`Connections · ${agent.mcps.length + agent.subMcps.length}`}>
-        {[...agent.mcps, ...agent.subMcps].length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {[...agent.mcps, ...agent.subMcps].map((m) => (
-              <span key={m.slug} className="border-border flex items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-xs">
-                <McpLogo icon={m} />
-                {m.label}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span className="text-foreground-muted text-sm">None declared</span>
-        )}
-      </DetailSection>
-
-      <DetailSection title={`Labels · ${agent.labels.length}`}>
-        {agent.labels.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5">
-            {agent.labels.map((label) => (
-              <Badge key={label} variant="gray" size="small">{label}</Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-foreground-muted text-sm">No labels</span>
-        )}
-      </DetailSection>
     </div>
   );
 }
 
-function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+function BrowseConnections({
+  connections,
+  ownConnectionCount,
+}: {
+  connections: McpIcon[];
+  ownConnectionCount: number;
+}) {
+  if (connections.length === 0) {
+    return <span className="text-foreground-muted hidden text-xs md:block">—</span>;
+  }
+  const visible = connections.slice(0, 2);
   return (
-    <section className="border-border mt-5 border-t pt-4">
-      <h3 className="text-foreground-weak mb-2 text-xs font-medium uppercase tracking-wide">{title}</h3>
-      {children}
-    </section>
-  );
-}
-
-function Metric({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="border-border min-w-0 rounded-md border bg-surface p-2">
-      <span className="text-foreground-muted block text-xs uppercase tracking-wide">{label}</span>
-      <span className="text-foreground mt-1 block truncate font-mono text-sm">{children}</span>
+    <div className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1 md:col-span-1 md:col-start-auto">
+      {visible.map((connection, index) => (
+        <span
+          key={connection.slug}
+          className="border-border text-foreground-weak flex min-w-0 items-center gap-1.5 rounded border bg-surface px-1.5 py-0.5 text-xs"
+        >
+          <McpLogo icon={connection} dimmed={index >= ownConnectionCount} />
+          <span className="max-w-24 truncate">{connection.label}</span>
+        </span>
+      ))}
+      {connections.length > visible.length && (
+        <span className="text-foreground-muted text-xs">+{connections.length - visible.length}</span>
+      )}
     </div>
   );
 }
