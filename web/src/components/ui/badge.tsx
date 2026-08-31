@@ -28,7 +28,7 @@ const badgeVariants = cva(
         pink: "bg-category-pink text-foreground-category-pink [&_svg]:text-icon-category-pink",
         purple:
           "bg-category-purple text-foreground-category-purple [&_svg]:text-icon-category-purple",
-        red: "bg-category-red text-foreground-category-red [&_svg]:text-icon-category-red",
+        red: "bg-category-red text-foreground-sentiment-negative [&_svg]:text-icon-sentiment-negative",
         teal: "bg-category-teal text-foreground-category-teal [&_svg]:text-icon-category-teal",
         yellow:
           "bg-category-yellow text-foreground-category-yellow [&_svg]:text-icon-category-yellow",
