@@ -1,7 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useState, useTransition } from "react";
+import {
+  useActionState,
+  useMemo,
+  useState,
+  useTransition,
+  type ReactNode,
+} from "react";
 
 import { IconApiConnection, IconPlusLarge, IconStar } from "central-icons";
 
@@ -12,20 +18,18 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { mcpLogoUrl } from "@/lib/mcp-logo";
 import { formatCurrency } from "@/lib/pricing";
+import { cn } from "@/lib/utils";
 
 import { toggleAgentStarAction } from "./agent-stars-actions";
 import {
   AgentInventoryNameCell,
   inventoryAgentSearchText,
 } from "./agent-inventory-name-cell";
-import { AgentInventoryPromotionFilter } from "./agent-inventory-promotion-filter";
 import { dismissPendingCreateAction } from "./inventory-actions";
 
-// Workspace agent inventory. Replaces the card grid (better for ~10
-// agents, falls apart past that) with a sortable / filterable table.
-// Status facet pills + free-text search live above; the table itself
-// renders every agent — live, pending-create, and invalid — as a
-// single row so the user sees the whole picture in one place.
+// Workspace agent switchboard. Browse keeps the scan path compact and moves
+// configuration into a selected-agent pane; Performance keeps the sortable
+// operational metrics together instead of repeating them across every view.
 
 export type McpIcon = {
   /** Provider slug for the logo (e.g. "attio", "linear"). */
@@ -115,6 +119,7 @@ type SortKey =
   | "last-run";
 
 type EnrichedRow = { agent: InventoryAgent; bucket: StatusBucket };
+type InventoryMode = "browse" | "performance" | "changes";
 
 type Props = {
   agents: InventoryAgent[];
@@ -138,20 +143,18 @@ export function AgentsInventory({
   initialPromotionOnly = false,
 }: Props) {
   const [query, setQuery] = useState("");
-  // null = "all" (no facet selected). Selecting a pill switches the
-  // visible rows to that bucket only.
   const [bucket, setBucket] = useState<StatusBucket | null>(null);
   const [labelFilter, setLabelFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
   const [mcpFilter, setMcpFilter] = useState("");
-  const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
-  // Default sort: alphabetical by name. The user can re-sort by clicking
-  // column headers.
+  const [mode, setMode] = useState<InventoryMode>(
+    initialPromotionOnly ? "changes" : "browse",
+  );
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  // Default to MY agents (owned or starred) for a tidy day-to-day list; "all"
-  // shows everyone's. Falls back to "all" when I own/star nothing yet, so the
-  // list is never empty.
   const [view, setView] = useState<"mine" | "all">(
     !initialPromotionOnly &&
       agents.some((a) => a.kind === "live" && (a.isMine || a.isStarred))
@@ -185,7 +188,6 @@ export function AgentsInventory({
     [enriched],
   );
 
-  // Distinct labels + models across live agents, for the filter dropdowns.
   const labelOptions = useMemo(() => {
     const set = new Set<string>();
     for (const { agent } of enriched) {
@@ -206,7 +208,6 @@ export function AgentsInventory({
       ...[...set].sort().map((m) => ({ value: m, label: shortModel(m) })),
     ];
   }, [enriched]);
-  // Distinct MCPs (top-level + sub-agent) across live agents, slug→label.
   const mcpOptions = useMemo(() => {
     const labels = new Map<string, string>();
     for (const { agent } of enriched) {
@@ -224,18 +225,19 @@ export function AgentsInventory({
   }, [enriched]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let rows = q
-      ? enriched.filter(({ agent }) =>
-          inventoryAgentSearchText(agent).toLowerCase().includes(q),
-        )
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    let rows = terms.length
+      ? enriched.filter(({ agent }) => {
+          const text = inventoryAgentSearchText(agent).toLowerCase();
+          return terms.every((term) => text.includes(term));
+        })
       : enriched;
     if (view === "mine") {
       rows = rows.filter(
         ({ agent }) => agent.kind !== "live" || agent.isMine || agent.isStarred,
       );
     }
-    if (promotionOnly) {
+    if (mode === "changes") {
       rows = rows.filter(
         ({ agent }) =>
           agent.kind === "live" && agent.pendingPromotion !== null,
@@ -267,7 +269,7 @@ export function AgentsInventory({
     enriched,
     query,
     view,
-    promotionOnly,
+    mode,
     bucket,
     labelFilter,
     modelFilter,
@@ -300,7 +302,21 @@ export function AgentsInventory({
     onHeaderClick(key as SortKey);
   }
 
-  const columns: Column<EnrichedRow>[] = [
+  function selectMode(nextMode: InventoryMode) {
+    setMode(nextMode);
+    setSelectedKey(null);
+    setMobileDetailsOpen(false);
+    if (nextMode === "changes") setView("all");
+    if (nextMode === "performance") {
+      setSortKey("last-run");
+      setSortDir("desc");
+    } else {
+      setSortKey("name");
+      setSortDir("asc");
+    }
+  }
+
+  const performanceColumns: Column<EnrichedRow>[] = [
     {
       key: "star",
       header: "",
@@ -342,58 +358,6 @@ export function AgentsInventory({
       sortable: true,
       thClassName: "w-[120px]",
       cell: ({ bucket }) => <StatusCell bucket={bucket} />,
-    },
-    {
-      key: "labels",
-      header: "Labels",
-      cell: ({ agent }) => {
-        if (agent.kind === "invalid") {
-          return (
-            <span className="text-sentiment-negative text-sm">
-              {agent.error}
-              {agent.detail ? ` — ${agent.detail}` : ""}
-            </span>
-          );
-        }
-        if (agent.kind === "pending-create") {
-          return <span className="text-foreground-muted">—</span>;
-        }
-        return agent.labels.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {agent.labels.map((l) => (
-              <Badge key={l} variant="gray" size="small">
-                {l}
-              </Badge>
-            ))}
-          </div>
-        ) : (
-          <span className="text-foreground-muted">—</span>
-        );
-      },
-    },
-    {
-      key: "model",
-      header: "Model",
-      cell: ({ agent }) => {
-        if (agent.kind !== "live") {
-          return <span className="text-foreground-muted">—</span>;
-        }
-        return (
-          <span className="text-foreground-weak font-mono text-sm">
-            {shortModel(agent.model)}
-          </span>
-        );
-      },
-    },
-    {
-      key: "mcps",
-      header: "MCPs",
-      cell: ({ agent }) => {
-        if (agent.kind !== "live") {
-          return <span className="text-foreground-muted">—</span>;
-        }
-        return <McpCell mcps={agent.mcps} subMcps={agent.subMcps} />;
-      },
     },
     {
       key: "runs",
@@ -485,6 +449,10 @@ export function AgentsInventory({
     },
   ];
 
+  const activeAdvancedFilters = [labelFilter, modelFilter, mcpFilter].filter(
+    Boolean,
+  ).length;
+
   const emptyState = (
     <div className="text-foreground-weak flex flex-col items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm">
       {agents.length === 0 ? (
@@ -518,7 +486,7 @@ export function AgentsInventory({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Input
           type="search"
-          placeholder="Search agents…"
+          placeholder="Search name, label, or connection…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="max-w-sm"
@@ -534,14 +502,39 @@ export function AgentsInventory({
         )}
       </div>
 
+      <div
+        role="tablist"
+        aria-label="Agent inventory view"
+        className="border-border flex items-end gap-6 border-b"
+      >
+        <InventoryTab
+          active={mode === "browse"}
+          label="Browse"
+          count={agents.length}
+          onClick={() => selectMode("browse")}
+        />
+        <InventoryTab
+          active={mode === "performance"}
+          label="Performance"
+          onClick={() => selectMode("performance")}
+        />
+        <InventoryTab
+          active={mode === "changes"}
+          label="Changes"
+          count={pendingPromotionCount}
+          tone={pendingPromotionCount > 0 ? "caution" : "neutral"}
+          onClick={() => selectMode("changes")}
+        />
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
-        <div className="border-border inline-flex overflow-hidden rounded-md border text-sm">
+        <div className="border-border inline-flex overflow-hidden rounded-full border text-sm">
           <button
             type="button"
             onClick={() => setView("mine")}
-            className={`px-2.5 py-1 ${
+            className={`px-3 py-1.5 ${
               view === "mine"
-                ? "bg-surface-raised text-foreground"
+                ? "bg-interactive text-foreground-on-accent"
                 : "text-foreground-weak hover:text-foreground"
             }`}
           >
@@ -550,71 +543,564 @@ export function AgentsInventory({
           <button
             type="button"
             onClick={() => setView("all")}
-            className={`px-2.5 py-1 ${
+            className={`px-3 py-1.5 ${
               view === "all"
-                ? "bg-surface-raised text-foreground"
+                ? "bg-interactive text-foreground-on-accent"
                 : "text-foreground-weak hover:text-foreground"
             }`}
           >
             All
           </button>
         </div>
-        <AgentInventoryPromotionFilter
-          count={pendingPromotionCount}
-          active={promotionOnly}
-          onChange={(active) => {
-            setPromotionOnly(active);
-            if (active) setView("all");
-          }}
-        />
         <FacetPills counts={counts} active={bucket} onChange={setBucket} />
-        {labelOptions.length > 1 && (
-          <Select
-            value={labelFilter}
-            onValueChange={setLabelFilter}
-            options={labelOptions}
-            ariaLabel="Filter by label"
-            className="min-w-[130px]"
+        <button
+          type="button"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen((open) => !open)}
+          className="border-border text-foreground-weak hover:text-foreground rounded-full border bg-surface px-3 py-1.5 text-sm"
+        >
+          Filters{activeAdvancedFilters > 0 ? ` · ${activeAdvancedFilters}` : ""}
+        </button>
+      </div>
+
+      {filtersOpen && (
+        <div className="border-border bg-surface-raised grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
+          {labelOptions.length > 1 && (
+            <Select
+              value={labelFilter}
+              onValueChange={setLabelFilter}
+              options={labelOptions}
+              ariaLabel="Filter by label"
+            />
+          )}
+          {modelOptions.length > 1 && (
+            <Select
+              value={modelFilter}
+              onValueChange={setModelFilter}
+              options={modelOptions}
+              ariaLabel="Filter by model"
+            />
+          )}
+          {mcpOptions.length > 1 && (
+            <Select
+              value={mcpFilter}
+              onValueChange={setMcpFilter}
+              options={mcpOptions}
+              ariaLabel="Filter by MCP"
+            />
+          )}
+        </div>
+      )}
+
+      {mode === "performance" ? (
+        <>
+          <div className="hidden md:block">
+            <DataTable
+              columns={performanceColumns}
+              rows={filtered}
+              getRowKey={({ agent }) => rowKey(agent)}
+              rowHref={({ agent }) =>
+                agent.kind === "live" ? agent.detailHref : null
+              }
+              rowClassName={({ bucket: rowBucket }) =>
+                rowBucket === "invalid"
+                  ? "bg-[var(--color-input-error)]/30 hover:bg-[var(--color-input-error)]/50"
+                  : ""
+              }
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={onSort}
+              empty={emptyState}
+            />
+          </div>
+          <MobilePerformanceList rows={filtered} />
+        </>
+      ) : filtered.length > 0 ? (
+        <InventoryBrowser
+          rows={filtered}
+          selectedKey={selectedKey}
+          mobileDetailsOpen={mobileDetailsOpen}
+          workspaceSlug={workspaceSlug}
+          canEdit={canEdit}
+          onSelect={(key) => {
+            setSelectedKey(key);
+            setMobileDetailsOpen(true);
+          }}
+          onCloseMobileDetails={() => setMobileDetailsOpen(false)}
+          onSortName={() => onHeaderClick("name")}
+          sortDir={sortDir}
+        />
+      ) : (
+        emptyState
+      )}
+    </div>
+  );
+}
+
+function MobilePerformanceList({ rows }: { rows: EnrichedRow[] }) {
+  return (
+    <div className="border-border overflow-hidden rounded-lg border md:hidden">
+      {rows.map(({ agent, bucket }) => {
+        const title =
+          agent.kind === "invalid"
+            ? agent.filename
+            : agent.kind === "live"
+              ? agent.displayName
+              : agent.name;
+        const body = (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <span className="text-foreground min-w-0 truncate text-sm font-medium">
+                {title}
+              </span>
+              <StatusPill bucket={bucket} />
+            </div>
+            {agent.kind === "live" && (
+              <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                <MobileMetric label="Runs" value={agent.runs30d.toLocaleString("en-US")} />
+                <MobileMetric
+                  label="Success"
+                  value={
+                    agent.runs30d > 0
+                      ? `${Math.round((agent.succeeded30d / agent.runs30d) * 100)}%`
+                      : "—"
+                  }
+                />
+                <MobileMetric
+                  label="Last run"
+                  value={agent.lastRun ? formatRelativeAgo(agent.lastRun.createdAtIso) : "Never"}
+                />
+              </div>
+            )}
+          </>
+        );
+        return agent.kind === "live" ? (
+          <Link
+            key={rowKey(agent)}
+            href={agent.detailHref}
+            className="border-border-weak hover:bg-interactive-state-hover block border-b bg-surface-raised p-3 last:border-b-0"
+          >
+            {body}
+          </Link>
+        ) : (
+          <div
+            key={rowKey(agent)}
+            className="border-border-weak border-b bg-surface-raised p-3 last:border-b-0"
+          >
+            {body}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function MobileMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="border-border min-w-0 rounded border bg-surface p-2">
+      <span className="text-foreground-muted block uppercase tracking-wide">{label}</span>
+      <span className="text-foreground mt-1 block truncate font-mono">{value}</span>
+    </span>
+  );
+}
+
+function InventoryTab({
+  active,
+  label,
+  count,
+  tone = "neutral",
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count?: number;
+  tone?: "neutral" | "caution";
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={cn(
+        "-mb-px flex items-center gap-1.5 border-b-2 px-0.5 pb-2 text-sm font-medium",
+        active
+          ? "border-foreground text-foreground"
+          : "text-foreground-weak hover:text-foreground border-transparent",
+      )}
+    >
+      {label}
+      {count !== undefined && (
+        <span
+          className={cn(
+            "rounded-full px-1.5 py-0.5 text-xs",
+            tone === "caution" && count > 0
+              ? "bg-[var(--color-sentiment-caution-subtle)] text-[var(--color-foreground-sentiment-caution)]"
+              : "bg-surface-secondary text-foreground-muted",
+          )}
+        >
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function InventoryBrowser({
+  rows,
+  selectedKey,
+  mobileDetailsOpen,
+  workspaceSlug,
+  canEdit,
+  onSelect,
+  onCloseMobileDetails,
+  onSortName,
+  sortDir,
+}: {
+  rows: EnrichedRow[];
+  selectedKey: string | null;
+  mobileDetailsOpen: boolean;
+  workspaceSlug: string;
+  canEdit: boolean;
+  onSelect: (key: string) => void;
+  onCloseMobileDetails: () => void;
+  onSortName: () => void;
+  sortDir: SortDir;
+}) {
+  const selected =
+    rows.find(({ agent }) => rowKey(agent) === selectedKey) ?? rows[0];
+  const effectiveKey = rowKey(selected.agent);
+
+  return (
+    <div className="border-border relative grid min-h-[34rem] overflow-hidden rounded-lg border bg-surface lg:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+      <section className="border-border min-w-0 border-r-0 lg:border-r">
+        <div className="border-border text-foreground-weak flex items-center justify-between border-b bg-surface-secondary px-4 py-2 text-xs font-medium uppercase tracking-wide">
+          <span>
+            {rows.length} {rows.length === 1 ? "agent" : "agents"}
+          </span>
+          <button
+            type="button"
+            onClick={onSortName}
+            className="hover:text-foreground"
+            aria-label={`Sort agent names ${sortDir === "asc" ? "descending" : "ascending"}`}
+          >
+            {sortDir === "asc" ? "A–Z ↑" : "Z–A ↓"}
+          </button>
+        </div>
+        <div className="max-h-[42rem] overflow-y-auto">
+          {rows.map((row) => (
+            <InventoryBrowseRow
+              key={rowKey(row.agent)}
+              row={row}
+              selected={rowKey(row.agent) === effectiveKey}
+              workspaceSlug={workspaceSlug}
+              onSelect={() => onSelect(rowKey(row.agent))}
+            />
+          ))}
+        </div>
+      </section>
+
+      <InventoryDetails
+        row={selected}
+        mobileOpen={mobileDetailsOpen}
+        workspaceSlug={workspaceSlug}
+        canEdit={canEdit}
+        onCloseMobile={onCloseMobileDetails}
+      />
+    </div>
+  );
+}
+
+function InventoryBrowseRow({
+  row,
+  selected,
+  workspaceSlug,
+  onSelect,
+}: {
+  row: EnrichedRow;
+  selected: boolean;
+  workspaceSlug: string;
+  onSelect: () => void;
+}) {
+  const { agent, bucket } = row;
+  const title =
+    agent.kind === "invalid" ? agent.filename : agent.kind === "live" ? agent.displayName : agent.name;
+  const subtitle = agent.kind === "live" ? agent.name : agent.path;
+  const labels = agent.kind === "live" ? agent.labels.slice(0, 2) : [];
+  const mcps = agent.kind === "live" ? [...agent.mcps, ...agent.subMcps].slice(0, 3) : [];
+
+  return (
+    <div
+      className={cn(
+        "border-border-weak grid grid-cols-[2rem_minmax(0,1fr)] border-b bg-surface-raised transition-colors last:border-b-0",
+        selected
+          ? "bg-[var(--color-sentiment-positive-subtle)] shadow-[inset_3px_0_0_var(--color-sentiment-positive)]"
+          : "hover:bg-interactive-state-hover",
+        bucket === "invalid" && "bg-[var(--color-input-error)]/30",
+      )}
+    >
+      <div className="flex justify-center pt-4">
+        {agent.kind === "live" ? (
+          <StarButton
+            workspaceSlug={workspaceSlug}
+            agentName={agent.name}
+            starred={agent.isStarred}
           />
+        ) : (
+          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-[var(--color-foreground-muted)]" />
         )}
-        {modelOptions.length > 1 && (
-          <Select
-            value={modelFilter}
-            onValueChange={setModelFilter}
-            options={modelOptions}
-            ariaLabel="Filter by model"
-            className="min-w-[130px]"
-          />
+      </div>
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onSelect}
+        className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-3 py-3 pr-3 text-left"
+      >
+        <span className="min-w-0">
+          <span className="text-foreground block truncate text-sm font-medium">
+            {title}
+          </span>
+          <span className="text-foreground-muted mt-0.5 block truncate font-mono text-xs">
+            {subtitle}
+          </span>
+          <span className="mt-2 flex min-w-0 items-center gap-1 overflow-hidden">
+            <StatusPill bucket={bucket} />
+            {labels.map((label) => (
+              <span
+                key={label}
+                className="border-border text-foreground-weak max-w-28 truncate rounded border bg-surface px-1.5 py-0.5 text-xs"
+              >
+                {label}
+              </span>
+            ))}
+            {agent.kind === "live" && agent.labels.length > labels.length && (
+              <span className="text-foreground-muted text-xs">
+                +{agent.labels.length - labels.length}
+              </span>
+            )}
+          </span>
+        </span>
+        {mcps.length > 0 && (
+          <span className="hidden items-center gap-1 pt-1 sm:flex">
+            {mcps.map((m) => (
+              <span
+                key={m.slug}
+                className="border-border flex h-7 w-7 items-center justify-center rounded-md border bg-surface"
+              >
+                <McpLogo icon={m} />
+              </span>
+            ))}
+          </span>
         )}
-        {mcpOptions.length > 1 && (
-          <Select
-            value={mcpFilter}
-            onValueChange={setMcpFilter}
-            options={mcpOptions}
-            ariaLabel="Filter by MCP"
-            className="min-w-[130px]"
-          />
+      </button>
+    </div>
+  );
+}
+
+function InventoryDetails({
+  row,
+  mobileOpen,
+  workspaceSlug,
+  canEdit,
+  onCloseMobile,
+}: {
+  row: EnrichedRow;
+  mobileOpen: boolean;
+  workspaceSlug: string;
+  canEdit: boolean;
+  onCloseMobile: () => void;
+}) {
+  const { agent, bucket } = row;
+  return (
+    <aside
+      aria-label="Selected agent details"
+      className={cn(
+        "bg-surface-raised absolute inset-0 z-10 min-w-0 flex-col lg:static lg:flex",
+        mobileOpen ? "flex" : "hidden",
+      )}
+    >
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-foreground-category-green text-xs font-medium uppercase tracking-wide">
+              Selected agent
+            </p>
+            <h2 className="text-foreground-title mt-1 truncate text-xl font-semibold">
+              {agent.kind === "invalid"
+                ? agent.filename
+                : agent.kind === "live"
+                  ? agent.displayName
+                  : agent.name}
+            </h2>
+            <p className="text-foreground-muted mt-1 truncate font-mono text-xs">
+              {agent.kind === "live" ? agent.name : agent.path}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            aria-label="Close agent details"
+            className="border-border text-foreground-weak hover:text-foreground rounded-md border px-2 py-1 lg:hidden"
+          >
+            ×
+          </button>
+        </div>
+
+        {agent.kind === "live" ? (
+          <LiveAgentDetails agent={agent} bucket={bucket} />
+        ) : agent.kind === "pending-create" ? (
+          <div className="mt-5 flex flex-col gap-4">
+            <StatusPill bucket={bucket} />
+            <p className="text-foreground-weak text-sm">
+              Submitted {formatRelativeAgo(agent.createdAtIso)} using {agent.frameworkLabel}.
+            </p>
+            <PendingLinks agent={agent} />
+            {canEdit && (
+              <DismissPendingButton
+                workspaceSlug={workspaceSlug}
+                improvementId={agent.key}
+                agentName={agent.name}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="mt-5 flex flex-col gap-3">
+            <StatusPill bucket={bucket} />
+            <p className="text-sentiment-negative text-sm">{agent.error}</p>
+            {agent.detail && (
+              <p className="text-foreground-weak whitespace-pre-wrap text-sm">{agent.detail}</p>
+            )}
+          </div>
         )}
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        getRowKey={({ agent }) => rowKey(agent)}
-        rowHref={({ agent }) =>
-          agent.kind === "live" ? agent.detailHref : null
-        }
-        rowClassName={({ bucket: rowBucket }) =>
-          rowBucket === "invalid"
-            ? "bg-[var(--color-input-error)]/30 hover:bg-[var(--color-input-error)]/50"
-            : ""
-        }
-        sortKey={sortKey}
-        sortDir={sortDir}
-        onSort={onSort}
-        empty={emptyState}
-      />
+      {agent.kind === "live" && (
+        <div className="border-border grid grid-cols-2 gap-2 border-t p-4">
+          <Button variant="secondary" asChild>
+            <Link href={`/${workspaceSlug}/runs?agent=${encodeURIComponent(agent.name)}`}>
+              Run history
+            </Link>
+          </Button>
+          <Button variant="primary" asChild>
+            <Link href={agent.detailHref}>Open agent</Link>
+          </Button>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function LiveAgentDetails({
+  agent,
+  bucket,
+}: {
+  agent: Extract<InventoryAgent, { kind: "live" }>;
+  bucket: StatusBucket;
+}) {
+  const successRate =
+    agent.runs30d > 0 ? agent.succeeded30d / agent.runs30d : null;
+  return (
+    <div className="mt-5">
+      {agent.description && (
+        <p className="text-foreground-weak line-clamp-5 text-sm leading-6">
+          {agent.description}
+        </p>
+      )}
+
+      {agent.pendingPromotion && (
+        <Link
+          href={agent.pendingPromotion.href}
+          className="border-[var(--color-sentiment-caution)] bg-[var(--color-sentiment-caution-subtle)] mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm"
+        >
+          <span>
+            <span className="text-foreground block font-medium">Draft needs promotion</span>
+            <span className="text-foreground-weak text-xs">
+              +{agent.pendingPromotion.addedLines} −{agent.pendingPromotion.removedLines}
+            </span>
+          </span>
+          <span aria-hidden>→</span>
+        </Link>
+      )}
+
+      <DetailSection title="Operational signals">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Status"><StatusCell bucket={bucket} /></Metric>
+          <Metric label="Runs 30d">{agent.runs30d.toLocaleString("en-US")}</Metric>
+          <Metric label="Success">
+            {successRate === null ? "—" : <SuccessCell rate={successRate} failed={agent.failed30d} />}
+          </Metric>
+          <Metric label="Avg cost">
+            {agent.avgCostUsd30d === null ? "—" : formatCurrency(agent.avgCostUsd30d)}
+          </Metric>
+        </div>
+        <p className="text-foreground-muted mt-2 text-xs" suppressHydrationWarning>
+          Last run: {agent.lastRun ? `${formatRelativeAgo(agent.lastRun.createdAtIso)} · ${agent.lastRun.status}` : "Never"}
+        </p>
+      </DetailSection>
+
+      <DetailSection title="Configuration">
+        <div className="flex flex-wrap gap-1.5">
+          <Badge variant="gray" size="small">{shortModel(agent.model)}</Badge>
+          <Badge variant="gray" size="small">{agent.frameworkLabel}</Badge>
+        </div>
+      </DetailSection>
+
+      <DetailSection title={`Connections · ${agent.mcps.length + agent.subMcps.length}`}>
+        {[...agent.mcps, ...agent.subMcps].length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {[...agent.mcps, ...agent.subMcps].map((m) => (
+              <span key={m.slug} className="border-border flex items-center gap-1.5 rounded-md border bg-surface px-2 py-1 text-xs">
+                <McpLogo icon={m} />
+                {m.label}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span className="text-foreground-muted text-sm">None declared</span>
+        )}
+      </DetailSection>
+
+      <DetailSection title={`Labels · ${agent.labels.length}`}>
+        {agent.labels.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5">
+            {agent.labels.map((label) => (
+              <Badge key={label} variant="gray" size="small">{label}</Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-foreground-muted text-sm">No labels</span>
+        )}
+      </DetailSection>
     </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-border mt-5 border-t pt-4">
+      <h3 className="text-foreground-weak mb-2 text-xs font-medium uppercase tracking-wide">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+function Metric({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="border-border min-w-0 rounded-md border bg-surface p-2">
+      <span className="text-foreground-muted block text-xs uppercase tracking-wide">{label}</span>
+      <span className="text-foreground mt-1 block truncate font-mono text-sm">{children}</span>
+    </div>
+  );
+}
+
+function StatusPill({ bucket }: { bucket: StatusBucket }) {
+  const meta = STATUS_META[bucket];
+  return (
+    <span className="border-border text-foreground-weak inline-flex w-fit items-center gap-1.5 rounded border bg-surface px-1.5 py-0.5 text-xs">
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dotClass}`} aria-hidden />
+      {meta.label}
+    </span>
   );
 }
 
@@ -666,34 +1152,6 @@ function FacetPills({
           </button>
         );
       })}
-    </div>
-  );
-}
-
-// MCPs column for a live agent: the agent's own connection logos, then —
-// for an orchestrator — a "+" and the (dimmed) logos its sub-agents bring in.
-function McpCell({ mcps, subMcps }: { mcps: McpIcon[]; subMcps: McpIcon[] }) {
-  if (mcps.length === 0 && subMcps.length === 0) {
-    return <span className="text-foreground-muted">—</span>;
-  }
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {mcps.map((m) => (
-        <McpLogo key={`top:${m.slug}`} icon={m} />
-      ))}
-      {subMcps.length > 0 && (
-        <>
-          <span
-            className="text-foreground-muted px-0.5 text-xs"
-            title="Used by this agent's sub-agents"
-          >
-            +
-          </span>
-          {subMcps.map((m) => (
-            <McpLogo key={`sub:${m.slug}`} icon={m} dimmed />
-          ))}
-        </>
-      )}
     </div>
   );
 }
