@@ -39,6 +39,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Top-level outputs no longer repeat the agent as its own orchestrator.**
+  Output cards and provenance show orchestrator metadata only for sub-agent
+  runs, using the current Orchestrator terminology throughout.
 - **Cargo AI provider keys no longer appear in process command lines.**
   Cargo AI runs now load credentials from an isolated, per-run profile. The
   key is supplied over standard input, the subprocess environment is cleared,

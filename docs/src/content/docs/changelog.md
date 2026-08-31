@@ -44,6 +44,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Top-level outputs no longer repeat the agent as its own orchestrator.**
+  Output cards and provenance show orchestrator metadata only for sub-agent
+  runs, using the current Orchestrator terminology throughout.
 - **Automation failures remain inspectable after edits and recovery.** Schedule,
   event-trigger, and webhook dispatch failures now append durable history with
   retry attempts and related runs. Editing no longer clears current health, and

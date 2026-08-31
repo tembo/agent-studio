@@ -38,6 +38,7 @@ export default async function OutputDetailPage({
   if (!output || output.workspaceId !== workspace.id) notFound();
 
   const raw = sp.view === "raw";
+  const hasOrchestrator = output.orchestratorRunId !== output.runId;
   const runHref = `/${slug}/agents/${encodeURIComponent(output.agentName)}/runs/${output.runId}`;
   const orchestratorRunHref = `/${slug}/agents/${encodeURIComponent(
     output.orchestratorName,
@@ -107,17 +108,17 @@ export default async function OutputDetailPage({
                 </Link>
               </ProvenanceRow>
               <ProvenanceRow label="Agent">{output.agentName}</ProvenanceRow>
-              <ProvenanceRow label="Orchestrator">
-                <div>{output.orchestratorName}</div>
-                {output.orchestratorRunId !== output.runId ? (
+              {hasOrchestrator ? (
+                <ProvenanceRow label="Orchestrator">
+                  <div>{output.orchestratorName}</div>
                   <Link
                     className="text-foreground-weak mt-1 inline-block underline hover:no-underline"
                     href={orchestratorRunHref}
                   >
                     View orchestrator run →
                   </Link>
-                ) : null}
-              </ProvenanceRow>
+                </ProvenanceRow>
+              ) : null}
               <ProvenanceRow label="Run as">
                 {output.createdByName?.trim() ||
                   output.createdByEmail ||

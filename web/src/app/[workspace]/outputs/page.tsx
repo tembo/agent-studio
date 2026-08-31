@@ -197,7 +197,10 @@ export default async function OutputsPage({
                     {output.agentName}
                   </div>
                   <div className="text-foreground-weak mt-0.5 text-sm">
-                    Orchestrator {output.orchestratorName} · Run as{" "}
+                    {output.orchestratorRunId !== output.runId
+                      ? `Orchestrator ${output.orchestratorName} · `
+                      : ""}
+                    Run as{" "}
                     {userLabel({
                       name: output.createdByName,
                       email: output.createdByEmail,
