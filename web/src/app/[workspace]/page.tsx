@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { FRAMEWORK_LABELS } from "@/lib/agent-framework";
 import { agentDisplayName } from "@/lib/agent-format";
 import { listPendingAgentDrafts } from "@/lib/agent-draft-status";
+import { listAgentInventoryViews } from "@/lib/agent-inventory-views";
 import { listStarredAgentNames } from "@/lib/agent-stars";
 import { listOwnedAgentNames } from "@/lib/agent-versions";
 import { toolkitLabel } from "@/lib/composio-label";
@@ -66,6 +67,7 @@ export default async function WorkspacePage({
     currentUserRole,
     starredNames,
     ownedNames,
+    savedViews,
   ] = await Promise.all([
     isTemboConfiguredForUser(workspace.id, session.user.id),
     listAgents(workspace.id),
@@ -73,6 +75,7 @@ export default async function WorkspacePage({
     getWorkspaceRole(workspace.id, session.user.id),
     listStarredAgentNames(workspace.id, session.user.id),
     listOwnedAgentNames(workspace.id, session.user.id),
+    listAgentInventoryViews(workspace.id, session.user.id),
   ]);
   const canEdit = meetsMinRole(currentUserRole, "operator");
   const pendingDrafts = await listPendingAgentDrafts(
@@ -138,6 +141,7 @@ export default async function WorkspacePage({
   // union of those sub-agents' MCPs, minus the ones the orchestrator already
   // declares itself. Lets the list show "top-level MCPs + sub-agent MCPs".
   const subAgentNamesByOrchestrator = new Map<string, Set<string>>();
+  const orchestratorNamesBySubAgent = new Map<string, Set<string>>();
   for (const e of subAgentEdges) {
     let set = subAgentNamesByOrchestrator.get(e.orchestratorAgentName);
     if (!set) {
@@ -145,6 +149,13 @@ export default async function WorkspacePage({
       subAgentNamesByOrchestrator.set(e.orchestratorAgentName, set);
     }
     set.add(e.subAgentName);
+
+    let parents = orchestratorNamesBySubAgent.get(e.subAgentName);
+    if (!parents) {
+      parents = new Set<string>();
+      orchestratorNamesBySubAgent.set(e.subAgentName, parents);
+    }
+    parents.add(e.orchestratorAgentName);
   }
   const subMcpsByAgent = new Map<string, McpIcon[]>();
   for (const [orchestrator, subAgents] of subAgentNamesByOrchestrator) {
@@ -214,6 +225,12 @@ export default async function WorkspacePage({
             labels: a.spec.labels,
             mcps: mcpsByAgent.get(a.spec.name) ?? [],
             subMcps: subMcpsByAgent.get(a.spec.name) ?? [],
+            subAgentNames: [
+              ...(subAgentNamesByOrchestrator.get(a.spec.name) ?? []),
+            ].sort(),
+            orchestratorNames: [
+              ...(orchestratorNamesBySubAgent.get(a.spec.name) ?? []),
+            ].sort(),
             model: a.spec.model ?? null,
             runs30d: s?.totalRuns30d ?? 0,
             succeeded30d: s?.succeeded30d ?? 0,
@@ -331,6 +348,9 @@ export default async function WorkspacePage({
           workspaceSlug={workspace.slug}
           canEdit={canEdit}
           initialPromotionOnly={initialPromotionOnly}
+          savedViews={savedViews}
+          currentUserId={session.user.id}
+          canManageSharedViews={currentUserRole === "workspace_admin"}
         />
       )}
     </div>

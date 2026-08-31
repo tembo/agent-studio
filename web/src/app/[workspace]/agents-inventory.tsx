@@ -12,9 +12,26 @@ import { Select } from "@/components/ui/select";
 import { mcpLogoUrl } from "@/lib/mcp-logo";
 import { formatCurrency } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
+import type {
+  AgentInventoryFilterOperators,
+  AgentInventoryFilters,
+  AgentInventoryOwner,
+  AgentInventorySort,
+  AgentInventoryStatus,
+  AgentInventoryType,
+  AgentInventoryView,
+} from "@/lib/agent-inventory-view-types";
+import {
+  defaultAgentInventoryFilterOperators,
+  matchesAgentInventoryValues,
+  matchesAgentOwnershipFilters,
+  matchesAgentRelationshipFilters,
+} from "@/lib/agent-inventory-view-types";
 
 import { toggleAgentStarAction } from "./agent-stars-actions";
+import { AgentInventoryFilterBar } from "./agent-inventory-filter-bar";
 import { inventoryAgentSearchText } from "./agent-inventory-name-cell";
+import { AgentInventoryViewControls } from "./agent-inventory-view-controls";
 import { dismissPendingCreateAction } from "./inventory-actions";
 
 export type McpIcon = {
@@ -35,6 +52,8 @@ export type InventoryAgent =
       labels: string[];
       mcps: McpIcon[];
       subMcps: McpIcon[];
+      subAgentNames: string[];
+      orchestratorNames: string[];
       model: string | null;
       runs30d: number;
       succeeded30d: number;
@@ -77,9 +96,9 @@ export type InventoryAgent =
       prNumber: number | null;
     };
 
-type StatusBucket = "active" | "idle" | "error" | "pending" | "invalid";
+type StatusBucket = AgentInventoryStatus;
 type EnrichedRow = { agent: InventoryAgent; bucket: StatusBucket };
-type SortKey = "last-run" | "name" | "status" | "runs" | "cost" | "success";
+type SortKey = AgentInventorySort;
 
 const SORT_OPTIONS = [
   { value: "last-run", label: "Sort: Recently run" },
@@ -97,6 +116,9 @@ type Props = {
   workspaceSlug: string;
   canEdit: boolean;
   initialPromotionOnly?: boolean;
+  savedViews: AgentInventoryView[];
+  currentUserId: string;
+  canManageSharedViews: boolean;
 };
 
 export function AgentsInventory({
@@ -106,23 +128,70 @@ export function AgentsInventory({
   workspaceSlug,
   canEdit,
   initialPromotionOnly = false,
+  savedViews,
+  currentUserId,
+  canManageSharedViews,
 }: Props) {
   const [query, setQuery] = useState("");
-  const [bucket, setBucket] = useState<StatusBucket | null>(null);
-  const [labelFilter, setLabelFilter] = useState("");
-  const [modelFilter, setModelFilter] = useState("");
-  const [mcpFilter, setMcpFilter] = useState("");
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [ownerFilter, setOwnerFilter] =
+    useState<AgentInventoryOwner[]>([]);
+  const [starredFilter, setStarredFilter] = useState<boolean[]>([]);
+  const [bucket, setBucket] = useState<StatusBucket[]>([]);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [modelFilter, setModelFilter] = useState<string[]>([]);
+  const [mcpFilter, setMcpFilter] = useState<string[]>([]);
+  const [agentTypeFilter, setAgentTypeFilter] =
+    useState<AgentInventoryType[]>([]);
+  const [orchestratorFilter, setOrchestratorFilter] = useState<string[]>([]);
   const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
-  const [sortKey, setSortKey] = useState<SortKey>("last-run");
-  const [view, setView] = useState<"mine" | "all">(
-    !initialPromotionOnly &&
-      agents.some((agent) =>
-        agent.kind === "live" ? agent.isMine || agent.isStarred : false,
-      )
-      ? "mine"
-      : "all",
+  const [operators, setOperators] = useState<AgentInventoryFilterOperators>(
+    defaultAgentInventoryFilterOperators,
   );
+  const [sortKey, setSortKey] = useState<SortKey>("last-run");
+
+  const defaultFilters: AgentInventoryFilters = {
+    query: "",
+    owner: [],
+    starred: [],
+    status: [],
+    promotionOnly: initialPromotionOnly,
+    label: [],
+    model: [],
+    mcp: [],
+    agentType: [],
+    orchestrator: [],
+    operators: defaultAgentInventoryFilterOperators(),
+    sort: "last-run",
+  };
+  const currentFilters: AgentInventoryFilters = {
+    query,
+    owner: ownerFilter,
+    starred: starredFilter,
+    status: bucket,
+    promotionOnly,
+    label: labelFilter,
+    model: modelFilter,
+    mcp: mcpFilter,
+    agentType: agentTypeFilter,
+    orchestrator: orchestratorFilter,
+    operators,
+    sort: sortKey,
+  };
+
+  function applyFilters(filters: AgentInventoryFilters) {
+    setQuery(filters.query);
+    setOwnerFilter(filters.owner);
+    setStarredFilter(filters.starred);
+    setBucket(filters.status);
+    setPromotionOnly(filters.promotionOnly);
+    setLabelFilter(filters.label);
+    setModelFilter(filters.model);
+    setMcpFilter(filters.mcp);
+    setAgentTypeFilter(filters.agentType);
+    setOrchestratorFilter(filters.orchestrator);
+    setOperators(filters.operators);
+    setSortKey(filters.sort);
+  }
 
   const enriched = useMemo(
     () => agents.map((agent) => ({ agent, bucket: statusBucket(agent) })),
@@ -192,6 +261,23 @@ export function AgentsInventory({
     ];
   }, [enriched]);
 
+  const orchestratorOptions = useMemo(() => {
+    const values = enriched
+      .map(({ agent }) => agent)
+      .filter(
+        (agent): agent is Extract<InventoryAgent, { kind: "live" }> =>
+          agent.kind === "live" && agent.subAgentNames.length > 0,
+      )
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return [
+      { value: "", label: "All orchestrators" },
+      ...values.map((agent) => ({
+        value: agent.name,
+        label: `Sub-agents of ${agent.displayName}`,
+      })),
+    ];
+  }, [enriched]);
+
   const filtered = useMemo(() => {
     const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     let rows = terms.length
@@ -201,32 +287,74 @@ export function AgentsInventory({
         })
       : enriched;
 
-    if (view === "mine") {
-      rows = rows.filter(
-        ({ agent }) => agent.kind !== "live" || agent.isMine || agent.isStarred,
+    if (ownerFilter.length > 0 || starredFilter.length > 0) {
+      rows = rows.filter(({ agent }) =>
+        matchesAgentOwnershipFilters(agent, ownerFilter, starredFilter, {
+          owner: operators.owner,
+          starred: operators.starred,
+        }),
       );
     }
     if (promotionOnly) {
       rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.pendingPromotion !== null,
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            [agent.pendingPromotion !== null],
+            [true],
+            operators.promotionOnly,
+          ),
       );
     }
-    if (bucket !== null) rows = rows.filter((row) => row.bucket === bucket);
-    if (labelFilter) {
-      rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.labels.includes(labelFilter),
+    if (bucket.length > 0) {
+      rows = rows.filter((row) =>
+        matchesAgentInventoryValues([row.bucket], bucket, operators.status),
       );
     }
-    if (modelFilter) {
-      rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.model === modelFilter,
-      );
-    }
-    if (mcpFilter) {
+    if (labelFilter.length > 0) {
       rows = rows.filter(
         ({ agent }) =>
           agent.kind === "live" &&
-          [...agent.mcps, ...agent.subMcps].some((mcp) => mcp.slug === mcpFilter),
+          matchesAgentInventoryValues(
+            agent.labels,
+            labelFilter,
+            operators.label,
+          ),
+      );
+    }
+    if (modelFilter.length > 0) {
+      rows = rows.filter(
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            agent.model ? [agent.model] : [],
+            modelFilter,
+            operators.model,
+          ),
+      );
+    }
+    if (mcpFilter.length > 0) {
+      rows = rows.filter(
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            [...agent.mcps, ...agent.subMcps].map((mcp) => mcp.slug),
+            mcpFilter,
+            operators.mcp,
+          ),
+      );
+    }
+    if (agentTypeFilter.length > 0 || orchestratorFilter.length > 0) {
+      rows = rows.filter(({ agent }) =>
+        matchesAgentRelationshipFilters(
+          agent,
+          agentTypeFilter,
+          orchestratorFilter,
+          {
+            agentType: operators.agentType,
+            orchestrator: operators.orchestrator,
+          },
+        ),
       );
     }
 
@@ -234,18 +362,18 @@ export function AgentsInventory({
   }, [
     enriched,
     query,
-    view,
+    ownerFilter,
+    starredFilter,
     promotionOnly,
     bucket,
     labelFilter,
     modelFilter,
     mcpFilter,
+    agentTypeFilter,
+    orchestratorFilter,
+    operators,
     sortKey,
   ]);
-
-  const activeAdvancedFilters = [labelFilter, modelFilter, mcpFilter].filter(
-    Boolean,
-  ).length;
 
   const emptyState = (
     <div className="text-foreground-weak flex flex-col items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-8 text-center text-sm">
@@ -277,124 +405,55 @@ export function AgentsInventory({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Input
-          type="search"
-          placeholder="Search name, label, model, or connection…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="max-w-sm"
-          aria-label="Search agents"
+      <AgentInventoryViewControls
+        workspaceSlug={workspaceSlug}
+        currentUserId={currentUserId}
+        canManageSharedViews={canManageSharedViews}
+        filters={currentFilters}
+        defaultFilters={defaultFilters}
+        views={savedViews}
+        onApply={applyFilters}
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Input
+              type="search"
+              placeholder="Search name, label, model, or connection…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="max-w-sm"
+              aria-label="Search agents"
+            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={sortKey}
+                onValueChange={(value) => setSortKey(value as SortKey)}
+                options={SORT_OPTIONS}
+                ariaLabel="Sort agents"
+                className="min-w-[180px]"
+              />
+              {canCreate && (
+                <Button asChild>
+                  <Link href={newAgentHref}>
+                    <IconPlusLarge size={16} />
+                    <span>New agent</span>
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <AgentInventoryFilterBar
+          filters={currentFilters}
+          onChange={applyFilters}
+          statusCounts={counts}
+          pendingPromotionCount={pendingPromotionCount}
+          labelOptions={labelOptions}
+          modelOptions={modelOptions}
+          mcpOptions={mcpOptions}
+          orchestratorOptions={orchestratorOptions}
         />
-        <div className="flex items-center gap-2">
-          <Select
-            value={sortKey}
-            onValueChange={(value) => setSortKey(value as SortKey)}
-            options={SORT_OPTIONS}
-            ariaLabel="Sort agents"
-            className="min-w-[180px]"
-          />
-          {canCreate && (
-            <Button asChild>
-              <Link href={newAgentHref}>
-                <IconPlusLarge size={16} />
-                <span>New agent</span>
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="border-border inline-flex overflow-hidden rounded-full border text-sm">
-          <button
-            type="button"
-            onClick={() => setView("mine")}
-            className={cn(
-              "px-3 py-1.5",
-              view === "mine"
-                ? "bg-interactive text-foreground-on-accent"
-                : "text-foreground-weak hover:text-foreground",
-            )}
-          >
-            Mine + Starred
-          </button>
-          <button
-            type="button"
-            onClick={() => setView("all")}
-            className={cn(
-              "px-3 py-1.5",
-              view === "all"
-                ? "bg-interactive text-foreground-on-accent"
-                : "text-foreground-weak hover:text-foreground",
-            )}
-          >
-            All
-          </button>
-        </div>
-
-        <FacetPills counts={counts} active={bucket} onChange={setBucket} />
-
-        {pendingPromotionCount > 0 && (
-          <button
-            type="button"
-            aria-pressed={promotionOnly}
-            onClick={() => {
-              setPromotionOnly((active) => !active);
-              if (!promotionOnly) setView("all");
-            }}
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors",
-              promotionOnly
-                ? "border-foreground bg-interactive text-foreground-on-accent"
-                : "border-border bg-surface text-foreground-weak hover:text-foreground",
-            )}
-          >
-            Drafts
-            <span className="rounded-full bg-surface-secondary px-1.5 py-0.5 text-sm text-foreground-weak">
-              {pendingPromotionCount}
-            </span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((open) => !open)}
-          className="border-border text-foreground-weak hover:text-foreground rounded-full border bg-surface px-3 py-1.5 text-sm"
-        >
-          Filters{activeAdvancedFilters > 0 ? ` · ${activeAdvancedFilters}` : ""}
-        </button>
-      </div>
-
-      {filtersOpen && (
-        <div className="border-border bg-surface-raised grid gap-3 rounded-lg border p-3 sm:grid-cols-3">
-          {labelOptions.length > 1 && (
-            <Select
-              value={labelFilter}
-              onValueChange={setLabelFilter}
-              options={labelOptions}
-              ariaLabel="Filter by label"
-            />
-          )}
-          {modelOptions.length > 1 && (
-            <Select
-              value={modelFilter}
-              onValueChange={setModelFilter}
-              options={modelOptions}
-              ariaLabel="Filter by model"
-            />
-          )}
-          {mcpOptions.length > 1 && (
-            <Select
-              value={mcpFilter}
-              onValueChange={setMcpFilter}
-              options={mcpOptions}
-              ariaLabel="Filter by MCP"
-            />
-          )}
-        </div>
-      )}
+      </AgentInventoryViewControls>
 
       {filtered.length > 0 ? (
         <div className="border-border overflow-hidden rounded-lg border bg-surface">
@@ -694,62 +753,6 @@ function StatusDot({ bucket }: { bucket: StatusBucket }) {
       title={status.label}
       className={cn("h-2 w-2 shrink-0 rounded-full", status.dotClass)}
     />
-  );
-}
-
-function FacetPills({
-  counts,
-  active,
-  onChange,
-}: {
-  counts: Record<StatusBucket | "all", number>;
-  active: StatusBucket | null;
-  onChange: (bucket: StatusBucket | null) => void;
-}) {
-  const pills: Array<{ key: StatusBucket | "all"; label: string }> = [
-    { key: "all", label: "All" },
-    { key: "active", label: "Active" },
-    { key: "idle", label: "Idle" },
-    { key: "error", label: "Error" },
-    { key: "pending", label: "Pending" },
-    { key: "invalid", label: "Invalid" },
-  ];
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      {pills.map(({ key, label }) => {
-        const count = counts[key];
-        if (key !== "all" && count === 0) return null;
-        const isActive =
-          (key === "all" && active === null) || key === active;
-        return (
-          <button
-            key={key}
-            type="button"
-            onClick={() =>
-              onChange(key === "all" ? null : (key as StatusBucket))
-            }
-            className={cn(
-              "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors",
-              isActive
-                ? "border-foreground bg-surface-raised text-foreground"
-                : "border-border bg-surface text-foreground-weak hover:text-foreground",
-            )}
-          >
-            {label}
-            <span
-              className={cn(
-                "rounded-full px-1.5 py-0.5 text-sm font-medium",
-                isActive
-                  ? "bg-surface text-foreground-weak"
-                  : "bg-surface-secondary text-foreground-muted",
-              )}
-            >
-              {count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
