@@ -40,7 +40,7 @@ describe("inventoryAgentSearchText", () => {
   });
 
   it("preserves the existing searchable identity when no description exists", () => {
-    expect(inventoryAgentSearchText(liveAgent(null))).toBe(
+    expect(inventoryAgentSearchText(liveAgent(null))).toContain(
       "Daily Brief daily-brief daily-brief.yaml",
     );
   });
@@ -59,5 +59,19 @@ describe("inventoryAgentSearchText", () => {
     expect(inventoryAgentSearchText(agent)).toContain(
       "unpromoted draft needs promotion",
     );
+  });
+
+  it("includes labels, model, and direct and inherited connections", () => {
+    const agent = liveAgent(null);
+    agent.labels = ["sales", "read-only"];
+    agent.mcps = [{ slug: "attio", label: "Attio" }];
+    agent.subMcps = [{ slug: "slack", label: "Slack" }];
+
+    const haystack = inventoryAgentSearchText(agent).toLowerCase();
+
+    expect(haystack).toContain("sales");
+    expect(haystack).toContain("claude-sonnet-5");
+    expect(haystack).toContain("attio");
+    expect(haystack).toContain("slack");
   });
 });

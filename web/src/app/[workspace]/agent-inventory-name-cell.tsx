@@ -113,6 +113,10 @@ export function inventoryAgentSearchText(agent: InventoryAgent): string {
     agent.name,
     agent.filename,
     agent.description,
+    agent.model,
+    ...agent.labels,
+    ...agent.mcps.flatMap((mcp) => [mcp.slug, mcp.label]),
+    ...agent.subMcps.flatMap((mcp) => [mcp.slug, mcp.label]),
     agent.pendingPromotion ? "unpromoted draft needs promotion" : null,
   ]
     .filter(Boolean)
