@@ -70,6 +70,11 @@ preview, the exact raw text, its agent version and execution provenance, and a
 link to the source run. Orchestrator provenance appears only for an output
 produced by a sub-agent; a top-level output shows only its producing agent.
 
+Each agent also has an **Outputs** tab with the same report view fixed to that
+agent. Search and the orchestrator, **Run as**, date, and delivery-evidence
+filters remain available there; use the workspace **Activity → Outputs** page to
+search across agents.
+
 An output's delivery status is evidence-based: **Confirmed** means TAS observed
 the inbox item or successful tool call declared by that exact agent version. It
 does not claim that a person read an email or message. **Partial**, **Failed**,
