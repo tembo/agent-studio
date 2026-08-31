@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  useCallback,
   type FormEvent,
   type ReactNode,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -29,6 +31,7 @@ type Props = {
   defaultFilters: AgentInventoryFilters;
   views: AgentInventoryView[];
   onApply: (filters: AgentInventoryFilters) => void;
+  toolbar: ReactNode;
   children: ReactNode;
 };
 
@@ -43,6 +46,7 @@ export function AgentInventoryViewControls({
   defaultFilters,
   views,
   onApply,
+  toolbar,
   children,
 }: Props) {
   const builtInViews = [
@@ -156,10 +160,22 @@ export function AgentInventoryViewControls({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          value={selected?.id ?? selectedBuiltIn?.id ?? ""}
-          onValueChange={(id) => {
+      <div className="flex min-w-0 items-center gap-3">
+        <ViewPillSwitcher
+          views={[
+            ...builtInViews.map((view) => ({
+              id: view.id,
+              label: `${view.name}${view.id === selectedBuiltIn?.id && selectedIsDirty ? " · Unsaved" : ""}`,
+              menuLabel: view.name,
+            })),
+            ...availableViews.map((view) => ({
+              id: view.id,
+              label: `${view.name}${view.id === selected?.id && selectedIsDirty ? " · Unsaved" : ""}`,
+              menuLabel: `${view.name} · ${view.visibility === "personal" ? "Personal" : "Shared"}`,
+            })),
+          ]}
+          activeViewId={activeViewId}
+          onSelect={(id) => {
             setCreating(false);
             setEditingViewId("");
             setSaveError("");
@@ -169,107 +185,99 @@ export function AgentInventoryViewControls({
               availableViews.find((view) => view.id === id);
             if (next) onApply(next.filters);
           }}
-          options={[
-            ...builtInViews.map((view) => ({
-              value: view.id,
-              label: `${view.name}${view.id === selectedBuiltIn?.id && selectedIsDirty ? " · Unsaved" : ""}`,
-            })),
-            ...availableViews.map((view) => ({
-              value: view.id,
-              label: `${view.name} · ${view.visibility === "personal" ? "Personal" : "Shared"}${view.id === selected?.id && selectedIsDirty ? " · Unsaved" : ""}`,
-            })),
-          ]}
-          ariaLabel="Saved agent view"
-          className="min-w-[220px]"
         />
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setEditorStartViewId(activeViewId);
-            setEditorStartFilters(filters);
-            setName("");
-            setVisibility("personal");
-            setSaveError("");
-            setEditingViewId("");
-            setActiveViewId("");
-            onApply(defaultFilters);
-            setCreating(true);
-          }}
-        >
-          New view
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => {
-            setActiveViewId(ALL_VIEW_ID);
-            setCreating(false);
-            setEditingViewId("");
-            onApply(defaultFilters);
-          }}
-        >
-          Reset
-        </Button>
-        {selectedIsDirty && !editorOpen && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <Button
-            variant="primary"
-            disabled={saving}
-            onClick={
-              selected && canManageSelected
-                ? saveCurrentFilters
-                : createFromCurrentFilters
-            }
-          >
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        )}
-        {canManageSelected && !editorOpen && (
-          <Button
-            variant="ghost"
+            variant="secondary"
             onClick={() => {
               setEditorStartViewId(activeViewId);
               setEditorStartFilters(filters);
-              setName(selected.name);
-              setVisibility(selected.visibility);
+              setName("");
+              setVisibility("personal");
               setSaveError("");
-              setCreating(false);
-              setEditingViewId(selected.id);
+              setEditingViewId("");
+              setActiveViewId("");
+              onApply(defaultFilters);
+              setCreating(true);
             }}
           >
-            Edit view
+            New view
           </Button>
-        )}
-        {canManageSelected && !editorOpen && (
           <Button
             variant="ghost"
-            disabled={deleting}
             onClick={() => {
-              setDeleteError("");
-              startDelete(async () => {
-                const result = await deleteAgentInventoryViewAction({
-                  workspaceSlug,
-                  viewId: selected.id,
-                });
-                if (!result.ok) {
-                  setDeleteError(result.error);
-                  return;
-                }
-                setAvailableViews((current) =>
-                  current.filter((view) => view.id !== selected.id),
-                );
-                setActiveViewId(ALL_VIEW_ID);
-                onApply(defaultFilters);
-              });
+              setActiveViewId(ALL_VIEW_ID);
+              setCreating(false);
+              setEditingViewId("");
+              onApply(defaultFilters);
             }}
           >
-            {deleting ? "Deleting…" : "Delete view"}
+            Reset
           </Button>
-        )}
-        {(deleteError || (!editorOpen && saveError)) && (
-          <span className="text-sentiment-negative text-sm" role="alert">
-            {deleteError || saveError}
-          </span>
-        )}
+          {selectedIsDirty && !editorOpen && (
+            <Button
+              variant="primary"
+              disabled={saving}
+              onClick={
+                selected && canManageSelected
+                  ? saveCurrentFilters
+                  : createFromCurrentFilters
+              }
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          )}
+          {canManageSelected && !editorOpen && (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditorStartViewId(activeViewId);
+                setEditorStartFilters(filters);
+                setName(selected.name);
+                setVisibility(selected.visibility);
+                setSaveError("");
+                setCreating(false);
+                setEditingViewId(selected.id);
+              }}
+            >
+              Edit view
+            </Button>
+          )}
+          {canManageSelected && !editorOpen && (
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => {
+                setDeleteError("");
+                startDelete(async () => {
+                  const result = await deleteAgentInventoryViewAction({
+                    workspaceSlug,
+                    viewId: selected.id,
+                  });
+                  if (!result.ok) {
+                    setDeleteError(result.error);
+                    return;
+                  }
+                  setAvailableViews((current) =>
+                    current.filter((view) => view.id !== selected.id),
+                  );
+                  setActiveViewId(ALL_VIEW_ID);
+                  onApply(defaultFilters);
+                });
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete view"}
+            </Button>
+          )}
+          {(deleteError || (!editorOpen && saveError)) && (
+            <span className="text-sentiment-negative text-sm" role="alert">
+              {deleteError || saveError}
+            </span>
+          )}
+        </div>
       </div>
+
+      {toolbar}
 
       {editorOpen && (
         <form
@@ -350,4 +358,121 @@ function upsertView(
   const existing = views.findIndex((view) => view.id === next.id);
   if (existing === -1) return [...views, next];
   return views.map((view) => (view.id === next.id ? next : view));
+}
+
+type ViewChoice = {
+  id: string;
+  label: string;
+  menuLabel: string;
+};
+
+const MORE_VIEWS_WIDTH = 84;
+
+function ViewPillSwitcher({
+  views,
+  activeViewId,
+  onSelect,
+}: {
+  views: ViewChoice[];
+  activeViewId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [visibleCount, setVisibleCount] = useState(views.length);
+  const cleanupObservers = useRef<() => void>(() => undefined);
+  const setListNode = useCallback((node: HTMLDivElement | null) => {
+    cleanupObservers.current();
+    if (!node) return;
+
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const pills = Array.from(node.children) as HTMLElement[];
+        const last = pills.at(-1);
+        if (!last || last.offsetLeft + last.offsetWidth <= node.clientWidth) {
+          setVisibleCount((current) =>
+            current === pills.length ? current : pills.length,
+          );
+          return;
+        }
+
+        const availableWidth = Math.max(
+          0,
+          node.clientWidth - MORE_VIEWS_WIDTH,
+        );
+        const firstHidden = pills.findIndex(
+          (pill) => pill.offsetLeft + pill.offsetWidth > availableWidth,
+        );
+        const next = firstHidden === -1 ? pills.length : firstHidden;
+        setVisibleCount((current) => (current === next ? current : next));
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(measure);
+    const mutationObserver = new MutationObserver(measure);
+    resizeObserver.observe(node);
+    mutationObserver.observe(node, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+    measure();
+
+    cleanupObservers.current = () => {
+      cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, []);
+  const safeVisibleCount = Math.min(visibleCount, views.length);
+  const hiddenViews = views.slice(safeVisibleCount);
+  const activeViewIsHidden = hiddenViews.some(
+    (view) => view.id === activeViewId,
+  );
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <div
+        ref={setListNode}
+        className="flex h-8 min-w-0 items-center gap-1 overflow-hidden"
+        aria-label="Agent views"
+      >
+        {views.map((view, index) => {
+          const hidden = index >= safeVisibleCount;
+          const active = view.id === activeViewId;
+          return (
+            <Button
+              key={view.id}
+              variant={active ? "primary" : "secondary"}
+              onClick={() => onSelect(view.id)}
+              aria-current={active ? "page" : undefined}
+              aria-hidden={hidden || undefined}
+              tabIndex={hidden ? -1 : 0}
+              title={view.menuLabel}
+              className={`h-7 max-w-52 rounded-full px-3 ${hidden ? "invisible pointer-events-none" : ""}`}
+            >
+              <span className="truncate">{view.label}</span>
+            </Button>
+          );
+        })}
+      </div>
+      {hiddenViews.length > 0 && (
+        <div className="absolute right-0 top-0">
+          <Select
+            value={activeViewIsHidden ? activeViewId : ""}
+            onValueChange={onSelect}
+            options={hiddenViews.map((view) => ({
+              value: view.id,
+              label: view.menuLabel,
+            }))}
+            triggerLabel={`${hiddenViews.length} more`}
+            ariaLabel={`${hiddenViews.length} more agent views`}
+            alignItemWithTrigger={false}
+            className="h-7 w-[80px] rounded-full bg-interactive-tertiary px-2 shadow-none"
+            popupClassName="min-w-52"
+          />
+        </div>
+      )}
+    </div>
+  );
 }

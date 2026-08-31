@@ -405,34 +405,6 @@ export function AgentsInventory({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Input
-          type="search"
-          placeholder="Search name, label, model, or connection…"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          className="max-w-sm"
-          aria-label="Search agents"
-        />
-        <div className="flex items-center gap-2">
-          <Select
-            value={sortKey}
-            onValueChange={(value) => setSortKey(value as SortKey)}
-            options={SORT_OPTIONS}
-            ariaLabel="Sort agents"
-            className="min-w-[180px]"
-          />
-          {canCreate && (
-            <Button asChild>
-              <Link href={newAgentHref}>
-                <IconPlusLarge size={16} />
-                <span>New agent</span>
-              </Link>
-            </Button>
-          )}
-        </div>
-      </div>
-
       <AgentInventoryViewControls
         workspaceSlug={workspaceSlug}
         currentUserId={currentUserId}
@@ -441,6 +413,35 @@ export function AgentsInventory({
         defaultFilters={defaultFilters}
         views={savedViews}
         onApply={applyFilters}
+        toolbar={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Input
+              type="search"
+              placeholder="Search name, label, model, or connection…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="max-w-sm"
+              aria-label="Search agents"
+            />
+            <div className="flex items-center gap-2">
+              <Select
+                value={sortKey}
+                onValueChange={(value) => setSortKey(value as SortKey)}
+                options={SORT_OPTIONS}
+                ariaLabel="Sort agents"
+                className="min-w-[180px]"
+              />
+              {canCreate && (
+                <Button asChild>
+                  <Link href={newAgentHref}>
+                    <IconPlusLarge size={16} />
+                    <span>New agent</span>
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </div>
+        }
       >
         <AgentInventoryFilterBar
           filters={currentFilters}

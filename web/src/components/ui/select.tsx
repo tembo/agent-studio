@@ -38,6 +38,7 @@ type Props = {
   hideIndicator?: boolean;
   popupClassName?: string;
   alignItemWithTrigger?: boolean;
+  triggerLabel?: ReactNode;
 };
 
 export function Select({
@@ -51,6 +52,7 @@ export function Select({
   hideIndicator = false,
   popupClassName,
   alignItemWithTrigger = true,
+  triggerLabel,
 }: Props) {
   const selected = options.find((o) => o.value === value);
   return (
@@ -67,7 +69,8 @@ export function Select({
         )}
       >
         <BaseSelect.Value className="truncate">
-          {selected ? selected.label : (placeholder ?? "Select…")}
+          {triggerLabel ??
+            (selected ? selected.label : (placeholder ?? "Select…"))}
         </BaseSelect.Value>
         {!hideIcon && (
           <BaseSelect.Icon className="text-foreground-weak">

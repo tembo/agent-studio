@@ -232,7 +232,9 @@ keep your day-to-day view tidy:
   roles in a nested workflow.
 - The built-in **All** and **Mine** views are always available and cannot be
   renamed or deleted. Changing their filters marks the view **Unsaved**;
-  choosing **Save** creates a custom view without changing the built-in.
+  choosing **Save** creates a custom view without changing the built-in. Views
+  appear as pills above search and sort; when space is limited, additional
+  views move into the **more** menu.
 - Choose **New view** to name and save the current search, filters, and sort.
   Personal views are visible only to you; shared views are available to every
   member of the workspace. You can keep editing filters while naming a view and
