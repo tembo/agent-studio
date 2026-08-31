@@ -455,10 +455,10 @@ function LiveInventoryRow({
 }) {
   const router = useRouter();
   const connections = [...agent.mcps, ...agent.subMcps];
-  const successLabel =
-    agent.runs30d > 0
-      ? `${Math.round((agent.succeeded30d / agent.runs30d) * 100)}%`
-      : "—";
+  const hasTrailingRuns = agent.runs30d > 0;
+  const successLabel = hasTrailingRuns
+    ? `${Math.round((agent.succeeded30d / agent.runs30d) * 100)}%`
+    : "";
 
   return (
     <article
@@ -486,16 +486,16 @@ function LiveInventoryRow({
       <AgentMetadata agent={agent} connections={connections} />
 
       <div className="text-foreground col-start-2 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 font-mono text-sm lg:col-start-3 lg:row-start-1 lg:justify-self-end">
-        {agent.runs30d > 0 && (
+        {hasTrailingRuns && (
           <>
-            <span
-              title="Average cost per run in the trailing 30 days"
-              aria-label={`Average cost per run: ${agent.avgCostUsd30d === null ? "not available" : formatCurrency(agent.avgCostUsd30d)}`}
-            >
-              {agent.avgCostUsd30d === null
-                ? "—"
-                : formatCurrency(agent.avgCostUsd30d)}
-            </span>
+            {agent.avgCostUsd30d !== null ? (
+              <span
+                title="Average cost per run in the trailing 30 days"
+                aria-label={`Average cost per run: ${formatCurrency(agent.avgCostUsd30d)}`}
+              >
+                {formatCurrency(agent.avgCostUsd30d)}
+              </span>
+            ) : null}
             <span
               title="Success rate in the trailing 30 days"
               aria-label={`Success rate: ${successLabel}`}
@@ -520,7 +520,7 @@ function LiveInventoryRow({
         </span>
       </div>
 
-      {agent.runs30d > 0 && (
+      {hasTrailingRuns && (
         <span
           className="text-foreground-weak col-start-2 font-mono text-sm lg:col-start-3 lg:row-start-2 lg:justify-self-end"
           title="Runs in the trailing 30 days"
@@ -587,12 +587,14 @@ function AgentMetadata({
         </span>
       )}
 
-      <span
-        className="rounded bg-gray-300 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-100"
-        title={agent.model ?? "No model configured"}
-      >
-        {shortModel(agent.model)}
-      </span>
+      {agent.model ? (
+        <span
+          className="rounded bg-gray-300 px-2 py-0.5 font-mono text-xs text-gray-800 dark:bg-gray-700 dark:text-gray-100"
+          title={agent.model}
+        >
+          {shortModel(agent.model)}
+        </span>
+      ) : null}
 
       {agent.pendingPromotion && (
         <Link
@@ -1009,8 +1011,7 @@ function successRate(agent: InventoryAgent): number | null {
     : null;
 }
 
-function shortModel(model: string | null): string {
-  if (!model) return "—";
+function shortModel(model: string): string {
   return model.replace(/^anthropic:claude-/, "").replace(/^openai:/, "");
 }
 

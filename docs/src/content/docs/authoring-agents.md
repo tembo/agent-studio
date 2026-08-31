@@ -219,7 +219,8 @@ keep your day-to-day view tidy:
   **Sort** menu for name, status, trailing-30-day runs/cost/success, or recent
   activity. Click anywhere on a live-agent row except its explicit controls to
   open it. The trailing-30-day count, average cost, and success rate stay hidden
-  until the agent has at least one run in that window.
+  until the agent has at least one run in that window; missing model or cost
+  values are left blank instead of showing placeholder dashes.
 - **Fork** an agent (the **Fork** button on its page) to make your own editable
   copy. The copy is named with an **owner prefix** — `sales-gen` forked by `ryw`
   becomes **`ryw.sales-gen`** — so two people can each keep their own without a
