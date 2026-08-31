@@ -221,6 +221,17 @@ keep your day-to-day view tidy:
   open it. The trailing-30-day count, average cost, and success rate stay hidden
   until the agent has at least one run in that window; missing model or cost
   values are left blank instead of showing placeholder dashes.
+- Add structured filters from **Add filter**. Each active filter is an editable
+  pill, and the list updates immediately when you change or remove it. Alongside
+  status, label, model, and connection filters, you can filter agents by the
+  observed **Orchestrator** or **Sub-agent** role, or show only the sub-agents
+  called by a particular orchestrator. These relationships come from run
+  history; they are not fields in the agent spec, and an agent can match both
+  roles in a nested workflow.
+- Choose **New view** to name and save the current search, filters, and sort.
+  Personal views are visible only to you; shared views are available to every
+  member of the workspace. You can keep editing filters while naming a view and
+  watch the result list update before you save it.
 - **Fork** an agent (the **Fork** button on its page) to make your own editable
   copy. The copy is named with an **owner prefix** — `sales-gen` forked by `ryw`
   becomes **`ryw.sales-gen`** — so two people can each keep their own without a

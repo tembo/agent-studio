@@ -18,6 +18,8 @@ function liveAgent(
     labels: [],
     mcps: [],
     subMcps: [],
+    subAgentNames: [],
+    orchestratorNames: [],
     model: "anthropic:claude-sonnet-5",
     runs30d: 0,
     succeeded30d: 0,
