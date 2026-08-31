@@ -67,7 +67,8 @@ run with non-empty output appears here, including sub-agent runs. Search the
 output body, or filter by producing agent, orchestrator, **Run as** member,
 completion date, and delivery evidence. Open a result to see a rendered Markdown
 preview, the exact raw text, its agent version and execution provenance, and a
-link to the source run.
+link to the source run. Orchestrator provenance appears only for an output
+produced by a sub-agent; a top-level output shows only its producing agent.
 
 An output's delivery status is evidence-based: **Confirmed** means TAS observed
 the inbox item or successful tool call declared by that exact agent version. It
