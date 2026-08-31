@@ -222,12 +222,14 @@ keep your day-to-day view tidy:
   until the agent has at least one run in that window; missing model or cost
   values are left blank instead of showing placeholder dashes.
 - Add structured filters from **Add filter**. Each active filter is an editable
-  pill, and the list updates immediately when you change or remove it. Alongside
-  owner, star status, status, label, model, and connection filters, you can
-  filter agents by the observed **Orchestrator** or **Sub-agent** role, or show
-  only the sub-agents called by a particular orchestrator. These relationships
-  come from run history; they are not fields in the agent spec, and an agent can
-  match both roles in a nested workflow.
+  pill, and the list updates immediately when you change or remove it. Click
+  **is** to switch a filter to **is not**; list-valued filters accept multiple
+  selections and match any selected value. Alongside owner, star status,
+  status, label, model, and connection filters, you can filter agents by the
+  observed **Orchestrator** or **Sub-agent** role, or show only the sub-agents
+  called by a particular orchestrator. These relationships come from run
+  history; they are not fields in the agent spec, and an agent can match both
+  roles in a nested workflow.
 - Choose **New view** to name and save the current search, filters, and sort.
   Personal views are visible only to you; shared views are available to every
   member of the workspace. You can keep editing filters while naming a view and

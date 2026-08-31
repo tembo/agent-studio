@@ -13,6 +13,7 @@ import { mcpLogoUrl } from "@/lib/mcp-logo";
 import { formatCurrency } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type {
+  AgentInventoryFilterOperators,
   AgentInventoryFilters,
   AgentInventoryOwner,
   AgentInventorySort,
@@ -21,6 +22,8 @@ import type {
   AgentInventoryView,
 } from "@/lib/agent-inventory-view-types";
 import {
+  defaultAgentInventoryFilterOperators,
+  matchesAgentInventoryValues,
   matchesAgentOwnershipFilters,
   matchesAgentRelationshipFilters,
 } from "@/lib/agent-inventory-view-types";
@@ -131,29 +134,33 @@ export function AgentsInventory({
 }: Props) {
   const [query, setQuery] = useState("");
   const [ownerFilter, setOwnerFilter] =
-    useState<AgentInventoryOwner | "">("");
-  const [starredFilter, setStarredFilter] = useState<boolean | null>(null);
-  const [bucket, setBucket] = useState<StatusBucket | null>(null);
-  const [labelFilter, setLabelFilter] = useState("");
-  const [modelFilter, setModelFilter] = useState("");
-  const [mcpFilter, setMcpFilter] = useState("");
+    useState<AgentInventoryOwner[]>([]);
+  const [starredFilter, setStarredFilter] = useState<boolean[]>([]);
+  const [bucket, setBucket] = useState<StatusBucket[]>([]);
+  const [labelFilter, setLabelFilter] = useState<string[]>([]);
+  const [modelFilter, setModelFilter] = useState<string[]>([]);
+  const [mcpFilter, setMcpFilter] = useState<string[]>([]);
   const [agentTypeFilter, setAgentTypeFilter] =
-    useState<AgentInventoryType | "">("");
-  const [orchestratorFilter, setOrchestratorFilter] = useState("");
+    useState<AgentInventoryType[]>([]);
+  const [orchestratorFilter, setOrchestratorFilter] = useState<string[]>([]);
   const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
+  const [operators, setOperators] = useState<AgentInventoryFilterOperators>(
+    defaultAgentInventoryFilterOperators,
+  );
   const [sortKey, setSortKey] = useState<SortKey>("last-run");
 
   const defaultFilters: AgentInventoryFilters = {
     query: "",
-    owner: "",
-    starred: null,
-    status: null,
+    owner: [],
+    starred: [],
+    status: [],
     promotionOnly: initialPromotionOnly,
-    label: "",
-    model: "",
-    mcp: "",
-    agentType: "",
-    orchestrator: "",
+    label: [],
+    model: [],
+    mcp: [],
+    agentType: [],
+    orchestrator: [],
+    operators: defaultAgentInventoryFilterOperators(),
     sort: "last-run",
   };
   const currentFilters: AgentInventoryFilters = {
@@ -167,6 +174,7 @@ export function AgentsInventory({
     mcp: mcpFilter,
     agentType: agentTypeFilter,
     orchestrator: orchestratorFilter,
+    operators,
     sort: sortKey,
   };
 
@@ -181,6 +189,7 @@ export function AgentsInventory({
     setMcpFilter(filters.mcp);
     setAgentTypeFilter(filters.agentType);
     setOrchestratorFilter(filters.orchestrator);
+    setOperators(filters.operators);
     setSortKey(filters.sort);
   }
 
@@ -278,40 +287,73 @@ export function AgentsInventory({
         })
       : enriched;
 
-    if (ownerFilter || starredFilter !== null) {
+    if (ownerFilter.length > 0 || starredFilter.length > 0) {
       rows = rows.filter(({ agent }) =>
-        matchesAgentOwnershipFilters(agent, ownerFilter, starredFilter),
+        matchesAgentOwnershipFilters(agent, ownerFilter, starredFilter, {
+          owner: operators.owner,
+          starred: operators.starred,
+        }),
       );
     }
     if (promotionOnly) {
       rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.pendingPromotion !== null,
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            [agent.pendingPromotion !== null],
+            [true],
+            operators.promotionOnly,
+          ),
       );
     }
-    if (bucket !== null) rows = rows.filter((row) => row.bucket === bucket);
-    if (labelFilter) {
-      rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.labels.includes(labelFilter),
+    if (bucket.length > 0) {
+      rows = rows.filter((row) =>
+        matchesAgentInventoryValues([row.bucket], bucket, operators.status),
       );
     }
-    if (modelFilter) {
-      rows = rows.filter(
-        ({ agent }) => agent.kind === "live" && agent.model === modelFilter,
-      );
-    }
-    if (mcpFilter) {
+    if (labelFilter.length > 0) {
       rows = rows.filter(
         ({ agent }) =>
           agent.kind === "live" &&
-          [...agent.mcps, ...agent.subMcps].some((mcp) => mcp.slug === mcpFilter),
+          matchesAgentInventoryValues(
+            agent.labels,
+            labelFilter,
+            operators.label,
+          ),
       );
     }
-    if (agentTypeFilter || orchestratorFilter) {
+    if (modelFilter.length > 0) {
+      rows = rows.filter(
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            agent.model ? [agent.model] : [],
+            modelFilter,
+            operators.model,
+          ),
+      );
+    }
+    if (mcpFilter.length > 0) {
+      rows = rows.filter(
+        ({ agent }) =>
+          agent.kind === "live" &&
+          matchesAgentInventoryValues(
+            [...agent.mcps, ...agent.subMcps].map((mcp) => mcp.slug),
+            mcpFilter,
+            operators.mcp,
+          ),
+      );
+    }
+    if (agentTypeFilter.length > 0 || orchestratorFilter.length > 0) {
       rows = rows.filter(({ agent }) =>
         matchesAgentRelationshipFilters(
           agent,
           agentTypeFilter,
           orchestratorFilter,
+          {
+            agentType: operators.agentType,
+            orchestrator: operators.orchestrator,
+          },
         ),
       );
     }
@@ -329,6 +371,7 @@ export function AgentsInventory({
     mcpFilter,
     agentTypeFilter,
     orchestratorFilter,
+    operators,
     sortKey,
   ]);
 

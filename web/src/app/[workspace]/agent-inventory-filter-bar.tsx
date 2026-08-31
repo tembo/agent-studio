@@ -2,24 +2,19 @@
 
 import { useState } from "react";
 
-import { Select, type SelectOption } from "@/components/ui/select";
+import {
+  MultiSelect,
+  Select,
+  type SelectOption,
+} from "@/components/ui/select";
 import type {
+  AgentInventoryFilterKey,
+  AgentInventoryFilterOperator,
   AgentInventoryFilters,
   AgentInventoryOwner,
   AgentInventoryStatus,
   AgentInventoryType,
 } from "@/lib/agent-inventory-view-types";
-
-type FilterKey =
-  | "owner"
-  | "starred"
-  | "status"
-  | "promotionOnly"
-  | "label"
-  | "model"
-  | "mcp"
-  | "agentType"
-  | "orchestrator";
 
 type Props = {
   filters: AgentInventoryFilters;
@@ -59,113 +54,169 @@ export function AgentInventoryFilterBar({
     onChange({ ...filters, [key]: value });
   }
 
+  function updateOperator(
+    key: AgentInventoryFilterKey,
+    operator: AgentInventoryFilterOperator,
+  ) {
+    onChange({
+      ...filters,
+      operators: { ...filters.operators, [key]: operator },
+    });
+  }
+
+  function removeFilter<K extends AgentInventoryFilterKey>(
+    key: K,
+    emptyValue: AgentInventoryFilters[K],
+  ) {
+    onChange({
+      ...filters,
+      [key]: emptyValue,
+      operators: { ...filters.operators, [key]: "is" },
+    });
+  }
+
   return (
     <div className="border-border bg-surface-raised flex min-h-11 flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
-      {filters.owner && (
+      {filters.owner.length > 0 && (
         <FilterPill
           label="Owner"
-          value={filters.owner}
+          values={filters.owner}
           options={[
             { value: "me", label: "Me" },
             { value: "others", label: "Others" },
           ]}
+          operator={filters.operators.owner}
           ariaLabel="Filter agent ownership"
-          onChange={(value) => update("owner", value as AgentInventoryOwner)}
-          onRemove={() => update("owner", "")}
+          onValuesChange={(values) =>
+            update("owner", values as AgentInventoryOwner[])
+          }
+          onOperatorChange={(operator) => updateOperator("owner", operator)}
+          onRemove={() => removeFilter("owner", [])}
         />
       )}
-      {filters.starred !== null && (
+      {filters.starred.length > 0 && (
         <FilterPill
           label="Starred"
-          value={String(filters.starred)}
+          values={filters.starred.map(String)}
           options={[
             { value: "true", label: "True" },
             { value: "false", label: "False" },
           ]}
+          operator={filters.operators.starred}
           ariaLabel="Filter starred agents"
-          onChange={(value) => update("starred", value === "true")}
-          onRemove={() => update("starred", null)}
+          onValuesChange={(values) =>
+            update(
+              "starred",
+              values.map((value) => value === "true"),
+            )
+          }
+          onOperatorChange={(operator) => updateOperator("starred", operator)}
+          onRemove={() => removeFilter("starred", [])}
         />
       )}
-      {filters.status && (
+      {filters.status.length > 0 && (
         <FilterPill
           label="Status"
-          value={filters.status}
+          values={filters.status}
           options={STATUS_OPTIONS.map((option) => ({
             ...option,
             label: `${option.label} · ${statusCounts[option.value]}`,
           }))}
+          operator={filters.operators.status}
           ariaLabel="Filter agent status"
-          onChange={(value) => update("status", value as AgentInventoryStatus)}
-          onRemove={() => update("status", null)}
+          onValuesChange={(values) =>
+            update("status", values as AgentInventoryStatus[])
+          }
+          onOperatorChange={(operator) => updateOperator("status", operator)}
+          onRemove={() => removeFilter("status", [])}
         />
       )}
       {filters.promotionOnly && (
         <FilterPill
           label="Draft"
-          value="pending"
+          values={["pending"]}
           options={[{ value: "pending", label: "Needs promotion" }]}
+          operator={filters.operators.promotionOnly}
           ariaLabel="Filter pending promotions"
-          onChange={() => undefined}
-          onRemove={() => update("promotionOnly", false)}
+          onValuesChange={() => undefined}
+          onOperatorChange={(operator) =>
+            updateOperator("promotionOnly", operator)
+          }
+          onRemove={() => removeFilter("promotionOnly", false)}
+          fixedValue
         />
       )}
-      {filters.label && (
+      {filters.label.length > 0 && (
         <FilterPill
           label="Label"
-          value={filters.label}
-          options={withoutEmpty(labelOptions, filters.label)}
+          values={filters.label}
+          options={withCurrentOptions(labelOptions, filters.label)}
+          operator={filters.operators.label}
           ariaLabel="Filter by label"
-          onChange={(value) => update("label", value)}
-          onRemove={() => update("label", "")}
+          onValuesChange={(values) => update("label", values)}
+          onOperatorChange={(operator) => updateOperator("label", operator)}
+          onRemove={() => removeFilter("label", [])}
         />
       )}
-      {filters.model && (
+      {filters.model.length > 0 && (
         <FilterPill
           label="Model"
-          value={filters.model}
-          options={withoutEmpty(modelOptions, filters.model)}
+          values={filters.model}
+          options={withCurrentOptions(modelOptions, filters.model)}
+          operator={filters.operators.model}
           ariaLabel="Filter by model"
-          onChange={(value) => update("model", value)}
-          onRemove={() => update("model", "")}
+          onValuesChange={(values) => update("model", values)}
+          onOperatorChange={(operator) => updateOperator("model", operator)}
+          onRemove={() => removeFilter("model", [])}
         />
       )}
-      {filters.mcp && (
+      {filters.mcp.length > 0 && (
         <FilterPill
           label="MCP"
-          value={filters.mcp}
-          options={withoutEmpty(mcpOptions, filters.mcp)}
+          values={filters.mcp}
+          options={withCurrentOptions(mcpOptions, filters.mcp)}
+          operator={filters.operators.mcp}
           ariaLabel="Filter by MCP"
-          onChange={(value) => update("mcp", value)}
-          onRemove={() => update("mcp", "")}
+          onValuesChange={(values) => update("mcp", values)}
+          onOperatorChange={(operator) => updateOperator("mcp", operator)}
+          onRemove={() => removeFilter("mcp", [])}
         />
       )}
-      {filters.agentType && (
+      {filters.agentType.length > 0 && (
         <FilterPill
           label="Type"
-          value={filters.agentType}
+          values={filters.agentType}
           options={[
             { value: "orchestrator", label: "Orchestrator" },
             { value: "sub-agent", label: "Sub-agent" },
           ]}
+          operator={filters.operators.agentType}
           ariaLabel="Filter by agent type"
-          onChange={(value) => update("agentType", value as AgentInventoryType)}
-          onRemove={() => update("agentType", "")}
+          onValuesChange={(values) =>
+            update("agentType", values as AgentInventoryType[])
+          }
+          onOperatorChange={(operator) => updateOperator("agentType", operator)}
+          onRemove={() => removeFilter("agentType", [])}
         />
       )}
-      {filters.orchestrator && (
+      {filters.orchestrator.length > 0 && (
         <FilterPill
           label="Sub-agent of"
-          value={filters.orchestrator}
-          options={withoutEmpty(orchestratorOptions, filters.orchestrator).map(
-            (option) => ({
-              ...option,
-              label: option.label.replace(/^Sub-agents of /, ""),
-            }),
-          )}
+          values={filters.orchestrator}
+          options={withCurrentOptions(
+            orchestratorOptions,
+            filters.orchestrator,
+          ).map((option) => ({
+            ...option,
+            label: option.label.replace(/^Sub-agents of /, ""),
+          }))}
+          operator={filters.operators.orchestrator}
           ariaLabel="Filter by orchestrator"
-          onChange={(value) => update("orchestrator", value)}
-          onRemove={() => update("orchestrator", "")}
+          onValuesChange={(values) => update("orchestrator", values)}
+          onOperatorChange={(operator) =>
+            updateOperator("orchestrator", operator)
+          }
+          onRemove={() => removeFilter("orchestrator", [])}
         />
       )}
 
@@ -216,34 +267,63 @@ export function AgentInventoryFilterBar({
 
 function FilterPill({
   label,
-  value,
+  values,
   options,
+  operator,
   ariaLabel,
-  onChange,
+  onValuesChange,
+  onOperatorChange,
   onRemove,
+  fixedValue = false,
 }: {
   label: string;
-  value: string;
+  values: string[];
   options: SelectOption[];
+  operator: AgentInventoryFilterOperator;
   ariaLabel: string;
-  onChange: (value: string) => void;
+  onValuesChange: (values: string[]) => void;
+  onOperatorChange: (operator: AgentInventoryFilterOperator) => void;
   onRemove: () => void;
+  fixedValue?: boolean;
 }) {
+  const valueLabel = options
+    .filter((option) => values.includes(option.value))
+    .map((option) => option.label)
+    .join(", ");
+
   return (
-    <div className="border-border bg-surface inline-flex h-7 items-center overflow-hidden rounded-md border text-sm">
-      <span className="text-foreground-weak border-border-weak border-r px-2">
+    <div className="border-border bg-surface inline-flex h-7 items-center rounded-md border text-sm">
+      <span className="text-foreground-weak border-border-weak flex h-full items-center border-r px-2">
         {label}
       </span>
-      <span className="text-foreground-muted border-border-weak border-r px-1.5">
-        is
-      </span>
       <Select
-        value={value}
-        onValueChange={onChange}
-        options={options}
-        ariaLabel={ariaLabel}
-        className="h-7 min-w-0 rounded-none bg-transparent px-2 shadow-none"
+        value={operator}
+        onValueChange={(value) =>
+          onOperatorChange(value as AgentInventoryFilterOperator)
+        }
+        options={[
+          { value: "is", label: "is" },
+          { value: "is-not", label: "is not" },
+        ]}
+        ariaLabel={`${label} filter operator`}
+        hideIcon
+        hideIndicator
+        popupClassName="min-w-40 py-1"
+        className="text-foreground-muted h-full rounded-none border-0 bg-transparent px-2 font-normal shadow-none"
       />
+      {fixedValue ? (
+        <span className="text-foreground-strong flex h-full max-w-64 items-center border-l border-border-weak px-2 font-medium">
+          {valueLabel}
+        </span>
+      ) : (
+        <MultiSelect
+          value={values}
+          onValueChange={onValuesChange}
+          options={options}
+          ariaLabel={ariaLabel}
+          className="h-full max-w-64 min-w-0 rounded-none border-0 border-l border-border-weak bg-transparent px-2 font-medium shadow-none"
+        />
+      )}
       <button
         type="button"
         onClick={onRemove}
@@ -271,36 +351,43 @@ function filterChoices(args: {
   modelOptions: SelectOption[];
   mcpOptions: SelectOption[];
   orchestratorOptions: SelectOption[];
-}): Array<{ key: FilterKey; label: string }> {
-  const result: Array<{ key: FilterKey; label: string }> = [];
-  if (!args.filters.owner) result.push({ key: "owner", label: "Owner" });
-  if (args.filters.starred === null) {
+}): Array<{ key: AgentInventoryFilterKey; label: string }> {
+  const result: Array<{ key: AgentInventoryFilterKey; label: string }> = [];
+  if (args.filters.owner.length === 0) {
+    result.push({ key: "owner", label: "Owner" });
+  }
+  if (args.filters.starred.length === 0) {
     result.push({ key: "starred", label: "Starred" });
   }
-  if (!args.filters.status) result.push({ key: "status", label: "Status" });
+  if (args.filters.status.length === 0) {
+    result.push({ key: "status", label: "Status" });
+  }
   if (!args.filters.promotionOnly && args.pendingPromotionCount > 0) {
     result.push({ key: "promotionOnly", label: "Draft needs promotion" });
   }
-  if (!args.filters.label && args.labelOptions.length > 1) {
+  if (args.filters.label.length === 0 && args.labelOptions.length > 1) {
     result.push({ key: "label", label: "Label" });
   }
-  if (!args.filters.model && args.modelOptions.length > 1) {
+  if (args.filters.model.length === 0 && args.modelOptions.length > 1) {
     result.push({ key: "model", label: "Model" });
   }
-  if (!args.filters.mcp && args.mcpOptions.length > 1) {
+  if (args.filters.mcp.length === 0 && args.mcpOptions.length > 1) {
     result.push({ key: "mcp", label: "MCP connection" });
   }
-  if (!args.filters.agentType) {
+  if (args.filters.agentType.length === 0) {
     result.push({ key: "agentType", label: "Agent type" });
   }
-  if (!args.filters.orchestrator && args.orchestratorOptions.length > 1) {
+  if (
+    args.filters.orchestrator.length === 0 &&
+    args.orchestratorOptions.length > 1
+  ) {
     result.push({ key: "orchestrator", label: "Sub-agent of orchestrator" });
   }
   return result;
 }
 
 function addFilter(
-  key: FilterKey,
+  key: AgentInventoryFilterKey,
   filters: AgentInventoryFilters,
   onChange: (filters: AgentInventoryFilters) => void,
   options: {
@@ -310,23 +397,42 @@ function addFilter(
     orchestratorOptions: SelectOption[];
   },
 ) {
-  const defaults: Record<FilterKey, AgentInventoryFilters[FilterKey]> = {
-    owner: "me",
-    starred: true,
-    status: "active",
+  const defaults: Record<
+    AgentInventoryFilterKey,
+    AgentInventoryFilters[AgentInventoryFilterKey]
+  > = {
+    owner: ["me"],
+    starred: [true],
+    status: ["active"],
     promotionOnly: true,
-    label: options.labelOptions[1]?.value ?? "",
-    model: options.modelOptions[1]?.value ?? "",
-    mcp: options.mcpOptions[1]?.value ?? "",
-    agentType: "orchestrator",
-    orchestrator: options.orchestratorOptions[1]?.value ?? "",
+    label: firstOption(options.labelOptions),
+    model: firstOption(options.modelOptions),
+    mcp: firstOption(options.mcpOptions),
+    agentType: ["orchestrator"],
+    orchestrator: firstOption(options.orchestratorOptions),
   };
-  onChange({ ...filters, [key]: defaults[key] });
+  onChange({
+    ...filters,
+    [key]: defaults[key],
+    operators: { ...filters.operators, [key]: "is" },
+  });
 }
 
-function withoutEmpty(options: SelectOption[], current: string): SelectOption[] {
+function firstOption(options: SelectOption[]): string[] {
+  const value = options.find((option) => option.value)?.value;
+  return value ? [value] : [];
+}
+
+function withCurrentOptions(
+  options: SelectOption[],
+  current: string[],
+): SelectOption[] {
   const values = options.filter((option) => option.value);
-  return values.some((option) => option.value === current)
-    ? values
-    : [{ value: current, label: current }, ...values];
+  const known = new Set(values.map((option) => option.value));
+  return [
+    ...current
+      .filter((value) => !known.has(value))
+      .map((value) => ({ value, label: value })),
+    ...values,
+  ];
 }

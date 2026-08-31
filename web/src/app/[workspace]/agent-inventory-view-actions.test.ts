@@ -63,7 +63,11 @@ describe("agent inventory view actions", () => {
       workspaceSlug: "demo",
       name: "  Research team  ",
       visibility: "shared",
-      filters: { agentType: "sub-agent", sort: "name" },
+      filters: {
+        agentType: ["sub-agent", "orchestrator"],
+        operators: { agentType: "is-not" },
+        sort: "name",
+      },
     });
 
     expect(result.ok).toBe(true);
@@ -74,7 +78,8 @@ describe("agent inventory view actions", () => {
         name: "Research team",
         visibility: "shared",
         filters: expect.objectContaining({
-          agentType: "sub-agent",
+          agentType: ["sub-agent", "orchestrator"],
+          operators: expect.objectContaining({ agentType: "is-not" }),
           sort: "name",
         }),
       }),

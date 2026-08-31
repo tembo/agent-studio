@@ -150,7 +150,7 @@ export function AgentInventoryViewControls({
       {creating && (
         <form
           onSubmit={save}
-          className="border-border bg-surface-raised overflow-hidden rounded-lg border"
+          className="border-border bg-surface-raised overflow-visible rounded-lg border"
         >
           <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -200,7 +200,7 @@ export function AgentInventoryViewControls({
               </p>
             )}
           </div>
-          <div className="border-border border-t [&>div]:rounded-none [&>div]:border-0">
+          <div className="border-border border-t [&>div]:rounded-b-lg [&>div]:rounded-t-none [&>div]:border-0">
             {children}
           </div>
         </form>

@@ -30,7 +30,7 @@ describe("agent inventory views", () => {
     ).resolves.toMatchObject([
       {
         name: "My failing agents",
-        filters: { owner: "me", starred: true, status: "error" },
+        filters: { owner: ["me"], starred: [true], status: ["error"] },
       },
     ]);
     expect(query.mock.calls[0]?.[0]).toMatch(
