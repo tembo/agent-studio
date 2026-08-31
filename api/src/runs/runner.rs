@@ -947,19 +947,23 @@ async fn mark_succeeded(
         .map(serde_json::from_value::<delivery::DeliveryDeclaration>)
         .transpose()
         .context("decode output delivery declaration")?;
-    let tool_calls = sqlx::query_as::<_, (String, Option<bool>)>(
-        "SELECT tool_name, ok FROM run_tool_call WHERE run_id = $1",
-    )
-    .bind(run_id)
-    .fetch_all(&mut *tx)
-    .await?;
-    let produced_inbox_item: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM inbox_item WHERE produced_by_run_id = $1)")
-            .bind(run_id)
-            .fetch_one(&mut *tx)
-            .await?;
-    let (delivery_status, delivery_evidence) =
-        delivery::derive_delivery_status(declaration.as_ref(), &tool_calls, produced_inbox_item);
+    let (delivery_status, delivery_evidence) = if let Some(declaration) = declaration.as_ref() {
+        let tool_calls = sqlx::query_as::<_, (String, Option<bool>)>(
+            "SELECT tool_name, ok FROM run_tool_call WHERE run_id = $1",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        let produced_inbox_item: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM inbox_item WHERE produced_by_run_id = $1)",
+        )
+        .bind(run_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        delivery::derive_delivery_status(Some(declaration), &tool_calls, produced_inbox_item)
+    } else {
+        delivery::derive_delivery_status(None, &[], false)
+    };
     let delivery_evidence = serde_json::to_value(delivery_evidence)?;
 
     sqlx::query(

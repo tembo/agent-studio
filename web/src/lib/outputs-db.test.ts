@@ -71,6 +71,16 @@ describe("outputs read model", () => {
 
   it("rejects malformed cursors", () => {
     expect(decodeOutputCursor("not-a-cursor")).toBeNull();
+    expect(
+      decodeOutputCursor(
+        Buffer.from(
+          JSON.stringify({
+            completedAt: "2026-08-30T12:00:00.000Z",
+            id: "not-a-uuid",
+          }),
+        ).toString("base64url"),
+      ),
+    ).toBeNull();
   });
 
   it("carries the id in the next cursor when completion times tie", async () => {

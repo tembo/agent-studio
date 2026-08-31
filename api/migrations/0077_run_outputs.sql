@@ -1,4 +1,4 @@
--- Searchable output library. The run row remains the canonical copy of the
+-- Searchable Outputs library. The run row remains the canonical copy of the
 -- output; these columns only add search and immutable delivery provenance.
 
 ALTER TABLE run

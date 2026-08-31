@@ -69,6 +69,8 @@ export type OutputFacets = {
 
 const DEFAULT_LIMIT = 30;
 const MAX_LIMIT = 100;
+const UUID_RE =
+  /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
 type Cursor = { completedAt: Date; id: string };
 
@@ -89,8 +91,9 @@ export function decodeOutputCursor(raw: string | undefined): Cursor | null {
       return null;
     }
     const completedAt = new Date(parsed.completedAt);
-    if (!parsed.id || Number.isNaN(completedAt.getTime())) return null;
-    return { completedAt, id: parsed.id };
+    const id = parsed.id.trim();
+    if (!UUID_RE.test(id) || Number.isNaN(completedAt.getTime())) return null;
+    return { completedAt, id };
   } catch {
     return null;
   }
