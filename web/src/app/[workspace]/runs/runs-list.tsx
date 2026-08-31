@@ -1,21 +1,11 @@
 "use client";
 
-// Client-side filter + paginate surface for /<workspace>/runs.
-//
-// Filters live entirely in component state (per the "no URL state to
-// manage" tradeoff). The server page renders the initial page; this
-// component takes over on any filter change or "Load more" click,
-// calling loadRunsAction.
+// Client-side filter + paginate surface shared by workspace and agent runs.
+// Filters navigate through the URL; pagination appends through a server action.
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useMemo, useState, useTransition } from "react";
 
 import { LocalTime } from "@/components/local-time";
 import { Badge } from "@/components/ui/badge";
@@ -24,28 +14,20 @@ import { DataTable, type Column } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/pricing";
+import {
+  RUN_LIST_STATUSES,
+  RUN_LIST_TRIGGERS,
+  type RunListStatus,
+  type RunListTrigger,
+} from "@/lib/run-list-query";
 import { runIdentityLabel } from "@/lib/run-identity";
 
 import { loadRunsAction } from "./actions";
 import type { LoadedRun } from "./shape";
 
-type RunStatus = LoadedRun["status"];
-type RunTrigger = LoadedRun["trigger"];
-
-const ALL_STATUSES: RunStatus[] = [
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-];
-const ALL_TRIGGERS: RunTrigger[] = ["manual", "schedule", "event"];
 const PAGE_SIZE = 50;
-
-// "Recent" threshold for relative-time rendering on the Queued column.
-// Older rows fall back to absolute (via LocalTime) so users don't get
-// "342d ago" — at that point an exact date is more useful.
-const RELATIVE_MS = 24 * 60 * 60 * 1000;
+const NO_STATUSES: RunListStatus[] = [];
+const NO_TRIGGERS: RunListTrigger[] = [];
 
 type Props = {
   workspaceSlug: string;
@@ -58,8 +40,8 @@ type Props = {
    * "no filter."
    */
   initialFilters?: {
-    statuses?: RunStatus[];
-    triggers?: RunTrigger[];
+    statuses?: RunListStatus[];
+    triggers?: RunListTrigger[];
     agentName?: string;
     search?: string;
   };
@@ -79,64 +61,39 @@ export function RunsList({
   lockedAgent,
 }: Props) {
   const agentScoped = Boolean(lockedAgent);
-
-  const [statuses, setStatuses] = useState<RunStatus[]>(
-    initialFilters?.statuses ?? [],
-  );
-  const [triggers, setTriggers] = useState<RunTrigger[]>(
-    initialFilters?.triggers ?? [],
-  );
-  const [agentName, setAgentName] = useState<string>(
-    lockedAgent ?? initialFilters?.agentName ?? "",
-  );
-  const [search, setSearch] = useState<string>(initialFilters?.search ?? "");
+  const router = useRouter();
+  const pathname = usePathname();
+  const urlSearchParams = useSearchParams();
+  const statuses = initialFilters?.statuses ?? NO_STATUSES;
+  const triggers = initialFilters?.triggers ?? NO_TRIGGERS;
+  const agentName = lockedAgent ?? initialFilters?.agentName ?? "";
+  const activeSearch = initialFilters?.search ?? "";
+  const [search, setSearch] = useState(activeSearch);
 
   const [rows, setRows] = useState<LoadedRun[]>(initial);
   const [more, setMore] = useState<boolean>(initial.length >= PAGE_SIZE);
   const [pending, startTransition] = useTransition();
 
-  // Debounce the search input so we don't fire a network request per
-  // keystroke. 250ms feels responsive without being chatty.
-  const [debouncedSearch, setDebouncedSearch] = useState(search);
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 250);
-    return () => clearTimeout(t);
-  }, [search]);
-
-  // Track the latest filter combination so an in-flight fetch can
-  // self-cancel by comparing its captured filters to current state.
-  const filterEpoch = useRef(0);
-
-  const filtersKey = JSON.stringify({
-    statuses,
-    triggers,
-    agentName,
-    search: debouncedSearch,
-  });
-  const firstRender = useRef(true);
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
-      return;
-    }
-    filterEpoch.current += 1;
-    const epoch = filterEpoch.current;
-    startTransition(async () => {
-      const next = await loadRunsAction({
-        workspaceSlug,
-        filters: {
-          statuses: statuses.length ? statuses : undefined,
-          triggers: triggers.length ? triggers : undefined,
-          agentName: agentName || undefined,
-          search: debouncedSearch || undefined,
-        },
+  const navigateWithFilters = useCallback(
+    (
+      updates: Partial<
+        Record<"status" | "trigger" | "agent" | "q", string | null>
+      >,
+    ) => {
+      const next = new URLSearchParams(urlSearchParams.toString());
+      for (const [name, value] of Object.entries(updates)) {
+        if (value) next.set(name, value);
+        else next.delete(name);
+      }
+      const query = next.toString();
+      startTransition(() => {
+        router.replace(query ? `${pathname}?${query}` : pathname, {
+          scroll: false,
+        });
       });
-      if (epoch !== filterEpoch.current) return; // stale
-      setRows(next);
-      setMore(next.length >= PAGE_SIZE);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey, workspaceSlug]);
+    },
+    [pathname, router, urlSearchParams],
+  );
 
   const onLoadMore = useCallback(() => {
     if (rows.length === 0) return;
@@ -148,14 +105,20 @@ export function RunsList({
           statuses: statuses.length ? statuses : undefined,
           triggers: triggers.length ? triggers : undefined,
           agentName: agentName || undefined,
-          search: debouncedSearch || undefined,
+          search: activeSearch || undefined,
         },
         beforeIso: last.createdAt,
       });
       setRows((prev) => [...prev, ...next]);
       setMore(next.length >= PAGE_SIZE);
     });
-  }, [rows, workspaceSlug, statuses, triggers, agentName, debouncedSearch]);
+  }, [rows, workspaceSlug, statuses, triggers, agentName, activeSearch]);
+
+  const hasFilters =
+    statuses.length > 0 ||
+    triggers.length > 0 ||
+    (!agentScoped && agentName !== "") ||
+    activeSearch !== "";
 
   // Longest completed duration in the current row set — used to scale
   // the bar-chart background on the Duration cell. Memoised so a tall
@@ -259,7 +222,7 @@ export function RunsList({
       key: "queued",
       header: "Queued",
       tdClassName: "text-foreground-weak",
-      cell: (run) => <QueuedAt iso={run.createdAt} />,
+      cell: (run) => <LocalTime iso={run.createdAt} style="relative" />,
     });
 
     cols.push({
@@ -325,12 +288,17 @@ export function RunsList({
           <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
             Status
           </span>
-          {ALL_STATUSES.map((s) => (
+          {RUN_LIST_STATUSES.map((status) => (
             <FilterChip
-              key={s}
-              active={statuses.includes(s)}
-              onClick={() => toggle(s, statuses, setStatuses)}
-              label={STATUS_LABELS[s]}
+              key={status}
+              active={statuses.includes(status)}
+              onClick={() => {
+                const next = toggle(status, statuses);
+                navigateWithFilters({
+                  status: next.length > 0 ? next.join(",") : null,
+                });
+              }}
+              label={STATUS_LABELS[status]}
             />
           ))}
         </div>
@@ -339,12 +307,17 @@ export function RunsList({
           <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
             Trigger
           </span>
-          {ALL_TRIGGERS.map((t) => (
+          {RUN_LIST_TRIGGERS.map((trigger) => (
             <FilterChip
-              key={t}
-              active={triggers.includes(t)}
-              onClick={() => toggle(t, triggers, setTriggers)}
-              label={TRIGGER_LABELS[t]}
+              key={trigger}
+              active={triggers.includes(trigger)}
+              onClick={() => {
+                const next = toggle(trigger, triggers);
+                navigateWithFilters({
+                  trigger: next.length > 0 ? next.join(",") : null,
+                });
+              }}
+              label={TRIGGER_LABELS[trigger]}
             />
           ))}
         </div>
@@ -356,7 +329,9 @@ export function RunsList({
             </span>
             <Select
               value={agentName}
-              onValueChange={setAgentName}
+              onValueChange={(value) =>
+                navigateWithFilters({ agent: value || null })
+              }
               options={agentOptions}
               ariaLabel="Filter by agent"
               className="min-w-[200px]"
@@ -364,7 +339,13 @@ export function RunsList({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2">
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            navigateWithFilters({ q: search.trim() || null });
+          }}
+        >
           <label
             htmlFor="run-search"
             className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide"
@@ -374,13 +355,29 @@ export function RunsList({
           <Input
             id="run-search"
             type="search"
-            placeholder="Search input, output, or error…"
+            placeholder="Agent, run ID, Run as, input, output, or error…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="max-w-sm"
             maxLength={200}
           />
-        </div>
+          <Button type="submit" variant="secondary" size="small">
+            Search
+          </Button>
+          {activeSearch && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="small"
+              onClick={() => {
+                setSearch("");
+                navigateWithFilters({ q: null });
+              }}
+            >
+              Clear
+            </Button>
+          )}
+        </form>
       </div>
 
       <hr className="border-[var(--color-border-weak)]" />
@@ -390,7 +387,9 @@ export function RunsList({
         {pending
           ? "Loading…"
           : rows.length === 0
-            ? "No runs match these filters."
+            ? hasFilters
+              ? "No runs match these filters."
+              : "No runs yet."
             : `${rows.length} run${rows.length === 1 ? "" : "s"}${more ? "+" : ""}`}
       </div>
 
@@ -478,32 +477,6 @@ function SourceCell({ run }: { run: LoadedRun }) {
   );
 }
 
-// "5m ago" / "3h ago" within RELATIVE_MS, absolute LocalTime
-// otherwise. Re-renders every minute via a tick state so a row
-// queued 59s ago doesn't sit at "59s ago" forever.
-function QueuedAt({ iso }: { iso: string }) {
-  const [, force] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => force((n) => n + 1), 60_000);
-    return () => clearInterval(id);
-  }, []);
-  // Relative labels intentionally use the current browser clock while rendering.
-  // eslint-disable-next-line react-hooks/purity
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < RELATIVE_MS) return <span>{formatRelativeAgo(ms)}</span>;
-  return <LocalTime iso={iso} style="relative" />;
-}
-
-function formatRelativeAgo(diffMs: number): string {
-  if (diffMs < 0) return "just now";
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
-}
-
 function FilterChip({
   active,
   onClick,
@@ -529,11 +502,13 @@ function FilterChip({
   );
 }
 
-function toggle<T>(value: T, list: T[], set: (next: T[]) => void) {
-  set(list.includes(value) ? list.filter((x) => x !== value) : [...list, value]);
+function toggle<T>(value: T, list: T[]): T[] {
+  return list.includes(value)
+    ? list.filter((item) => item !== value)
+    : [...list, value];
 }
 
-const STATUS_LABELS: Record<RunStatus, string> = {
+const STATUS_LABELS: Record<RunListStatus, string> = {
   queued: "Queued",
   running: "Running",
   succeeded: "Succeeded",
@@ -541,14 +516,14 @@ const STATUS_LABELS: Record<RunStatus, string> = {
   cancelled: "Cancelled",
 };
 
-const TRIGGER_LABELS: Record<RunTrigger, string> = {
+const TRIGGER_LABELS: Record<RunListTrigger, string> = {
   manual: "Manual",
   schedule: "Scheduled",
   event: "Event",
 };
 
 const STATUS_BADGE: Record<
-  RunStatus,
+  RunListStatus,
   "green" | "red" | "yellow" | "blue" | "gray"
 > = {
   queued: "yellow",

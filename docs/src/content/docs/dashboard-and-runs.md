@@ -38,6 +38,13 @@ use the same identity. Parent run pages also show the identity for each
 sub-run. If a historical identity is no longer available, TAS displays
 **Unavailable member** instead of exposing an internal user identifier.
 
+Use **Search** on either the workspace Runs page or an agent's Runs tab to find
+runs by agent name, full run ID, **Run as** member name or email, input, output,
+or error text. Search combines with the agent, status, and trigger filters. The
+active search and filters are stored in the page URL, so copying the URL shares
+the same view. Submit an empty search or choose **Clear** to remove only the
+search while keeping the other filters.
+
 ### Source column
 
 Each row shows **how the run was instigated** and explicitly labels **who it
