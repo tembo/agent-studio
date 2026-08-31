@@ -12,6 +12,7 @@ type Item = { slug: string; label: string };
 const ITEMS: Item[] = [
   { slug: "", label: "Overview" },
   { slug: "runs", label: "Runs" },
+  { slug: "outputs", label: "Outputs" },
   { slug: "automation", label: "Automation" },
   { slug: "versions", label: "Versions" },
   { slug: "definition", label: "Definition" },

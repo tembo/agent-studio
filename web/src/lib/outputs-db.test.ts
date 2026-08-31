@@ -69,6 +69,21 @@ describe("outputs read model", () => {
     ]);
   });
 
+  it("scopes the output list to an exact agent name", async () => {
+    query.mockResolvedValue({ rows: [] });
+
+    await listOutputsForWorkspace("workspace-1", {
+      agentName: "pipeline-report",
+    });
+
+    expect(query.mock.calls[0]?.[0]).toMatch(/r\.agent_name = \$2/);
+    expect(query.mock.calls[0]?.[1]).toEqual([
+      "workspace-1",
+      "pipeline-report",
+      31,
+    ]);
+  });
+
   it("rejects malformed cursors", () => {
     expect(decodeOutputCursor("not-a-cursor")).toBeNull();
     expect(
