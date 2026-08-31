@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import {
   listAgentNamesWithRunsForWorkspace,
   listRunsForWorkspace,
-  type RunSummary,
-  type RunTrigger,
 } from "@/lib/runs-db";
+import { parseRunListQuery, runListQueryKey } from "@/lib/run-list-query";
 import { getServerSession } from "@/lib/session";
 import { getWorkspaceBySlug } from "@/lib/workspace";
 
@@ -13,15 +12,6 @@ import { RunsList } from "./runs-list";
 import { toLoaded } from "./shape";
 
 export const dynamic = "force-dynamic";
-
-const VALID_STATUSES: RunSummary["status"][] = [
-  "queued",
-  "running",
-  "succeeded",
-  "failed",
-  "cancelled",
-];
-const VALID_TRIGGERS: RunTrigger[] = ["manual", "schedule", "event"];
 
 export default async function RunsPage({
   params,
@@ -39,26 +29,17 @@ export default async function RunsPage({
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
 
-  // Read filters from URL search params so deep links (e.g. from a
-  // failed-run "find similar" affordance) land prefiltered. Validate
-  // each value against the canonical list so a malformed URL just
-  // gets ignored rather than throwing.
-  const statuses = parseMultiParam(sp.status, VALID_STATUSES);
-  const triggers = parseMultiParam(sp.trigger, VALID_TRIGGERS);
-  const agentName =
-    typeof sp.agent === "string" ? sp.agent.trim() || undefined : undefined;
-  const search =
-    typeof sp.q === "string" ? sp.q.slice(0, 200) || undefined : undefined;
+  const filters = parseRunListQuery(sp);
 
   // Initial render is server-side with filters already applied so
   // the first paint matches the URL. The client component takes over
   // on subsequent filter or pagination changes.
   const [initial, agentNames] = await Promise.all([
     listRunsForWorkspace(workspace.id, {
-      statuses: statuses.length ? statuses : undefined,
-      triggers: triggers.length ? triggers : undefined,
-      agentName,
-      search,
+      statuses: filters.statuses.length ? filters.statuses : undefined,
+      triggers: filters.triggers.length ? filters.triggers : undefined,
+      agentName: filters.agentName || undefined,
+      search: filters.search || undefined,
     }),
     listAgentNamesWithRunsForWorkspace(workspace.id),
   ]);
@@ -72,42 +53,25 @@ export default async function RunsPage({
         <p className="text-foreground-weak text-base">
           Every agent run in{" "}
           <span className="text-foreground font-medium">{workspace.name}</span>
-          . Filter by status, agent, or trigger, or search across input,
-          output, and error messages.
+          . Filter by status, agent, or trigger, or search by agent, run ID,
+          Run as identity, input, output, or error.
         </p>
       </div>
 
       <hr className="border-[var(--color-border-weak)]" />
 
       <RunsList
+        key={runListQueryKey(filters)}
         workspaceSlug={slug}
         agentNames={agentNames}
         initial={initial.map(toLoaded)}
         initialFilters={{
-          statuses,
-          triggers,
-          agentName: agentName ?? "",
-          search: search ?? "",
+          statuses: filters.statuses,
+          triggers: filters.triggers,
+          agentName: filters.agentName,
+          search: filters.search,
         }}
       />
     </div>
   );
-}
-
-// Accept either ?status=failed or ?status=failed&status=running. String
-// inputs split on comma so &status=failed,running also works for
-// hand-typed URLs. Unknown values silently dropped.
-function parseMultiParam<T extends string>(
-  raw: string | string[] | undefined,
-  allowed: T[],
-): T[] {
-  if (!raw) return [];
-  const list = Array.isArray(raw)
-    ? raw
-    : raw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-  const allowedSet = new Set<string>(allowed);
-  return list.filter((v): v is T => allowedSet.has(v));
 }
