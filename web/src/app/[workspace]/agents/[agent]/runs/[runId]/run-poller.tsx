@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 // run is still in flight — small, scoped, and avoids a separate polling
 // endpoint.
 //
-// Each refresh re-runs the WHOLE server page (run row + steps + child runs +
+// Each refresh re-runs the WHOLE server page (run row + steps + sub-agent runs +
 // the improvement-PR scan + GitHub fetches), so a fixed 1s tick is wasteful on
 // long runs. Instead we back off: snappy at the start, then progressively
 // slower up to a cap — a run that's been going for minutes doesn't need

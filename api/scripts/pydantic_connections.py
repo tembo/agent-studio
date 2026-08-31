@@ -400,11 +400,11 @@ def build_native_mcp_toolsets(
             continue
         headers = {"Authorization": f"Bearer {entry['access_token']}"}
         # Tag trigger_run calls to TAS's own MCP with this run's id, so the
-        # runs it spawns are recorded as our children (parent-run cost rollup).
+        # runs it spawns are recorded as sub-agent runs for cost rollup.
         # Only for the self provider — never leak the run id to third parties.
         run_id = os.environ.get("TAS_RUN_ID")
         if provider == "tembo-agent-studio" and run_id:
-            headers["X-Tas-Parent-Run"] = run_id
+            headers["X-Tas-Orchestrator-Run"] = run_id
         mcp = MCPToolset(entry["mcp_url"], headers=headers)
         if tools:
             # Capture the allowed set in a default-argument so the

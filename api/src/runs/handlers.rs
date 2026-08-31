@@ -75,11 +75,11 @@ pub struct CreateRunRequest {
     /// Human label for the version ("v3" | "draft"), shown in the runs UI.
     #[serde(default)]
     pub agent_version_label: Option<String>,
-    /// The run that triggered this one (an orchestrator's run id), when this
-    /// run was started via the tembo-agent-studio MCP `trigger_run` tool from
-    /// inside another run. Lets the parent's page roll up sub-run costs.
+    /// The orchestrator run that triggered this sub-agent run through the
+    /// tembo-agent-studio MCP `trigger_run` tool. Lets the orchestrator's page
+    /// roll up sub-run costs.
     #[serde(default)]
-    pub parent_run_id: Option<Uuid>,
+    pub orchestrator_run_id: Option<Uuid>,
     /// Agent-authored delivery intent from the exact spec used for this run.
     /// Stored as an immutable snapshot so later spec edits do not rewrite history.
     #[serde(default)]
@@ -162,7 +162,7 @@ pub async fn create_run(
             (id, workspace_id, agent_name, agent_path, model, status,
              failure_code, failure_summary, failure_recommendation,
              created_by, user_message, trigger, automation_id,
-             agent_version_id, agent_version_label, parent_run_id,
+             agent_version_id, agent_version_label, orchestrator_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
              execution_skills_content, output_delivery)
@@ -181,7 +181,7 @@ pub async fn create_run(
     .bind(req.automation_id)
     .bind(req.agent_version_id)
     .bind(&req.agent_version_label)
-    .bind(req.parent_run_id)
+    .bind(req.orchestrator_run_id)
     .bind(framework_name)
     .bind(req.spec_content.as_deref())
     .bind(spec_format_name)
@@ -222,7 +222,7 @@ pub async fn create_run(
                 skills_content,
                 message_history: None,
                 started_at: None,
-                parent_run_id: req.parent_run_id,
+                orchestrator_run_id: req.orchestrator_run_id,
             },
             cancel,
         )

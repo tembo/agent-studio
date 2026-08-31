@@ -39,7 +39,9 @@ export default async function OutputDetailPage({
 
   const raw = sp.view === "raw";
   const runHref = `/${slug}/agents/${encodeURIComponent(output.agentName)}/runs/${output.runId}`;
-  const operatorRunHref = `/${slug}/agents/${encodeURIComponent(output.operatorName)}/runs/${output.operatorRunId}`;
+  const orchestratorRunHref = `/${slug}/agents/${encodeURIComponent(
+    output.orchestratorName,
+  )}/runs/${output.orchestratorRunId}`;
   const evidence = new Map(
     output.deliveryEvidence?.destinations.map((item) => [item.key, item.status]) ?? [],
   );
@@ -105,14 +107,14 @@ export default async function OutputDetailPage({
                 </Link>
               </ProvenanceRow>
               <ProvenanceRow label="Agent">{output.agentName}</ProvenanceRow>
-              <ProvenanceRow label="Operator">
-                <div>{output.operatorName}</div>
-                {output.operatorRunId !== output.runId ? (
+              <ProvenanceRow label="Orchestrator">
+                <div>{output.orchestratorName}</div>
+                {output.orchestratorRunId !== output.runId ? (
                   <Link
                     className="text-foreground-weak mt-1 inline-block underline hover:no-underline"
-                    href={operatorRunHref}
+                    href={orchestratorRunHref}
                   >
-                    View operator run →
+                    View orchestrator run →
                   </Link>
                 ) : null}
               </ProvenanceRow>

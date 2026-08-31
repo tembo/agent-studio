@@ -1,4 +1,4 @@
-"""Line protocol shared by the Pydantic wrapper and its Rust parent.
+"""Line protocol shared by the Pydantic wrapper and its Rust host process.
 
 This module owns serialization only: live stream events, durable checkpoints,
 terminal tool/step/usage summaries, and AgentSpec parsing. Provider setup and
@@ -160,7 +160,7 @@ def _emit_stream_line(sentinel: str, payload: dict) -> None:
 
 
 def _emit_checkpoint(messages) -> None:
-    """Send typed message history and wait for the parent's acknowledgement."""
+    """Send typed message history and wait for the host's acknowledgement."""
     if not messages:
         return
     try:

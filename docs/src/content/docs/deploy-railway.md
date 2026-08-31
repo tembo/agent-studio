@@ -57,7 +57,7 @@ there's no manual migration step — just hand both services the URL.
 | `TAS_ENCRYPTION_KEY` | 32-byte base64. `openssl rand -base64 32`. **Must match the web service exactly** — web encrypts secrets, api decrypts them. Rotating it orphans every existing workspace secret. |
 | `INTERNAL_API_TOKEN` | Shared bearer the web service sends on `/internal/*`. `openssl rand -base64 32`. **Must match the web service exactly.** |
 | `API_MAX_CONCURRENT_RUNS` | Optional; maximum agents executing in this api service at once (default `4`). Extra runs stay queued. Lower this when Python runner processes approach the service's memory limit. |
-| `API_RESERVED_CHILD_RUNS` | Optional; slots reserved for child agents launched by another run (default `1`, must be lower than the maximum). Set `0` if the instance does not use orchestrators. |
+| `API_RESERVED_SUB_AGENT_RUNS` | Optional; slots reserved for sub-agents launched by an orchestrator (default `1`, must be lower than the maximum). Set `0` if the instance does not use orchestrators. |
 | `RUST_LOG` | `info,tas_api=debug` is a sensible start. |
 
 Put `TAS_ENCRYPTION_KEY` and `INTERNAL_API_TOKEN` in Railway **shared

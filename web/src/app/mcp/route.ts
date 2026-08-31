@@ -41,8 +41,9 @@ async function handleAuthorizedMcpRequest(
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
   });
-  const parentRunId = request.headers.get("x-tas-parent-run") ?? undefined;
-  const server = buildMcpServer(auth, { parentRunId });
+  const orchestratorRunId =
+    request.headers.get("x-tas-orchestrator-run") ?? undefined;
+  const server = buildMcpServer(auth, { orchestratorRunId });
   await server.connect(transport);
   return transport.handleRequest(request);
 }

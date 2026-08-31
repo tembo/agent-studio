@@ -34,7 +34,7 @@ const CARGO_AI_SCHEMA_VERSION: &str = "2026-03-03.r1";
 
 const CARGO_AI_BIN: &str = "/usr/local/bin/cargo-ai";
 const CARGO_AI_PROFILE: &str = "tas-runtime";
-const CHILD_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
+const SUBPROCESS_PATH: &str = "/usr/local/bin:/usr/bin:/bin";
 
 /// Per-run Cargo AI config used to carry the provider token without exposing it
 /// in the runtime process's argv. Cargo AI stores profile credentials with 0600
@@ -115,7 +115,7 @@ pub async fn invoke(args: CargoAiArgs<'_>) -> anyhow::Result<CargoAiResult> {
 
     configure_profile(cargo_ai_home.path(), &args).await?;
 
-    let mut child = run_command(cargo_ai_home.path())
+    let mut subprocess = run_command(cargo_ai_home.path())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -124,17 +124,17 @@ pub async fn invoke(args: CargoAiArgs<'_>) -> anyhow::Result<CargoAiResult> {
         .context("failed to spawn cargo-ai")?;
 
     {
-        let stdin = child
+        let stdin = subprocess
             .stdin
             .as_mut()
-            .ok_or_else(|| anyhow!("cargo-ai child stdin not captured"))?;
+            .ok_or_else(|| anyhow!("cargo-ai subprocess stdin not captured"))?;
         stdin
             .write_all(prepared.as_bytes())
             .await
             .context("failed to write prepared spec to cargo-ai stdin")?;
     }
 
-    let output = child
+    let output = subprocess
         .wait_with_output()
         .await
         .context("cargo-ai process failed to complete")?;
@@ -162,7 +162,7 @@ async fn configure_profile(home: &Path, args: &CargoAiArgs<'_>) -> anyhow::Resul
         .context("failed to create temporary cargo-ai profile")?;
     ensure_command_succeeded("cargo-ai profile add", &output)?;
 
-    let mut child = profile_token_command(home)
+    let mut subprocess = profile_token_command(home)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -171,7 +171,7 @@ async fn configure_profile(home: &Path, args: &CargoAiArgs<'_>) -> anyhow::Resul
         .context("failed to start cargo-ai credential setup")?;
 
     {
-        let stdin = child
+        let stdin = subprocess
             .stdin
             .as_mut()
             .ok_or_else(|| anyhow!("cargo-ai credential stdin not captured"))?;
@@ -181,7 +181,7 @@ async fn configure_profile(home: &Path, args: &CargoAiArgs<'_>) -> anyhow::Resul
             .context("failed to provide cargo-ai credential")?;
     }
 
-    let output = child
+    let output = subprocess
         .wait_with_output()
         .await
         .context("cargo-ai credential setup failed to complete")?;
@@ -192,7 +192,7 @@ fn isolated_command(home: &Path) -> Command {
     let mut command = Command::new(CARGO_AI_BIN);
     command
         .env_clear()
-        .env("PATH", CHILD_PATH)
+        .env("PATH", SUBPROCESS_PATH)
         .env("CARGO_AI_HOME", home)
         .env("CARGO_AI_DISABLE_KEYCHAIN", "1");
     command

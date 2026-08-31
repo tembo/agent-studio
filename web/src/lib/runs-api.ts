@@ -53,9 +53,9 @@ export type CreateRunInput = {
   /** Agent-authored delivery intent from the exact spec this run executes. */
   delivery?: AgentDelivery;
   automationId?: string;
-  // The run that triggered this one (an orchestrator calling trigger_run from
-  // inside its own run). Recorded so the parent's page can roll up sub-runs.
-  parentRunId?: string;
+  // The orchestrator run that triggered this sub-agent through trigger_run.
+  // Recorded so the orchestrator's page can roll up sub-runs.
+  orchestratorRunId?: string;
 };
 
 export type CreateRunResponse = { runId: string };
@@ -184,7 +184,7 @@ export async function createRun(input: CreateRunInput): Promise<CreateRunRespons
       automation_id: input.automationId,
       agent_version_id: input.agentVersionId,
       agent_version_label: input.agentVersionLabel,
-      parent_run_id: input.parentRunId,
+      orchestrator_run_id: input.orchestratorRunId,
       output_delivery: input.delivery,
     }),
   });
