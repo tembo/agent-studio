@@ -308,6 +308,7 @@ function FilterPill({
         ariaLabel={`${label} filter operator`}
         hideIcon
         hideIndicator
+        alignItemWithTrigger={false}
         popupClassName="min-w-40 py-1"
         className="text-foreground-muted h-full rounded-none border-0 bg-transparent px-2 font-normal shadow-none"
       />

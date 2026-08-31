@@ -69,6 +69,35 @@ export async function createAgentInventoryView(args: {
   return mapView(rows[0]);
 }
 
+export async function updateAgentInventoryView(args: {
+  workspaceId: string;
+  userId: string;
+  viewId: string;
+  canManageShared: boolean;
+  name: string;
+  visibility: AgentInventoryViewVisibility;
+  filters: AgentInventoryFilters;
+}): Promise<StoredAgentInventoryView | null> {
+  const { rows } = await db.query<ViewRow>(
+    `UPDATE agent_inventory_view
+        SET name = $6, visibility = $5, filters = $7::jsonb, updated_at = NOW()
+      WHERE id = $1 AND workspace_id = $2
+        AND (created_by = $3
+             OR ($4 AND visibility = 'shared' AND $5 = 'shared'))
+      RETURNING id, name, visibility, created_by, filters`,
+    [
+      args.viewId,
+      args.workspaceId,
+      args.userId,
+      args.canManageShared,
+      args.visibility,
+      args.name,
+      JSON.stringify(args.filters),
+    ],
+  );
+  return rows[0] ? mapView(rows[0]) : null;
+}
+
 export async function deleteAgentInventoryView(args: {
   workspaceId: string;
   userId: string;

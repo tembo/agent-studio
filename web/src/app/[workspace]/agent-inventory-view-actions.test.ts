@@ -13,6 +13,7 @@ vi.mock("@/lib/auth-server", () => ({
 vi.mock("@/lib/agent-inventory-views", () => ({
   createAgentInventoryView: vi.fn(),
   deleteAgentInventoryView: vi.fn(),
+  updateAgentInventoryView: vi.fn(),
 }));
 
 import {
@@ -22,12 +23,14 @@ import {
 import {
   createAgentInventoryView,
   deleteAgentInventoryView,
+  updateAgentInventoryView,
 } from "@/lib/agent-inventory-views";
 import { authorizeWorkspace } from "@/lib/auth-server";
 
 const mockAuthorize = vi.mocked(authorizeWorkspace);
 const mockCreate = vi.mocked(createAgentInventoryView);
 const mockDelete = vi.mocked(deleteAgentInventoryView);
+const mockUpdate = vi.mocked(updateAgentInventoryView);
 const viewId = "10000000-0000-4000-8000-000000000001";
 
 beforeEach(() => {
@@ -84,6 +87,58 @@ describe("agent inventory view actions", () => {
         }),
       }),
     );
+  });
+
+  it("updates an existing view with normalized filters", async () => {
+    mockUpdate.mockImplementation(async (args) => ({
+      id: args.viewId,
+      name: args.name,
+      visibility: args.visibility,
+      createdBy: args.userId,
+      filters: args.filters,
+    }));
+
+    const result = await saveAgentInventoryViewAction({
+      workspaceSlug: "demo",
+      viewId,
+      name: "  My agents  ",
+      visibility: "personal",
+      filters: { owner: ["me", "others"], sort: "name" },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        userId: "user-1",
+        viewId,
+        canManageShared: false,
+        name: "My agents",
+        visibility: "personal",
+        filters: expect.objectContaining({
+          owner: ["me", "others"],
+          sort: "name",
+        }),
+      }),
+    );
+  });
+
+  it("reports when an existing view cannot be edited", async () => {
+    mockUpdate.mockResolvedValue(null);
+
+    await expect(
+      saveAgentInventoryViewAction({
+        workspaceSlug: "demo",
+        viewId,
+        name: "Someone else’s view",
+        visibility: "shared",
+        filters: {},
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "You can’t edit that saved view.",
+    });
   });
 
   it("does not let a viewer delete another member's shared view", async () => {

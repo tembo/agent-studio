@@ -37,6 +37,7 @@ type Props = {
   hideIcon?: boolean;
   hideIndicator?: boolean;
   popupClassName?: string;
+  alignItemWithTrigger?: boolean;
 };
 
 export function Select({
@@ -49,6 +50,7 @@ export function Select({
   hideIcon = false,
   hideIndicator = false,
   popupClassName,
+  alignItemWithTrigger = true,
 }: Props) {
   const selected = options.find((o) => o.value === value);
   return (
@@ -75,8 +77,10 @@ export function Select({
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner
+          side="bottom"
           sideOffset={4}
           align="start"
+          alignItemWithTrigger={alignItemWithTrigger}
           className="z-50 outline-none"
         >
           <BaseSelect.Popup
@@ -150,8 +154,10 @@ export function MultiSelect({
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         <BaseSelect.Positioner
+          side="bottom"
           sideOffset={4}
           align="start"
+          alignItemWithTrigger={false}
           className="z-50 outline-none"
         >
           <BaseSelect.Popup

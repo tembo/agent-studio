@@ -7,6 +7,7 @@ import {
   createAgentInventoryView,
   deleteAgentInventoryView,
   type StoredAgentInventoryView,
+  updateAgentInventoryView,
 } from "@/lib/agent-inventory-views";
 import {
   normalizeAgentInventoryFilters,
@@ -21,6 +22,7 @@ export type SaveInventoryViewResult =
 
 export async function saveAgentInventoryViewAction(args: {
   workspaceSlug: string;
+  viewId?: string;
   name: string;
   visibility: AgentInventoryViewVisibility;
   filters: unknown;
@@ -39,15 +41,32 @@ export async function saveAgentInventoryViewAction(args: {
   if (args.visibility !== "personal" && args.visibility !== "shared") {
     return { ok: false, error: "Choose a valid view visibility." };
   }
+  if (args.viewId && !isUuid(args.viewId)) {
+    return { ok: false, error: "That saved view is invalid." };
+  }
 
   try {
-    const view = await createAgentInventoryView({
-      workspaceId: auth.workspace.id,
-      userId: auth.userId,
-      name,
-      visibility: args.visibility,
-      filters: normalizeAgentInventoryFilters(args.filters),
-    });
+    const filters = normalizeAgentInventoryFilters(args.filters);
+    const view = args.viewId
+      ? await updateAgentInventoryView({
+          workspaceId: auth.workspace.id,
+          userId: auth.userId,
+          viewId: args.viewId,
+          canManageShared: meetsMinRole(auth.role, "workspace_admin"),
+          name,
+          visibility: args.visibility,
+          filters,
+        })
+      : await createAgentInventoryView({
+          workspaceId: auth.workspace.id,
+          userId: auth.userId,
+          name,
+          visibility: args.visibility,
+          filters,
+        });
+    if (!view) {
+      return { ok: false, error: "You can’t edit that saved view." };
+    }
     revalidatePath(`/${auth.workspace.slug}`);
     return { ok: true, view };
   } catch (error) {
@@ -73,11 +92,7 @@ export async function deleteAgentInventoryViewAction(args: {
     if (auth.reason === "denied") return { ok: false, error: DENIED_MESSAGE };
     notFound();
   }
-  if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      args.viewId,
-    )
-  ) {
+  if (!isUuid(args.viewId)) {
     return { ok: false, error: "That saved view is invalid." };
   }
 
@@ -92,6 +107,12 @@ export async function deleteAgentInventoryViewAction(args: {
   }
   revalidatePath(`/${auth.workspace.slug}`);
   return { ok: true };
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function postgresCode(error: unknown): string | undefined {

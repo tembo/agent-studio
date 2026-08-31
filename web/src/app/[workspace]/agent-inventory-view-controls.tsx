@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import {
   type FormEvent,
   type ReactNode,
@@ -33,6 +32,9 @@ type Props = {
   children: ReactNode;
 };
 
+const ALL_VIEW_ID = "built-in:all";
+const MINE_VIEW_ID = "built-in:mine";
+
 export function AgentInventoryViewControls({
   workspaceSlug,
   currentUserId,
@@ -43,8 +45,30 @@ export function AgentInventoryViewControls({
   onApply,
   children,
 }: Props) {
-  const router = useRouter();
+  const builtInViews = [
+    { id: ALL_VIEW_ID, name: "All", filters: defaultFilters },
+    {
+      id: MINE_VIEW_ID,
+      name: "Mine",
+      filters: {
+        ...defaultFilters,
+        owner: ["me" as const],
+        operators: { ...defaultFilters.operators, owner: "is" as const },
+      },
+    },
+  ];
+  const initialViewId =
+    builtInViews.find(
+      (view) => filterKey(view.filters) === filterKey(filters),
+    )?.id ??
+    views.find((view) => filterKey(view.filters) === filterKey(filters))?.id ??
+    ALL_VIEW_ID;
+  const [activeViewId, setActiveViewId] = useState(initialViewId);
+  const [availableViews, setAvailableViews] = useState(views);
   const [creating, setCreating] = useState(false);
+  const [editingViewId, setEditingViewId] = useState("");
+  const [editorStartViewId, setEditorStartViewId] = useState("");
+  const [editorStartFilters, setEditorStartFilters] = useState(filters);
   const [name, setName] = useState("");
   const [visibility, setVisibility] =
     useState<AgentInventoryViewVisibility>("personal");
@@ -52,13 +76,21 @@ export function AgentInventoryViewControls({
   const [deleteError, setDeleteError] = useState("");
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
-  const selected = creating
-    ? undefined
-    : views.find((view) => filterKey(view.filters) === filterKey(filters));
-  const canDeleteSelected =
+  const editorOpen = creating || Boolean(editingViewId);
+  const selected = availableViews.find((view) => view.id === activeViewId);
+  const selectedBuiltIn = builtInViews.find(
+    (view) => view.id === activeViewId,
+  );
+  const selectedFilters = selected?.filters ?? selectedBuiltIn?.filters;
+  const editingView = availableViews.find(
+    (view) => view.id === editingViewId,
+  );
+  const canManageSelected =
     selected &&
     (selected.createdBy === currentUserId ||
       (selected.visibility === "shared" && canManageSharedViews));
+  const selectedIsDirty =
+    selectedFilters && filterKey(selectedFilters) !== filterKey(filters);
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,6 +98,7 @@ export function AgentInventoryViewControls({
     startSave(async () => {
       const result = await saveAgentInventoryViewAction({
         workspaceSlug,
+        viewId: editingViewId || undefined,
         name,
         visibility,
         filters,
@@ -75,29 +108,75 @@ export function AgentInventoryViewControls({
         return;
       }
       onApply(result.view.filters);
+      setAvailableViews((current) => upsertView(current, result.view));
+      setActiveViewId(result.view.id);
       setName("");
       setCreating(false);
-      router.refresh();
+      setEditingViewId("");
     });
+  }
+
+  function saveCurrentFilters() {
+    if (!selected || !canManageSelected) return;
+    setSaveError("");
+    startSave(async () => {
+      const result = await saveAgentInventoryViewAction({
+        workspaceSlug,
+        viewId: selected.id,
+        name: selected.name,
+        visibility: selected.visibility,
+        filters,
+      });
+      if (!result.ok) {
+        setSaveError(result.error);
+        return;
+      }
+      onApply(result.view.filters);
+      setAvailableViews((current) => upsertView(current, result.view));
+    });
+  }
+
+  function createFromCurrentFilters() {
+    setEditorStartViewId(activeViewId);
+    setEditorStartFilters(filters);
+    setName("");
+    setVisibility("personal");
+    setSaveError("");
+    setEditingViewId("");
+    setCreating(true);
+  }
+
+  function cancelEditor() {
+    onApply(editorStartFilters);
+    setActiveViewId(editorStartViewId);
+    setCreating(false);
+    setEditingViewId("");
+    setSaveError("");
   }
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <Select
-          value={selected?.id ?? ""}
+          value={selected?.id ?? selectedBuiltIn?.id ?? ""}
           onValueChange={(id) => {
-            const next = views.find((view) => view.id === id);
+            setCreating(false);
+            setEditingViewId("");
+            setSaveError("");
+            setActiveViewId(id);
+            const next =
+              builtInViews.find((view) => view.id === id) ??
+              availableViews.find((view) => view.id === id);
             if (next) onApply(next.filters);
           }}
           options={[
-            {
-              value: "",
-              label: views.length > 0 ? "Custom view" : "No saved views",
-            },
-            ...views.map((view) => ({
+            ...builtInViews.map((view) => ({
               value: view.id,
-              label: `${view.name} · ${view.visibility === "personal" ? "Personal" : "Shared"}`,
+              label: `${view.name}${view.id === selectedBuiltIn?.id && selectedIsDirty ? " · Unsaved" : ""}`,
+            })),
+            ...availableViews.map((view) => ({
+              value: view.id,
+              label: `${view.name} · ${view.visibility === "personal" ? "Personal" : "Shared"}${view.id === selected?.id && selectedIsDirty ? " · Unsaved" : ""}`,
             })),
           ]}
           ariaLabel="Saved agent view"
@@ -106,19 +185,60 @@ export function AgentInventoryViewControls({
         <Button
           variant="secondary"
           onClick={() => {
+            setEditorStartViewId(activeViewId);
+            setEditorStartFilters(filters);
             setName("");
             setVisibility("personal");
             setSaveError("");
+            setEditingViewId("");
+            setActiveViewId("");
             onApply(defaultFilters);
             setCreating(true);
           }}
         >
           New view
         </Button>
-        <Button variant="ghost" onClick={() => onApply(defaultFilters)}>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setActiveViewId(ALL_VIEW_ID);
+            setCreating(false);
+            setEditingViewId("");
+            onApply(defaultFilters);
+          }}
+        >
           Reset
         </Button>
-        {canDeleteSelected && (
+        {selectedIsDirty && !editorOpen && (
+          <Button
+            variant="primary"
+            disabled={saving}
+            onClick={
+              selected && canManageSelected
+                ? saveCurrentFilters
+                : createFromCurrentFilters
+            }
+          >
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        )}
+        {canManageSelected && !editorOpen && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setEditorStartViewId(activeViewId);
+              setEditorStartFilters(filters);
+              setName(selected.name);
+              setVisibility(selected.visibility);
+              setSaveError("");
+              setCreating(false);
+              setEditingViewId(selected.id);
+            }}
+          >
+            Edit view
+          </Button>
+        )}
+        {canManageSelected && !editorOpen && (
           <Button
             variant="ghost"
             disabled={deleting}
@@ -133,21 +253,25 @@ export function AgentInventoryViewControls({
                   setDeleteError(result.error);
                   return;
                 }
-                router.refresh();
+                setAvailableViews((current) =>
+                  current.filter((view) => view.id !== selected.id),
+                );
+                setActiveViewId(ALL_VIEW_ID);
+                onApply(defaultFilters);
               });
             }}
           >
             {deleting ? "Deleting…" : "Delete view"}
           </Button>
         )}
-        {deleteError && (
+        {(deleteError || (!editorOpen && saveError)) && (
           <span className="text-sentiment-negative text-sm" role="alert">
-            {deleteError}
+            {deleteError || saveError}
           </span>
         )}
       </div>
 
-      {creating && (
+      {editorOpen && (
         <form
           onSubmit={save}
           className="border-border bg-surface-raised overflow-visible rounded-lg border"
@@ -175,22 +299,26 @@ export function AgentInventoryViewControls({
                   onValueChange={(value) =>
                     setVisibility(value as AgentInventoryViewVisibility)
                   }
-                  options={[
-                    { value: "personal", label: "Personal · only me" },
-                    { value: "shared", label: "Shared · whole workspace" },
-                  ]}
+                  options={
+                    editingView && editingView.createdBy !== currentUserId
+                      ? [{ value: "shared", label: "Shared · whole workspace" }]
+                      : [
+                          { value: "personal", label: "Personal · only me" },
+                          { value: "shared", label: "Shared · whole workspace" },
+                        ]
+                  }
                   ariaLabel="View visibility"
                   className="min-w-[190px]"
                 />
                 <Button
                   variant="ghost"
                   disabled={saving}
-                  onClick={() => setCreating(false)}
+                  onClick={cancelEditor}
                 >
                   Cancel
                 </Button>
                 <Button type="submit" variant="primary" disabled={saving}>
-                  {saving ? "Saving…" : "Save"}
+                  {saving ? "Saving…" : editingViewId ? "Save changes" : "Save"}
                 </Button>
               </div>
             </div>
@@ -206,11 +334,20 @@ export function AgentInventoryViewControls({
         </form>
       )}
 
-      {!creating && children}
+      {!editorOpen && children}
     </div>
   );
 }
 
 function filterKey(filters: AgentInventoryFilters): string {
   return JSON.stringify(filters);
+}
+
+function upsertView(
+  views: AgentInventoryView[],
+  next: AgentInventoryView,
+): AgentInventoryView[] {
+  const existing = views.findIndex((view) => view.id === next.id);
+  if (existing === -1) return [...views, next];
+  return views.map((view) => (view.id === next.id ? next : view));
 }

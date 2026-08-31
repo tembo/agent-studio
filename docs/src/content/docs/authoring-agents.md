@@ -230,10 +230,17 @@ keep your day-to-day view tidy:
   called by a particular orchestrator. These relationships come from run
   history; they are not fields in the agent spec, and an agent can match both
   roles in a nested workflow.
+- The built-in **All** and **Mine** views are always available and cannot be
+  renamed or deleted. Changing their filters marks the view **Unsaved**;
+  choosing **Save** creates a custom view without changing the built-in.
 - Choose **New view** to name and save the current search, filters, and sort.
   Personal views are visible only to you; shared views are available to every
   member of the workspace. You can keep editing filters while naming a view and
-  watch the result list update before you save it.
+  watch the result list update before you save it. Changing an owned saved view
+  keeps it selected, marks it **Unsaved**, and reveals **Save** so you can
+  update it in place. Customizing a shared view that you cannot edit creates a
+  custom copy instead. Use **Edit view** to rename a custom view or change its
+  visibility.
 - **Fork** an agent (the **Fork** button on its page) to make your own editable
   copy. The copy is named with an **owner prefix** — `sales-gen` forked by `ryw`
   becomes **`ryw.sales-gen`** — so two people can each keep their own without a
