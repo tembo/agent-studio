@@ -14,7 +14,8 @@ import {
 } from "@/lib/improvements-api";
 import { getMcpProvider } from "@/lib/mcp-providers";
 import { meetsMinRole } from "@/lib/rbac";
-import { listAgentSubAgentEdges, listAgentSummaries30d } from "@/lib/runs-db";
+import { listAgentSubAgentEdges } from "@/lib/run-orchestration-db";
+import { listAgentSummaries30d } from "@/lib/runs-db";
 import { getServerSession } from "@/lib/session";
 import { isTemboConfiguredForUser } from "@/lib/tembo-credentials";
 import { listAgents } from "@/lib/workspace-agents";
@@ -133,31 +134,31 @@ export default async function WorkspacePage({
     }
   }
 
-  // Which sub-agents each orchestrator spawned (parent_run_id graph) → the
+  // Which sub-agents each orchestrator spawned (orchestrator_run_id graph) → the
   // union of those sub-agents' MCPs, minus the ones the orchestrator already
   // declares itself. Lets the list show "top-level MCPs + sub-agent MCPs".
-  const subAgentNamesByParent = new Map<string, Set<string>>();
+  const subAgentNamesByOrchestrator = new Map<string, Set<string>>();
   for (const e of subAgentEdges) {
-    let set = subAgentNamesByParent.get(e.parentAgentName);
+    let set = subAgentNamesByOrchestrator.get(e.orchestratorAgentName);
     if (!set) {
       set = new Set<string>();
-      subAgentNamesByParent.set(e.parentAgentName, set);
+      subAgentNamesByOrchestrator.set(e.orchestratorAgentName, set);
     }
-    set.add(e.childAgentName);
+    set.add(e.subAgentName);
   }
   const subMcpsByAgent = new Map<string, McpIcon[]>();
-  for (const [parent, children] of subAgentNamesByParent) {
-    const own = new Set((mcpsByAgent.get(parent) ?? []).map((m) => m.slug));
+  for (const [orchestrator, subAgents] of subAgentNamesByOrchestrator) {
+    const own = new Set((mcpsByAgent.get(orchestrator) ?? []).map((m) => m.slug));
     const seen = new Set<string>();
     const icons: McpIcon[] = [];
-    for (const child of children) {
-      for (const m of mcpsByAgent.get(child) ?? []) {
+    for (const subAgent of subAgents) {
+      for (const m of mcpsByAgent.get(subAgent) ?? []) {
         if (own.has(m.slug) || seen.has(m.slug)) continue;
         seen.add(m.slug);
         icons.push(m);
       }
     }
-    if (icons.length > 0) subMcpsByAgent.set(parent, icons);
+    if (icons.length > 0) subMcpsByAgent.set(orchestrator, icons);
   }
 
   // Refresh PR state after this response. Pending creates remain visible for

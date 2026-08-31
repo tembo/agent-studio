@@ -68,9 +68,9 @@ function errorResult(message: string) {
 const FRAMEWORK_VALUES = FRAMEWORKS as readonly [Framework, ...Framework[]];
 
 export type McpServerOptions = {
-  /** The run that's calling /mcp (when an agent calls it mid-run), recorded as
-   *  the parent of any run trigger_run spawns. */
-  parentRunId?: string;
+  /** The orchestrator run calling /mcp, recorded on sub-agent runs spawned by
+   *  trigger_run. */
+  orchestratorRunId?: string;
 };
 
 export function buildMcpServer(
@@ -372,7 +372,7 @@ export function buildMcpServer(
         agent,
         message,
         preferDraft,
-        parentRunId: options.parentRunId,
+        orchestratorRunId: options.orchestratorRunId,
       });
       if (!res.ok) return errorResult(res.error);
       return json({ runId: res.runId });
@@ -552,7 +552,7 @@ export function buildMcpServer(
         proposedAction,
         options: actionOptions,
         links,
-        parentRunId: options.parentRunId,
+        orchestratorRunId: options.orchestratorRunId,
       });
       if (!res.ok) return errorResult(res.error);
       return json({ inboxItem: serializeInboxItem(res.item) });
@@ -571,7 +571,10 @@ export function buildMcpServer(
     },
     async ({ id }) => {
       if (!isOperator) return operatorOnly();
-      const res = await claimInboxItemFor(ctx, { id, parentRunId: options.parentRunId });
+      const res = await claimInboxItemFor(ctx, {
+        id,
+        orchestratorRunId: options.orchestratorRunId,
+      });
       if (!res.ok) return errorResult(res.error);
       return json({ inboxItem: serializeInboxItem(res.item) });
     },

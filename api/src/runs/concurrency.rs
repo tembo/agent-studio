@@ -8,20 +8,20 @@ const DEFAULT_MAX_CONCURRENT_RUNS: usize = 4;
 
 /// Process-local admission control for agent runs.
 ///
-/// Root runs acquire from both pools. Child runs only acquire from the global
-/// pool, leaving `reserved_child_runs` slots available for the common case
-/// where an orchestrator stays alive while it waits for a sub-agent.
+/// Top-level runs acquire from both pools. Sub-agent runs only acquire from the
+/// global pool, leaving `reserved_sub_agent_runs` slots available when an
+/// orchestrator stays alive while it waits for a sub-agent.
 #[derive(Clone)]
 pub struct RunConcurrency {
     total: Arc<Semaphore>,
-    roots: Arc<Semaphore>,
+    top_level: Arc<Semaphore>,
     max_concurrent_runs: usize,
-    reserved_child_runs: usize,
+    reserved_sub_agent_runs: usize,
 }
 
 pub struct RunPermit {
     _total: OwnedSemaphorePermit,
-    _root: Option<OwnedSemaphorePermit>,
+    _top_level: Option<OwnedSemaphorePermit>,
 }
 
 impl RunConcurrency {
@@ -29,43 +29,49 @@ impl RunConcurrency {
         let max =
             parse_env_usize("API_MAX_CONCURRENT_RUNS")?.unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS);
         // A one-slot deployment cannot reserve its only slot. For every larger
-        // deployment, reserve one child slot unless the operator opts out.
+        // deployment, reserve one sub-agent slot unless the operator opts out.
         let default_reserved = usize::from(max > 1);
-        let reserved = parse_env_usize("API_RESERVED_CHILD_RUNS")?.unwrap_or(default_reserved);
+        let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?.unwrap_or(default_reserved);
         Self::new(max, reserved)
     }
 
-    pub fn new(max_concurrent_runs: usize, reserved_child_runs: usize) -> anyhow::Result<Self> {
+    pub fn new(max_concurrent_runs: usize, reserved_sub_agent_runs: usize) -> anyhow::Result<Self> {
         if max_concurrent_runs == 0 {
             bail!("API_MAX_CONCURRENT_RUNS must be at least 1");
         }
-        if reserved_child_runs >= max_concurrent_runs {
+        if reserved_sub_agent_runs >= max_concurrent_runs {
             bail!(
-                "API_RESERVED_CHILD_RUNS ({reserved_child_runs}) must be less than \
+                "API_RESERVED_SUB_AGENT_RUNS ({reserved_sub_agent_runs}) must be less than \
                  API_MAX_CONCURRENT_RUNS ({max_concurrent_runs})"
             );
         }
 
         Ok(Self {
             total: Arc::new(Semaphore::new(max_concurrent_runs)),
-            roots: Arc::new(Semaphore::new(max_concurrent_runs - reserved_child_runs)),
+            top_level: Arc::new(Semaphore::new(
+                max_concurrent_runs - reserved_sub_agent_runs,
+            )),
             max_concurrent_runs,
-            reserved_child_runs,
+            reserved_sub_agent_runs,
         })
     }
 
     /// Wait for execution capacity, returning `None` when the run is cancelled
     /// while still queued. The returned permits release automatically.
-    pub async fn acquire(&self, is_child: bool, cancel: &CancellationToken) -> Option<RunPermit> {
-        let root = if is_child {
+    pub async fn acquire(
+        &self,
+        is_sub_agent: bool,
+        cancel: &CancellationToken,
+    ) -> Option<RunPermit> {
+        let top_level = if is_sub_agent {
             None
         } else {
-            Some(acquire_or_cancel(self.roots.clone(), cancel).await?)
+            Some(acquire_or_cancel(self.top_level.clone(), cancel).await?)
         };
         let total = acquire_or_cancel(self.total.clone(), cancel).await?;
         Some(RunPermit {
             _total: total,
-            _root: root,
+            _top_level: top_level,
         })
     }
 
@@ -73,8 +79,8 @@ impl RunConcurrency {
         self.max_concurrent_runs
     }
 
-    pub fn reserved_child_runs(&self) -> usize {
-        self.reserved_child_runs
+    pub fn reserved_sub_agent_runs(&self) -> usize {
+        self.reserved_sub_agent_runs
     }
 
     pub fn active_runs(&self) -> usize {
@@ -85,7 +91,7 @@ impl RunConcurrency {
     /// runs that are already executing. Their database rows remain queued and
     /// the boot reconciler will resubmit them on the next process.
     pub fn close(&self) {
-        self.roots.close();
+        self.top_level.close();
         self.total.close();
     }
 }
@@ -127,11 +133,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn reserves_capacity_for_child_runs() {
+    async fn reserves_capacity_for_sub_agent_runs() {
         let gate = RunConcurrency::new(4, 1).unwrap();
         let cancel = CancellationToken::new();
 
-        let roots = [
+        let top_level_runs = [
             gate.acquire(false, &cancel).await.unwrap(),
             gate.acquire(false, &cancel).await.unwrap(),
             gate.acquire(false, &cancel).await.unwrap(),
@@ -144,7 +150,7 @@ mod tests {
                 .is_err()
         );
 
-        let child = gate.acquire(true, &cancel).await.unwrap();
+        let sub_agent = gate.acquire(true, &cancel).await.unwrap();
         assert_eq!(gate.active_runs(), 4);
         assert!(
             tokio::time::timeout(Duration::from_millis(20), gate.acquire(true, &cancel),)
@@ -152,8 +158,8 @@ mod tests {
                 .is_err()
         );
 
-        drop(child);
-        drop(roots);
+        drop(sub_agent);
+        drop(top_level_runs);
         assert_eq!(gate.active_runs(), 0);
     }
 

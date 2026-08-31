@@ -1,6 +1,6 @@
 """Characterization tests for the Rust-to-Python runner protocol.
 
-The Rust parent starts ``scripts/run_pydantic.py`` with ``--fmt`` and
+The Rust host starts ``scripts/run_pydantic.py`` with ``--fmt`` and
 ``--user-message``. It writes one JSON launch envelope to stdin, then keeps
 stdin open as a checkpoint acknowledgement channel. The wrapper writes a
 line-oriented stdout stream:

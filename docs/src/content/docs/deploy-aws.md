@@ -73,7 +73,7 @@ sit in plaintext task JSON):
 | `TAS_ENCRYPTION_KEY` | from Secrets Manager |
 | `INTERNAL_API_TOKEN` | from Secrets Manager |
 | `API_MAX_CONCURRENT_RUNS` | Maximum simultaneous agent executions per task (default `4`); tune against the task's memory limit. |
-| `API_RESERVED_CHILD_RUNS` | Slots reserved for child agents (default `1`; set `0` if orchestration is unused). |
+| `API_RESERVED_SUB_AGENT_RUNS` | Slots reserved for sub-agents (default `1`; set `0` if orchestration is unused). |
 | `RUST_LOG` | `info,tas_api=debug` |
 
 (AWS VPC networking is IPv4, so the default bind is reachable — no

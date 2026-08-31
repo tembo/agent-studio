@@ -8,7 +8,7 @@ import {
   getRunExecutionIdentity,
   listRecentRunsForAutomation,
 } from "./run-history-db";
-import { listChildRuns } from "./runs-db";
+import { listSubAgentRuns } from "./run-orchestration-db";
 
 describe("run history identities", () => {
   beforeEach(() => query.mockReset());
@@ -61,11 +61,11 @@ describe("run history identities", () => {
     expect(query.mock.calls[0]?.[1]).toEqual(["workspace-1", "run-1"]);
   });
 
-  it("keeps child run identities scoped through the parent workspace", async () => {
+  it("keeps sub-agent run identities scoped through the orchestrator workspace", async () => {
     query.mockResolvedValue({
       rows: [
         {
-          id: "child-1",
+          id: "sub-agent-1",
           agent_name: "Researcher",
           status: "succeeded",
           cost_usd: "0.01",
@@ -78,18 +78,20 @@ describe("run history identities", () => {
       ],
     });
 
-    await expect(listChildRuns("workspace-1", "parent-1")).resolves.toMatchObject(
+    await expect(
+      listSubAgentRuns("workspace-1", "orchestrator-1"),
+    ).resolves.toMatchObject(
       [
         {
-          id: "child-1",
+          id: "sub-agent-1",
           createdByName: null,
           createdByEmail: "operator@example.com",
         },
       ],
     );
     expect(query.mock.calls[0]?.[0]).toMatch(
-      /r\.workspace_id = \$1 AND r\.parent_run_id = \$2/,
+      /r\.workspace_id = \$1 AND r\.orchestrator_run_id = \$2/,
     );
-    expect(query.mock.calls[0]?.[1]).toEqual(["workspace-1", "parent-1"]);
+    expect(query.mock.calls[0]?.[1]).toEqual(["workspace-1", "orchestrator-1"]);
   });
 });

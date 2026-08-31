@@ -69,7 +69,7 @@ export default async function OutputsPage({
   const values = {
     q: scalar(sp.q).slice(0, 200),
     agent: scalar(sp.agent),
-    operator: scalar(sp.operator),
+    orchestrator: scalar(sp.orchestrator),
     user: scalar(sp.user),
     from: scalar(sp.from),
     to: scalar(sp.to),
@@ -79,7 +79,7 @@ export default async function OutputsPage({
     listOutputsForWorkspace(workspace.id, {
       search: values.q || undefined,
       agentName: values.agent || undefined,
-      operatorName: values.operator || undefined,
+      orchestratorName: values.orchestrator || undefined,
       createdBy: values.user || undefined,
       completedFrom: parseDate(values.from),
       completedBefore: parseDate(values.to, true),
@@ -120,10 +120,14 @@ export default async function OutputsPage({
               <option key={agent} value={agent}>{agent}</option>
             ))}
           </FilterSelect>
-          <FilterSelect name="operator" label="Root operator" value={values.operator}>
-            <option value="">All operators</option>
-            {facets.operators.map((operator) => (
-              <option key={operator} value={operator}>{operator}</option>
+          <FilterSelect
+            name="orchestrator"
+            label="Orchestrator"
+            value={values.orchestrator}
+          >
+            <option value="">All orchestrators</option>
+            {facets.orchestrators.map((orchestrator) => (
+              <option key={orchestrator} value={orchestrator}>{orchestrator}</option>
             ))}
           </FilterSelect>
           <FilterSelect name="user" label="Run as" value={values.user}>
@@ -193,7 +197,7 @@ export default async function OutputsPage({
                     {output.agentName}
                   </div>
                   <div className="text-foreground-weak mt-0.5 text-sm">
-                    Operator {output.operatorName} · Run as{" "}
+                    Orchestrator {output.orchestratorName} · Run as{" "}
                     {userLabel({
                       name: output.createdByName,
                       email: output.createdByEmail,

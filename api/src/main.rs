@@ -82,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
     let run_concurrency = runs::concurrency::RunConcurrency::from_env()?;
     tracing::info!(
         max_concurrent_runs = run_concurrency.max_concurrent_runs(),
-        reserved_child_runs = run_concurrency.reserved_child_runs(),
+        reserved_sub_agent_runs = run_concurrency.reserved_sub_agent_runs(),
         "run concurrency configured"
     );
 

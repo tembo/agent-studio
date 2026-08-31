@@ -10,14 +10,16 @@ import { listImprovementsForRun } from "@/lib/improvements-api";
 import { estimateRunCost, formatCurrency, formatTokens } from "@/lib/pricing";
 import { getRunExecutionIdentity } from "@/lib/run-history-db";
 import { runIdentityLabel } from "@/lib/run-identity";
+import {
+  listSubAgentRuns,
+  listSubAgentRunToolNames,
+} from "@/lib/run-orchestration-db";
 import { toolkitLabel } from "@/lib/composio-label";
 import { getMcpProvider } from "@/lib/mcp-providers";
 import { listWorkspaceToolProviders } from "@/lib/mcp-tools";
 import { getRun, type RunRecord } from "@/lib/runs-api";
 import type { WorkspaceRole } from "@/lib/rbac";
 import {
-  listChildRuns,
-  listChildRunToolNames,
   listStepsForRun,
   listToolCallsForRun,
 } from "@/lib/runs-db";
@@ -71,16 +73,16 @@ export default async function RunDetailPage({
     toolCalls,
     steps,
     toolProviderRows,
-    childRuns,
-    childToolNames,
+    subAgentRuns,
+    subAgentToolNames,
     runIdentity,
   ] =
     await Promise.all([
       listToolCallsForRun(workspace.id, run.id),
       listStepsForRun(workspace.id, run.id),
       listWorkspaceToolProviders(workspace.id),
-      listChildRuns(workspace.id, run.id),
-      listChildRunToolNames(workspace.id, run.id),
+      listSubAgentRuns(workspace.id, run.id),
+      listSubAgentRunToolNames(workspace.id, run.id),
       getRunExecutionIdentity(workspace.id, run.id),
     ]);
 
@@ -96,14 +98,14 @@ export default async function RunDetailPage({
     toolProviders[t.slug] = { slug: t.provider, label };
   }
 
-  // Which MCPs the sub-agents used: map each tool name the child runs invoked
+  // Which MCPs the sub-agents used: map each tool name their runs invoked
   // to its provider, deduped by provider slug. The orchestrator's own "Uses"
   // row (in the agent layout) only lists its top-level connections, so this
   // surfaces the providers reached one level down.
   const subAgentProviders: { slug: string; label: string }[] = [];
   {
     const seen = new Set<string>();
-    for (const name of childToolNames) {
+    for (const name of subAgentToolNames) {
       const p = toolProviders[name];
       if (!p || seen.has(p.slug)) continue;
       seen.add(p.slug);
@@ -193,16 +195,18 @@ export default async function RunDetailPage({
     : 0;
   // Sub-runs this run spawned via trigger_run. Roll their tokens + cost up so
   // an orchestrator's page shows its true total, not just its own (small) cost.
-  const subRunsCost = childRuns.reduce((sum, c) => sum + (c.costUsd ?? 0), 0);
-  const subRunsTokens = childRuns.reduce(
-    (sum, c) => sum + (c.tokensInput ?? 0) + (c.tokensOutput ?? 0),
+  const subRunsCost = subAgentRuns.reduce(
+    (sum, run) => sum + (run.costUsd ?? 0),
+    0,
+  );
+  const subRunsTokens = subAgentRuns.reduce(
+    (sum, run) => sum + (run.tokensInput ?? 0) + (run.tokensOutput ?? 0),
     0,
   );
   const grandTotalCost =
-    childRuns.length > 0 ? (estimatedCost ?? 0) + subRunsCost : null;
+    subAgentRuns.length > 0 ? (estimatedCost ?? 0) + subRunsCost : null;
   const grandTotalTokens =
-    childRuns.length > 0 ? (totalTokens ?? 0) + subRunsTokens : null;
-
+    subAgentRuns.length > 0 ? (totalTokens ?? 0) + subRunsTokens : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -375,8 +379,8 @@ export default async function RunDetailPage({
                 )}
                 <span className="text-foreground-weak">
                   {" "}
-                  · this run + {childRuns.length} sub-run
-                  {childRuns.length === 1 ? "" : "s"}
+                  · this run + {subAgentRuns.length} sub-run
+                  {subAgentRuns.length === 1 ? "" : "s"}
                 </span>
               </dd>
             </div>
@@ -427,49 +431,50 @@ export default async function RunDetailPage({
       )}
 
       {/* Runs this one spawned via trigger_run (an orchestrator fanning work
-          out to per-source agents). Each links to its own run page; the Total
+          out to per-source sub-agents). Each links to its own run page; the Total
           footer rolls this run + every sub-run into one tokens + cost figure. */}
-      {childRuns.length > 0 && (
-        <Section title={`Sub-runs (${childRuns.length})`}>
+      {subAgentRuns.length > 0 && (
+        <Section title={`Sub-runs (${subAgentRuns.length})`}>
           <ul className="divide-y divide-[var(--color-border-weak)]">
-            {childRuns.map((child) => {
-              const childTokens =
-                child.tokensInput !== null && child.tokensOutput !== null
-                  ? child.tokensInput + child.tokensOutput
+            {subAgentRuns.map((subAgentRun) => {
+              const subAgentTokens =
+                subAgentRun.tokensInput !== null &&
+                subAgentRun.tokensOutput !== null
+                  ? subAgentRun.tokensInput + subAgentRun.tokensOutput
                   : null;
               return (
-                <li key={child.id}>
+                <li key={subAgentRun.id}>
                   <Link
                     href={`/${workspace.slug}/agents/${encodeURIComponent(
-                      child.agentName,
-                    )}/runs/${child.id}`}
+                      subAgentRun.agentName,
+                    )}/runs/${subAgentRun.id}`}
                     className="hover:bg-background-weak flex items-center justify-between gap-3 px-1 py-2"
                   >
                     <span className="flex min-w-0 flex-col">
                       <span className="flex items-center gap-2 truncate">
                         <span className="text-foreground truncate font-medium">
-                          {child.agentName}
+                          {subAgentRun.agentName}
                         </span>
                         <span
-                          className={`${STATUS_TEXT_TONE[child.status]} text-sm`}
+                          className={`${STATUS_TEXT_TONE[subAgentRun.status]} text-sm`}
                         >
-                          {STATUS_LABELS[child.status]}
+                          {STATUS_LABELS[subAgentRun.status]}
                         </span>
                       </span>
                       <span className="text-foreground-muted truncate text-xs">
                         Run as{" "}
                         {runIdentityLabel(
-                          child.createdByName,
-                          child.createdByEmail,
+                          subAgentRun.createdByName,
+                          subAgentRun.createdByEmail,
                         )}
                       </span>
                     </span>
                     <span className="text-foreground-weak shrink-0 text-sm">
-                      {childTokens !== null && (
-                        <>{formatTokens(childTokens)} tokens</>
+                      {subAgentTokens !== null && (
+                        <>{formatTokens(subAgentTokens)} tokens</>
                       )}
-                      {child.costUsd !== null && (
-                        <> (~{formatCurrency(child.costUsd)})</>
+                      {subAgentRun.costUsd !== null && (
+                        <> (~{formatCurrency(subAgentRun.costUsd)})</>
                       )}
                     </span>
                   </Link>
@@ -482,8 +487,8 @@ export default async function RunDetailPage({
                 Total
                 <span className="text-foreground-weak font-normal">
                   {" "}
-                  (this run + {childRuns.length} sub-run
-                  {childRuns.length === 1 ? "" : "s"})
+                  (this run + {subAgentRuns.length} sub-run
+                  {subAgentRuns.length === 1 ? "" : "s"})
                 </span>
               </span>
               <span className="text-foreground shrink-0 font-medium">
