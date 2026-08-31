@@ -78,6 +78,7 @@ const existingAutomation = {
   enabled: true,
   lastFiredAt: null,
   lastFireError: null,
+  lastFireEventId: null,
   createdBy: "creator",
   createdByName: null,
   createdByEmail: null,

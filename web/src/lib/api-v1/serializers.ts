@@ -169,6 +169,7 @@ export type SerializedAutomation = {
   useDraft: boolean;
   lastFiredAt: string | null;
   lastFireError: string | null;
+  lastFireEventId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -185,6 +186,7 @@ export function serializeAutomation(a: Automation): SerializedAutomation {
     useDraft: a.useDraft,
     lastFiredAt: a.lastFiredAt ? a.lastFiredAt.toISOString() : null,
     lastFireError: a.lastFireError,
+    lastFireEventId: a.lastFireEventId,
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
   };

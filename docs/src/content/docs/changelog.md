@@ -21,6 +21,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Automation failures remain inspectable after edits and recovery.** Schedule,
+  event-trigger, and webhook dispatch failures now append durable history with
+  retry attempts and related runs. Editing no longer clears current health, and
+  a successful retry records recovery without deleting the original failure.
+  Every member sees a safe summary; only workspace admins can expand sanitized
+  technical diagnostics.
 - **Cargo AI provider keys no longer appear in process command lines.**
   Cargo AI runs now load credentials from an isolated, per-run profile. The
   key is supplied over standard input, the child environment is cleared, and

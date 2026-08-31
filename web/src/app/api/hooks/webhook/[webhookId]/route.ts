@@ -1,10 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  agentResolutionFailure,
+  recordAutomationFailure,
+  recordAutomationSuccess,
+  runApiRequestFailure,
+} from "@/lib/automation-events";
 import { createRun } from "@/lib/runs-api";
 import {
   countRecentEventRuns,
   getWebhookForInbound,
-  recordWebhookFire,
   webhookSvixMatches,
   webhookTokenMatches,
 } from "@/lib/webhooks-db";
@@ -94,7 +99,11 @@ export async function POST(
     webhook.agentName,
   );
   if (!dispatch.ok) {
-    await recordWebhookFire(webhook.id, dispatch.error.message);
+    await recordAutomationFailure({
+      kind: "webhook",
+      id: webhook.id,
+      failure: agentResolutionFailure(dispatch.error),
+    });
     return NextResponse.json(
       { error: `agent ${dispatch.error.kind}: ${dispatch.error.message}` },
       { status: 502 },
@@ -139,11 +148,18 @@ export async function POST(
     });
     runId = res.runId;
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "failed to queue run";
-    await recordWebhookFire(webhook.id, msg);
+    await recordAutomationFailure({
+      kind: "webhook",
+      id: webhook.id,
+      failure: runApiRequestFailure(e),
+    });
     return NextResponse.json({ error: "could not queue run" }, { status: 502 });
   }
 
-  await recordWebhookFire(webhook.id, null);
+  await recordAutomationSuccess({
+    kind: "webhook",
+    id: webhook.id,
+    runId,
+  });
   return NextResponse.json({ status: "queued", run_id: runId }, { status: 202 });
 }
