@@ -29,7 +29,8 @@ they are no longer release versions. Phase scope now lives in
 - **Agent inventory prioritizes recent activity.** Live-agent rows now open from
   any non-control click and default to most-recently-run order, with an explicit
   sort menu for the compact headerless layout. Agents with no trailing-30-day
-  runs remain visible without empty run-count, average-cost, or success fields.
+  runs remain visible without empty run-count, average-cost, or success fields,
+  and unavailable model or cost values no longer render placeholder dashes.
 - **Orchestration terminology is consistent across the stack.** Run links now
   use `run.orchestrator_run_id`; the internal MCP handoff uses
   `X-Tas-Orchestrator-Run`; and deployment configuration uses
