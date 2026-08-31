@@ -95,7 +95,7 @@ export function ActionNeeded({
               <span className="font-semibold">{it.agentLabel}</span>
             </span>
             <div className="flex items-center gap-3">
-              <Button asChild variant="orange" size="small">
+              <Button asChild variant="inverted" size="small">
                 <Link href={it.href}>{it.action}</Link>
               </Button>
               <button
