@@ -30,6 +30,8 @@ type Props = {
   agentName: string;
 };
 
+const TOOL_USAGE_PREVIEW = 5;
+
 export function AgentDashboard({
   stats,
   daily,
@@ -65,33 +67,63 @@ export function AgentDashboard({
 }
 
 function ToolUsage({ toolUsage }: { toolUsage: AgentToolUsage[] }) {
+  const preview = toolUsage.slice(0, TOOL_USAGE_PREVIEW);
+  const remaining = toolUsage.slice(TOOL_USAGE_PREVIEW);
+  const totalCalls = toolUsage.reduce((sum, tool) => sum + tool.calls, 0);
+
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-foreground-weak text-sm font-medium uppercase tracking-widest">
-        Tool usage (30d)
-      </span>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-foreground-weak text-sm font-medium uppercase tracking-widest">
+          Tool usage (30d)
+        </span>
+        <span className="text-foreground-muted text-sm">
+          {toolUsage.length} {toolUsage.length === 1 ? "tool" : "tools"} ·{" "}
+          {totalCalls.toLocaleString("en-US")} calls
+        </span>
+      </div>
       <ul className="divide-border bg-surface border-border flex flex-col divide-y overflow-hidden rounded-lg border">
-        {toolUsage.map((t) => (
-          <li
-            key={t.toolName}
-            className="flex items-baseline justify-between gap-3 px-3 py-2"
-          >
-            <code className="text-foreground truncate text-sm">
-              {t.toolName}
-            </code>
-            <span className="text-foreground-weak shrink-0 text-sm">
-              ×{t.calls.toLocaleString("en-US")}
-              {t.failed > 0 && (
-                <span className="text-sentiment-negative">
-                  {" "}
-                  · {t.failed} failed
-                </span>
-              )}
-            </span>
-          </li>
+        {preview.map((tool) => (
+          <ToolUsageRow key={tool.toolName} tool={tool} />
         ))}
+        {remaining.length > 0 && (
+          <li>
+            <details className="group">
+              <summary className="text-foreground-weak hover:text-foreground cursor-pointer list-none px-3 py-2 text-sm font-medium [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">
+                  Show {remaining.length} more tools
+                </span>
+                <span className="hidden group-open:inline">
+                  Hide additional tools
+                </span>
+              </summary>
+              <ul className="divide-border border-border flex max-h-64 flex-col divide-y overflow-y-auto border-t">
+                {remaining.map((tool) => (
+                  <ToolUsageRow key={tool.toolName} tool={tool} />
+                ))}
+              </ul>
+            </details>
+          </li>
+        )}
       </ul>
     </div>
+  );
+}
+
+function ToolUsageRow({ tool }: { tool: AgentToolUsage }) {
+  return (
+    <li className="flex items-baseline justify-between gap-3 px-3 py-2">
+      <code className="text-foreground truncate text-sm">{tool.toolName}</code>
+      <span className="text-foreground-weak shrink-0 text-sm">
+        ×{tool.calls.toLocaleString("en-US")}
+        {tool.failed > 0 && (
+          <span className="text-sentiment-negative">
+            {" "}
+            · {tool.failed} failed
+          </span>
+        )}
+      </span>
+    </li>
   );
 }
 

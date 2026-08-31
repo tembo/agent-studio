@@ -103,8 +103,9 @@ export default async function AgentVersionPage({
       )}
 
       <Section
-        title="Definition"
-        description={`The frozen ${current.specFormat.toUpperCase()} for v${current.versionNumber}.`}
+        title="Full definition"
+        description={`The frozen ${current.specFormat.toUpperCase()} for v${current.versionNumber} · ${countLines(current.specContent)} lines. Expand to view the source.`}
+        collapsible
       >
         <pre className="bg-surface border-border text-foreground overflow-x-auto rounded-lg border p-4 font-mono text-sm leading-5">
           {current.specContent}
@@ -112,4 +113,9 @@ export default async function AgentVersionPage({
       </Section>
     </div>
   );
+}
+
+function countLines(source: string): number {
+  const content = source.trimEnd();
+  return content ? content.split(/\r\n|\r|\n/).length : 0;
 }
