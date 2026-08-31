@@ -329,6 +329,38 @@ output_schema:
   required: [intent]
 \`\`\`
 
+### delivery (TAS extension — output delivery evidence)
+
+Declare where the completed output is intended to go and what durable evidence
+TAS can observe. This is **agent-defined**, not a hard-coded list of channels.
+TAS snapshots the declaration on every run, so later edits do not reinterpret
+old outputs.
+
+\`\`\`yaml
+delivery:
+  note: Daily brief for the account team
+  destinations:
+    - key: tasks-inbox
+      label: Tasks Inbox
+      evidence:
+        type: inbox_item
+    - key: email
+      label: Email
+      evidence:
+        type: tool_call
+        tool: GMAIL_SEND_EMAIL
+\`\`\`
+
+Each destination needs a unique stable \`key\`, a human-readable \`label\`, and
+one evidence rule:
+
+- \`type: inbox_item\` confirms when the run produces a TAS inbox item.
+- \`type: tool_call\` plus the exact \`tool\` name confirms when that tool call
+  succeeds. TAS stores the tool name and outcome, never arguments or results.
+
+The Outputs page says **Confirmed**, not "Delivered": a successful API call is
+durable evidence, but it cannot prove a person received or read the result.
+
 ### deps_schema
 
 JSON Schema for *runtime dependencies* the agent expects to be

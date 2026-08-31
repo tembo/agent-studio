@@ -16,6 +16,7 @@ import {
   IconChatBubbles,
   IconChevronDownSmall,
   IconDashboardMiddle,
+  IconFileText,
   IconHammer,
   IconHistory,
   IconInboxChecked,
@@ -121,6 +122,7 @@ export function SidebarNav({
       id: "activity",
       label: "Activity",
       items: [
+        { href: `${home}/outputs`, label: "Outputs", icon: <IconFileText /> },
         { href: `${home}/runs`, label: "Runs", icon: <IconHistory /> },
         {
           href: `${home}/tool-uses`,

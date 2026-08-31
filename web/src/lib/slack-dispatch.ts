@@ -281,6 +281,7 @@ export async function dispatchToAgent(args: {
       trigger: "event",
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
+      delivery: r.delivery,
     });
     // Deep-link target for the runs UI: the conversation that kicked this
     // off. Best-effort — a missing permalink just means no link in the UI.

@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::runs::delivery::DeliveryDeclaration;
 use crate::runs::runner;
 use crate::AppState;
 
@@ -79,6 +80,10 @@ pub struct CreateRunRequest {
     /// inside another run. Lets the parent's page roll up sub-run costs.
     #[serde(default)]
     pub parent_run_id: Option<Uuid>,
+    /// Agent-authored delivery intent from the exact spec used for this run.
+    /// Stored as an immutable snapshot so later spec edits do not rewrite history.
+    #[serde(default)]
+    pub output_delivery: Option<DeliveryDeclaration>,
 }
 
 #[derive(Debug, Serialize)]
@@ -142,6 +147,15 @@ pub async fn create_run(
         .skills_content
         .as_ref()
         .map(|skills| serde_json::json!(skills));
+    if let Some(delivery) = &req.output_delivery {
+        delivery
+            .validate()
+            .map_err(|message| (StatusCode::BAD_REQUEST, message))?;
+    }
+    let output_delivery = req
+        .output_delivery
+        .as_ref()
+        .map(|delivery| serde_json::json!(delivery));
 
     sqlx::query(
         r#"INSERT INTO run
@@ -151,10 +165,10 @@ pub async fn create_run(
              agent_version_id, agent_version_label, parent_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
-             execution_skills_content)
+             execution_skills_content, output_delivery)
             VALUES ($1, $2, $3, $4, $5, 'queued', NULL, NULL, NULL,
                     $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17)"#,
+                    $13, $14, $15, $16, $17, $18)"#,
     )
     .bind(run_id)
     .bind(req.workspace_id)
@@ -173,6 +187,7 @@ pub async fn create_run(
     .bind(spec_format_name)
     .bind(req.tools_module_content.as_deref())
     .bind(skills_json)
+    .bind(output_delivery)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("db insert: {e}")))?;

@@ -53,6 +53,21 @@ acted as** with **Run as**:
 The "Action needed" alerts in the sidebar (failing agents, missing connections,
 missing LLM key) link straight to the relevant surface.
 
+## Outputs
+
+The **Outputs** page is a report-first view of successful runs. Every successful
+run with non-empty output appears here, including sub-agent runs. Search the
+output body, or filter by producing agent, root operator, **Run as** member,
+completion date, and delivery evidence. Open a result to see a rendered Markdown
+preview, the exact raw text, its agent version and execution provenance, and a
+link to the source run.
+
+An output's delivery status is evidence-based: **Confirmed** means TAS observed
+the inbox item or successful tool call declared by that exact agent version. It
+does not claim that a person read an email or message. **Partial**, **Failed**,
+and **Unobserved** distinguish mixed, unsuccessful, and absent evidence;
+**Undeclared** means the agent did not define delivery intent.
+
 ## Member detail (admins)
 
 From **Settings → Members** or the Dashboard **Team** table, workspace admins

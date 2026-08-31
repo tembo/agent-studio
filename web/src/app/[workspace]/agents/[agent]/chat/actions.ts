@@ -244,6 +244,7 @@ export async function sendToAgentAction(args: {
       // Chat is the iterate-on-draft surface — always runs the live file.
       agentVersionId: null,
       agentVersionLabel: "draft",
+      delivery: spec.delivery,
     });
     return { ok: true, runId: res.runId };
   } catch (err) {

@@ -215,6 +215,7 @@ async function maybeFire(a: Automation, now: Date) {
       automation_id: a.id,
       agent_version_id: r.versionId,
       agent_version_label: r.versionLabel,
+      output_delivery: r.delivery,
     }),
   });
 

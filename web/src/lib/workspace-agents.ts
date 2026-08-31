@@ -449,6 +449,8 @@ export type ResolvedDispatch = {
   /** External services the agent declares (Pydantic only; [] otherwise).
    *  Used to pre-flight the acting user's connections before a run. */
   connections: AgentConnection[];
+  /** Delivery intent parsed from the exact draft or stable spec. */
+  delivery?: AgentSpec["delivery"];
 };
 
 export type ResolveDispatchError =
@@ -574,6 +576,7 @@ export async function resolveAgentForDispatch(
             stableParsed.spec.framework === "pydantic-agentspec"
               ? stableParsed.spec.connections
               : [],
+          delivery: stableParsed.ok ? stableParsed.spec.delivery : undefined,
         },
       };
     }
@@ -669,6 +672,7 @@ export async function resolveAgentForDispatch(
       skillsContent: skills.content,
       connections:
         spec.framework === "pydantic-agentspec" ? spec.connections : [],
+      delivery: spec.delivery,
     },
   };
 }

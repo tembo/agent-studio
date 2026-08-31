@@ -135,6 +135,7 @@ export async function POST(
       trigger: "event",
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
+      delivery: r.delivery,
     });
     runId = res.runId;
   } catch (e) {

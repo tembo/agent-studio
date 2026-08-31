@@ -191,6 +191,7 @@ export async function runNowAction(
       userMessage,
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
+      delivery: r.delivery,
     });
     runId = res.runId;
   } catch (err) {
