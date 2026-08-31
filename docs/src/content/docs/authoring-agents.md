@@ -80,6 +80,16 @@ Key fields:
   `label`. Evidence can be an `inbox_item` produced by the run or a named
   `tool_call`. TAS records the tool name and success only; tool arguments and
   results remain unstored because they may contain secrets or personal data.
+
+  Only add `delivery` when the agent is actually expected to publish its result
+  outside its own run. Omit it when the agent only returns output to its caller.
+  `delivery` describes destinations and evidence; use `output_schema` when you
+  need to control the response shape.
+
+  Evidence is scoped to the exact run carrying the declaration. If an
+  orchestrator delegates delivery to a sub-agent, put `delivery` on the
+  sub-agent that creates the inbox item or calls the delivery tool. Sub-agent
+  evidence does not roll up into the orchestrator's declaration.
 - **`model_settings:`** (optional) — a map of model knobs passed through to the
   model, e.g. `max_tokens`, `temperature`, `parallel_tool_calls`. TAS defaults
   `parallel_tool_calls: false` (so tools run one at a time unless you set it
