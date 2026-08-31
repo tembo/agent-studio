@@ -131,14 +131,21 @@ pull request.
 
 ## Backlog prioritization
 
-GitHub Issues are the source of truth for backlog priority. When auditing,
-sequencing, or re-prioritizing issues, use
+The [Agent Studio Backlog project](https://github.com/orgs/tembo/projects/1)
+is the source of truth for execution order and initiative. GitHub Issues remain
+the source for scope, type, provenance, risk, components, and dependencies. When
+auditing, sequencing, or re-prioritizing issues, use
 [`.agents/skills/reprioritize-backlog/SKILL.md`](./.agents/skills/reprioritize-backlog/SKILL.md).
 Every open issue should have exactly one type, one `priority: *` label, and one
-`status: *` label. The additive `customer` label is validated-demand evidence
-and raises priority, but never overrides P0 safety work or a hard dependency.
-Re-prioritization remains a human judgment: automation may find drift and
-propose changes, but must not silently reorder the live backlog.
+`status: *` label; Priority and Status must match the corresponding Project
+fields. The additive `user request` label is validated-demand evidence and raises
+priority, but never overrides P0 safety work or a hard dependency. Order is a
+global, unique, positive number for open work, and the Project's manual item
+positions must mirror it so the default view is useful without an explicit
+sort. Strategic re-prioritization remains a human judgment. Automation
+synchronizes taxonomy and deterministically refreshes Order from the approved
+metadata and dependency graph; it does not infer business priority from issue
+prose.
 
 ## What to leave alone
 

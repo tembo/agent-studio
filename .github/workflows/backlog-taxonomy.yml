@@ -2,17 +2,31 @@ name: Backlog taxonomy
 
 on:
   issues:
-    types: [opened, reopened, labeled, closed]
+    types: [opened, reopened, labeled, unlabeled, closed]
+  pull_request:
+    types: [opened, reopened, closed, ready_for_review, converted_to_draft]
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: backlog-taxonomy
+  cancel-in-progress: false
 
 permissions:
   contents: read
   issues: write
 
 jobs:
-  sync-labels:
+  sync-backlog:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Sync taxonomy labels
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
         with:
           script: |
             const issue = context.payload.issue;
@@ -60,11 +74,19 @@ jobs:
               await add("status: triage");
             }
 
-            const customerAdded =
-              action === "labeled" && context.payload.label?.name === "customer";
-            if (customerAdded && !names.has("priority: p0")) {
+            const userRequestAdded =
+              action === "labeled" && context.payload.label?.name === "user request";
+            if (userRequestAdded && !names.has("priority: p0")) {
               for (const priority of priorities) await remove(priority);
               await add("priority: p1");
             } else if ((action === "opened" || action === "reopened") && priorities.length === 0) {
-              await add(names.has("customer") ? "priority: p1" : "priority: p2");
+              await add(names.has("user request") ? "priority: p1" : "priority: p2");
             }
+
+      - name: Sync Agent Studio Backlog project
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+        run: node .agents/skills/reprioritize-backlog/scripts/sync-project.mjs
