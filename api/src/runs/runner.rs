@@ -73,9 +73,9 @@ pub struct RunContext {
     /// Preserve the original running timestamp across recovery so the built-in
     /// run clock remains stable and duration covers the interruption.
     pub started_at: Option<DateTime<Utc>>,
-    /// Parent run when this execution was launched by another TAS agent. Child
-    /// runs may use capacity reserved for orchestration progress.
-    pub parent_run_id: Option<Uuid>,
+    /// Orchestrator run that launched this execution. Sub-agent runs may use
+    /// capacity reserved for orchestration progress.
+    pub orchestrator_run_id: Option<Uuid>,
 }
 
 struct RunOutcome {
@@ -236,7 +236,7 @@ struct OrphanedRun {
     execution_skills_content: Option<serde_json::Value>,
     message_history: Option<serde_json::Value>,
     started_at: Option<DateTime<Utc>>,
-    parent_run_id: Option<Uuid>,
+    orchestrator_run_id: Option<Uuid>,
 }
 
 /// Reconstruct Pydantic runs whose in-memory task disappeared with the prior
@@ -247,7 +247,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
         "SELECT id, workspace_id, created_by, model, user_message, \
                 execution_framework, execution_spec_content, execution_spec_format, \
                 execution_tools_module_content, execution_skills_content, \
-                message_history, started_at, parent_run_id \
+                message_history, started_at, orchestrator_run_id \
            FROM run WHERE status IN ('queued', 'running') ORDER BY created_at",
     )
     .fetch_all(&state.db)
@@ -326,7 +326,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
                     skills_content,
                     message_history: row.message_history,
                     started_at: row.started_at,
-                    parent_run_id: row.parent_run_id,
+                    orchestrator_run_id: row.orchestrator_run_id,
                 },
                 cancel,
             )
@@ -346,8 +346,8 @@ pub async fn execute_run(state: &AppState, ctx: RunContext, cancel: Cancellation
     // runs from this api process.
     let run_id = ctx.run_id;
 
-    let is_child = ctx.parent_run_id.is_some();
-    let permit = state.run_concurrency.acquire(is_child, &cancel).await;
+    let is_sub_agent = ctx.orchestrator_run_id.is_some();
+    let permit = state.run_concurrency.acquire(is_sub_agent, &cancel).await;
     let Some(_permit) = permit else {
         if cancel.is_cancelled() {
             tracing::info!(run_id = %run_id, "queued run cancelled before execution capacity was available");
@@ -373,7 +373,7 @@ pub async fn execute_run(state: &AppState, ctx: RunContext, cancel: Cancellation
         run_id = %run_id,
         active_runs = state.run_concurrency.active_runs(),
         max_concurrent_runs = state.run_concurrency.max_concurrent_runs(),
-        is_child,
+        is_sub_agent,
         "run execution slot acquired"
     );
 

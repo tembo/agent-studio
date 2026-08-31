@@ -23,7 +23,7 @@ they are no longer release versions. Phase scope now lives in
 
 - **Searchable Outputs library.** Successful non-empty run outputs, including
   sub-agent results, are now searchable independently of the Runs log and can
-  be filtered by agent, root operator, acting user, date, and delivery evidence.
+  be filtered by agent, orchestrator, acting user, date, and delivery evidence.
   Output detail renders Markdown with an exact raw view and preserves the source
   run, version, execution identity, trigger, and model. Agents can optionally
   declare delivery intent in their spec; each run snapshots it and records
@@ -35,13 +35,25 @@ they are no longer release versions. Phase scope now lives in
   any non-control click and default to most-recently-run order, with an explicit
   sort menu for the compact headerless layout. Agents with no trailing-30-day
   runs remain visible without empty run-count, average-cost, or success fields.
+- **Orchestration terminology is consistent across the stack.** Run links now
+  use `run.orchestrator_run_id`; the internal MCP handoff uses
+  `X-Tas-Orchestrator-Run`; and deployment configuration uses
+  `API_RESERVED_SUB_AGENT_RUNS`. Existing run relationships are preserved by a
+  database rename migration. Self-hosted deployments that override the former
+  reservation variable must rename that override when upgrading.
 
 ### Fixed
 
+- **Automation failures remain inspectable after edits and recovery.** Schedule,
+  event-trigger, and webhook dispatch failures now append durable history with
+  retry attempts and related runs. Editing no longer clears current health, and
+  a successful retry records recovery without deleting the original failure.
+  Every member sees a safe summary; only workspace admins can expand sanitized
+  technical diagnostics.
 - **Cargo AI provider keys no longer appear in process command lines.**
   Cargo AI runs now load credentials from an isolated, per-run profile. The
-  key is supplied over standard input, the child environment is cleared, and
-  the temporary profile is removed when the run finishes.
+  key is supplied over standard input, the subprocess environment is cleared,
+  and the temporary profile is removed when the run finishes.
 - **Native MCP OAuth refreshes survive rotation and explain failures.**
   Concurrent runs now serialize refreshes so they cannot spend the same rotating
   refresh token. Retryable authorization-service failures use bounded backoff;
@@ -66,11 +78,12 @@ they are no longer release versions. Phase scope now lives in
   so future dependency updates must clear the same boundary production uses.
 - **Heavy run bursts no longer spawn unbounded Python processes.** The api now
   caps simultaneous agent executions (four by default) and leaves excess work
-  queued until capacity opens. One slot is reserved for child agents by default
-  so an orchestrator waiting on a sub-agent cannot occupy every root-run slot.
+  queued until capacity opens. One slot is reserved for sub-agents by default
+  so an orchestrator waiting on a sub-agent cannot occupy every top-level-run
+  slot.
   Queued cancellation and shutdown/recovery both honor the same admission gate;
   operators can tune it with `API_MAX_CONCURRENT_RUNS` and
-  `API_RESERVED_CHILD_RUNS`.
+  `API_RESERVED_SUB_AGENT_RUNS`.
 
 ## v2026.8.3 — Dashboard load-time fix, duplicate-migration CI guard
 
@@ -867,13 +880,13 @@ they are no longer release versions. Phase scope now lives in
 - **Sub-agent orchestration with rolled-up cost.** When an agent calls the
   `tembo-agent-studio` MCP `trigger_run` from inside its own run (an orchestrator
   fanning work out to per-source sub-agents), the spawned run is now linked to its
-  parent (`run.parent_run_id`). The parent's run page gets a **Sub-runs** section
-  listing each child with its tokens + cost, a **Combined** total, a **Prompt
-  cache** read/write breakdown, and a **Sub-agents use** row of the MCP logos the
-  children actually invoked.
+  orchestrator (`run.orchestrator_run_id`). The orchestrator's run page gets a
+  **Sub-runs** section listing each sub-agent with its tokens + cost, a
+  **Combined** total, a **Prompt cache** read/write breakdown, and a
+  **Sub-agents use** row of the MCP logos the sub-agents actually invoked.
 - **Agents list: MCPs column + filter.** The agents inventory shows each agent's
   declared connection logos; for an orchestrator it also shows (dimmed) the MCPs
-  its sub-agents bring in, derived from the `parent_run_id` graph. A **Filter by
+  its sub-agents bring in, derived from the `orchestrator_run_id` graph. A **Filter by
   MCP** dropdown matches an agent on its own or its sub-agents' MCPs.
 - **Native-MCP tool reference for the Tembo Coding Agent (`/for-agents`).** When
   TAS asks CAP to author or edit an agent, the prompt now lists native-MCP
@@ -954,8 +967,8 @@ they are no longer release versions. Phase scope now lives in
   direct+committed creates too, matching the query.
 
 ### Migrations
-- `0049` (per-user, workspace-bound API keys) and `0050` (`run.parent_run_id` for
-  sub-run linking) apply on the next Rust api restart.
+- `0049` (per-user, workspace-bound API keys) and `0050` (sub-run linking; now
+  represented by `run.orchestrator_run_id`) apply on the next Rust api restart.
 
 ## v2026.6.15 — Fathom MCP, free-text agent names
 

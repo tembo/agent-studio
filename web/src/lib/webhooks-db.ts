@@ -33,6 +33,7 @@ export type WebhookPreview = {
   enabled: boolean;
   lastFiredAt: Date | null;
   lastFireError: string | null;
+  lastFireEventId: string | null;
   createdAt: Date;
 };
 
@@ -44,7 +45,7 @@ export type WebhookRow = WebhookPreview & {
 
 const PREVIEW_COLS = `id, workspace_id, agent_name, owner_user_id, name,
   token_last4, (signing_secret_ciphertext IS NOT NULL) AS has_signing_secret,
-  enabled, last_fired_at, last_fire_error, created_at`;
+  enabled, last_fired_at, last_fire_error, last_fire_event_id, created_at`;
 
 type PreviewDbRow = {
   id: string;
@@ -57,6 +58,7 @@ type PreviewDbRow = {
   enabled: boolean;
   last_fired_at: Date | null;
   last_fire_error: string | null;
+  last_fire_event_id: string | null;
   created_at: Date;
 };
 
@@ -72,6 +74,7 @@ function toPreview(r: PreviewDbRow): WebhookPreview {
     enabled: r.enabled,
     lastFiredAt: r.last_fired_at,
     lastFireError: r.last_fire_error,
+    lastFireEventId: r.last_fire_event_id,
     createdAt: r.created_at,
   };
 }
@@ -277,19 +280,6 @@ export async function deleteWebhook(
     [workspaceId, id],
   );
   return (rowCount ?? 0) > 0;
-}
-
-/** Bump last_fired_at + set/clear the error string. Called from the receiver. */
-export async function recordWebhookFire(
-  id: string,
-  error: string | null,
-): Promise<void> {
-  await db.query(
-    `UPDATE workspace_webhook
-        SET last_fired_at = NOW(), last_fire_error = $2, updated_at = NOW()
-      WHERE id = $1`,
-    [id, error],
-  );
 }
 
 /**

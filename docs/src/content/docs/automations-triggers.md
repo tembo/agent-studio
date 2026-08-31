@@ -31,8 +31,16 @@ If a schedule cannot start, its status changes to **Error** and it appears under
 GitHub repository are retried with backoff; the scheduled window remains due so
 TAS starts one catch-up run when the repository becomes available again. Errors
 that require configuration changes, such as an invalid repository token or a
-deleted agent, remain visible until you correct the automation or repository
-connection.
+deleted agent, remain visible until a run is successfully queued. Editing or
+resaving an automation does not mark the error resolved.
+
+Open **Dispatch history** from the Automations page to inspect failures across
+schedules, event triggers, and inbound webhooks. The history keeps the failure
+timestamp and retry attempt after an automation recovers, and records the first
+successful recovery with a link to its run. Error summaries are safe for every
+workspace member. Workspace admins additionally see a collapsed **Technical
+details** section containing sanitized diagnostics; raw provider responses and
+credentials are never stored there.
 
 ## Composio event triggers
 

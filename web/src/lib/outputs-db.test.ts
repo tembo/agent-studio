@@ -29,8 +29,8 @@ function row(overrides: Record<string, unknown> = {}) {
     completed_at: new Date("2026-08-30T12:00:00Z"),
     agent_version_id: "version-1",
     agent_version_label: "v3",
-    operator_run_id: "operator-run-1",
-    operator_name: "daily-operator",
+    orchestrator_run_id: "orchestrator-run-1",
+    orchestrator_name: "daily-orchestrator",
     output_delivery: null,
     delivery_evidence: null,
     delivery_status: "undeclared",
@@ -105,18 +105,18 @@ describe("outputs read model", () => {
     ).toBe("Daily report Review the renewal.");
   });
 
-  it("scopes detail lookup and every ancestor hop to the workspace", async () => {
+  it("scopes detail lookup and every orchestration hop to the workspace", async () => {
     query.mockResolvedValue({ rows: [] });
     await expect(
       getOutputForWorkspace("workspace-1", "run-1"),
     ).resolves.toBeNull();
 
     expect(query.mock.calls[0]?.[0]).toMatch(/r\.workspace_id = \$1/);
-    expect(query.mock.calls[0]?.[0]).toMatch(/parent\.workspace_id = \$1/);
+    expect(query.mock.calls[0]?.[0]).toMatch(/orchestrator\.workspace_id = \$1/);
     expect(query.mock.calls[0]?.[1]).toEqual(["workspace-1", "run-1"]);
   });
 
-  it("keeps exact output and root-operator provenance on detail", async () => {
+  it("keeps exact output and orchestrator provenance on detail", async () => {
     query.mockResolvedValue({ rows: [row()] });
 
     await expect(
@@ -124,7 +124,7 @@ describe("outputs read model", () => {
     ).resolves.toMatchObject({
       output: "# Daily report\nOnly this output contains the search term.",
       agentName: "researcher",
-      operatorName: "daily-operator",
+      orchestratorName: "daily-orchestrator",
       agentVersionLabel: "v3",
     });
   });

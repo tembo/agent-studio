@@ -10,9 +10,13 @@ const { clientQuery, connect, poolQuery, release } = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({
   db: { connect, query: poolQuery },
 }));
-vi.mock("@/lib/automations-api", () => ({
-  ORPHANED_AUTOMATION_ERROR:
-    "Paused because the Run as owner is no longer a workspace member.",
+vi.mock("@/lib/automation-events", () => ({
+  ORPHANED_AUTOMATION_FAILURE: {
+    code: "automation_owner_removed",
+    summary:
+      "Paused because the Run as owner is no longer a workspace member.",
+    recommendation: "Assign a current workspace member as the Run as owner.",
+  },
 }));
 
 import {
@@ -39,6 +43,9 @@ beforeEach(() => {
           { id: "automation-2", enabled: false },
         ],
       };
+    }
+    if (sql.includes("INSERT INTO automation_dispatch_event")) {
+      return { rows: [{ id: "event-1" }] };
     }
     return { rows: [] };
   });
@@ -101,11 +108,20 @@ describe("offboardWorkspaceMember", () => {
       replacementUserId: null,
     });
     expect(clientQuery).toHaveBeenCalledWith(
-      expect.stringMatching(/SET enabled = FALSE/),
+      expect.stringMatching(/INSERT INTO automation_dispatch_event/),
       [
-        "workspace",
-        "former-owner",
+        "automation-1",
+        "automation_owner_removed",
         "Paused because the Run as owner is no longer a workspace member.",
+        "Assign a current workspace member as the Run as owner.",
+      ],
+    );
+    expect(clientQuery).toHaveBeenCalledWith(
+      expect.stringMatching(/SET enabled = FALSE[\s\S]*last_fire_event_id = \$3/),
+      [
+        "automation-1",
+        "Paused because the Run as owner is no longer a workspace member.",
+        "event-1",
       ],
     );
   });

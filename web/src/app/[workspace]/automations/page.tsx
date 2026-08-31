@@ -55,6 +55,7 @@ export default async function AutomationsPage({
       enabled: a.enabled,
       lastFiredAtIso: a.lastFiredAt ? a.lastFiredAt.toISOString() : null,
       lastFireError: a.lastFireError,
+      lastFireEventId: a.lastFireEventId,
       href: `/${slug}/automations/${a.id}`,
       cron: a.cron,
     })),
@@ -67,6 +68,7 @@ export default async function AutomationsPage({
       enabled: t.enabled,
       lastFiredAtIso: t.lastFiredAt ? t.lastFiredAt.toISOString() : null,
       lastFireError: t.lastFireError,
+      lastFireEventId: t.lastFireEventId,
       href: agentAutomationHref(t.agentName),
       toolkitSlug: t.toolkitSlug,
       triggerType: t.triggerType,
@@ -80,6 +82,7 @@ export default async function AutomationsPage({
       enabled: w.enabled,
       lastFiredAtIso: w.lastFiredAt ? w.lastFiredAt.toISOString() : null,
       lastFireError: w.lastFireError,
+      lastFireEventId: w.lastFireEventId,
       href: agentAutomationHref(w.agentName),
       tokenLast4: w.tokenLast4,
     })),
@@ -97,12 +100,17 @@ export default async function AutomationsPage({
             event triggers, and inbound webhooks.
           </p>
         </div>
-        <Button asChild>
-          <Link href={`/${slug}/automations/new`}>
-            <IconPlusLarge size={16} />
-            <span>New automation</span>
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="secondary">
+            <Link href={`/${slug}/automations/history`}>Dispatch history</Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/${slug}/automations/new`}>
+              <IconPlusLarge size={16} />
+              <span>New automation</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <hr className="border-[var(--color-border-weak)]" />

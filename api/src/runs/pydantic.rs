@@ -280,9 +280,9 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // This run's id. The wrapper forwards it as the X-Tas-Parent-Run header on
-    // the tembo-agent-studio MCP toolset only, so that a trigger_run call made
-    // from inside this run records this run as the new run's parent.
+    // This run's id. The wrapper forwards it as the X-Tas-Orchestrator-Run
+    // header on the tembo-agent-studio MCP toolset only, so a trigger_run call
+    // made from inside this run records the orchestration relationship.
     cmd.env("TAS_RUN_ID", args.run_id.to_string());
     cmd.env(
         "TAS_RUN_STARTED_AT",
@@ -340,12 +340,12 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
         cmd.env("TAS_SECRETS", secrets);
     }
 
-    let mut child = cmd.spawn().context("failed to spawn pydantic-ai wrapper")?;
+    let mut subprocess = cmd.spawn().context("failed to spawn pydantic-ai wrapper")?;
 
     // The first stdin line is the immutable launch envelope. Keep the pipe open
     // afterwards: each checkpoint blocks the Python graph until we acknowledge
     // that its history line has been handled on this channel.
-    let mut checkpoint_ack = child
+    let mut checkpoint_ack = subprocess
         .stdin
         .take()
         .ok_or_else(|| anyhow!("pydantic-ai wrapper stdin not captured"))?;
@@ -361,11 +361,11 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
         .await
         .context("failed to write pydantic-ai runner input")?;
 
-    let stdout = child
+    let stdout = subprocess
         .stdout
         .take()
         .ok_or_else(|| anyhow!("pydantic-ai wrapper stdout not captured"))?;
-    let stderr = child
+    let stderr = subprocess
         .stderr
         .take()
         .ok_or_else(|| anyhow!("pydantic-ai wrapper stderr not captured"))?;
@@ -435,7 +435,7 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
                 // User killed the run: SIGKILL the wrapper (and its model/tool
                 // subprocesses via the process group it leads) and bail. The
                 // run row was already written to 'cancelled' by the endpoint.
-                let _ = child.start_kill();
+                let _ = subprocess.start_kill();
                 anyhow::bail!("run cancelled by user");
             }
             res = reader.read_until(b'\n', &mut line_buf) => {
@@ -528,7 +528,7 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
         }
     }
 
-    let status = child
+    let status = subprocess
         .wait()
         .await
         .context("pydantic-ai wrapper failed to complete")?;

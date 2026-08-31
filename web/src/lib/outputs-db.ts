@@ -21,7 +21,7 @@ export type DeliveryEvidenceSnapshot = {
 export type OutputListFilters = {
   search?: string;
   agentName?: string;
-  operatorName?: string;
+  orchestratorName?: string;
   createdBy?: string;
   completedFrom?: Date;
   completedBefore?: Date;
@@ -32,8 +32,8 @@ export type OutputListFilters = {
 export type OutputListItem = {
   runId: string;
   agentName: string;
-  operatorRunId: string;
-  operatorName: string;
+  orchestratorRunId: string;
+  orchestratorName: string;
   createdBy: string;
   createdByName: string | null;
   createdByEmail: string | null;
@@ -63,7 +63,7 @@ export type OutputDetail = OutputListItem & {
 
 export type OutputFacets = {
   agents: string[];
-  operators: string[];
+  orchestrators: string[];
   users: { id: string; name: string | null; email: string }[];
 };
 
@@ -116,33 +116,34 @@ type OutputRow = {
   completed_at: Date;
   agent_version_id: string | null;
   agent_version_label: string | null;
-  operator_run_id: string;
-  operator_name: string;
+  orchestrator_run_id: string;
+  orchestrator_name: string;
   output_delivery: AgentDelivery | null;
   delivery_evidence: DeliveryEvidenceSnapshot | null;
   delivery_status: DeliveryStatus;
 };
 
-const OUTPUT_ANCESTRY_CTE = `WITH RECURSIVE candidates AS (
+const OUTPUT_ORCHESTRATION_CTE = `WITH RECURSIVE candidates AS (
   SELECT r.*
     FROM run r
    WHERE __CANDIDATE_WHERE__
-), ancestry AS (
-  SELECT c.id AS leaf_id, c.id AS ancestor_id, c.parent_run_id,
-         c.agent_name AS operator_name, 0 AS depth, ARRAY[c.id] AS path
+), run_chain AS (
+  SELECT c.id AS leaf_id, c.id AS run_id, c.orchestrator_run_id,
+         c.agent_name AS orchestrator_name, 0 AS depth, ARRAY[c.id] AS path
     FROM candidates c
   UNION ALL
-  SELECT a.leaf_id, parent.id, parent.parent_run_id,
-         parent.agent_name, a.depth + 1, a.path || parent.id
-    FROM ancestry a
-    JOIN run parent
-      ON parent.id = a.parent_run_id
-     AND parent.workspace_id = __WORKSPACE_PARAM__
-   WHERE a.depth < 50 AND NOT parent.id = ANY(a.path)
-), roots AS (
+  SELECT chain.leaf_id, orchestrator.id, orchestrator.orchestrator_run_id,
+         orchestrator.agent_name, chain.depth + 1,
+         chain.path || orchestrator.id
+    FROM run_chain chain
+    JOIN run orchestrator
+      ON orchestrator.id = chain.orchestrator_run_id
+     AND orchestrator.workspace_id = __WORKSPACE_PARAM__
+   WHERE chain.depth < 50 AND NOT orchestrator.id = ANY(chain.path)
+), orchestrators AS (
   SELECT DISTINCT ON (leaf_id)
-         leaf_id, ancestor_id AS operator_run_id, operator_name
-    FROM ancestry
+         leaf_id, run_id AS orchestrator_run_id, orchestrator_name
+    FROM run_chain
    ORDER BY leaf_id, depth DESC
 )`;
 
@@ -150,8 +151,8 @@ function mapListRow(row: OutputRow): OutputListItem {
   return {
     runId: row.id,
     agentName: row.agent_name,
-    operatorRunId: row.operator_run_id,
-    operatorName: row.operator_name,
+    orchestratorRunId: row.orchestrator_run_id,
+    orchestratorName: row.orchestrator_name,
     createdBy: row.created_by,
     createdByName: row.created_by_name,
     createdByEmail: row.created_by_email,
@@ -224,13 +225,13 @@ export async function listOutputsForWorkspace(
   }
 
   const finalWhere: string[] = [];
-  if (filters.operatorName) {
-    params.push(filters.operatorName);
-    finalWhere.push(`roots.operator_name = $${params.length}`);
+  if (filters.orchestratorName) {
+    params.push(filters.orchestratorName);
+    finalWhere.push(`orchestrators.orchestrator_name = $${params.length}`);
   }
   params.push(cappedLimit + 1);
 
-  const cte = OUTPUT_ANCESTRY_CTE.replace(
+  const cte = OUTPUT_ORCHESTRATION_CTE.replace(
     "__CANDIDATE_WHERE__",
     candidateWhere.join(" AND "),
   ).replace("__WORKSPACE_PARAM__", "$1");
@@ -241,10 +242,11 @@ export async function listOutputsForWorkspace(
             c.created_by, actor.name AS created_by_name,
             actor.email AS created_by_email, c.created_at, c.started_at,
             c.completed_at, c.agent_version_id, c.agent_version_label,
-            roots.operator_run_id, roots.operator_name, c.output_delivery,
+            orchestrators.orchestrator_run_id,
+            orchestrators.orchestrator_name, c.output_delivery,
             c.delivery_evidence, c.delivery_status
        FROM candidates c
-       JOIN roots ON roots.leaf_id = c.id
+       JOIN orchestrators ON orchestrators.leaf_id = c.id
        LEFT JOIN "user" actor ON actor.id = c.created_by
       ${finalWhere.length ? `WHERE ${finalWhere.join(" AND ")}` : ""}
       ORDER BY c.completed_at DESC, c.id DESC
@@ -275,7 +277,7 @@ export async function getOutputForWorkspace(
     "BTRIM(r.output) <> ''",
     "r.completed_at IS NOT NULL",
   ].join(" AND ");
-  const cte = OUTPUT_ANCESTRY_CTE.replace(
+  const cte = OUTPUT_ORCHESTRATION_CTE.replace(
     "__CANDIDATE_WHERE__",
     candidateWhere,
   ).replace("__WORKSPACE_PARAM__", "$1");
@@ -286,10 +288,11 @@ export async function getOutputForWorkspace(
             c.created_by, actor.name AS created_by_name,
             actor.email AS created_by_email, c.created_at, c.started_at,
             c.completed_at, c.agent_version_id, c.agent_version_label,
-            roots.operator_run_id, roots.operator_name, c.output_delivery,
+            orchestrators.orchestrator_run_id,
+            orchestrators.orchestrator_name, c.output_delivery,
             c.delivery_evidence, c.delivery_status
        FROM candidates c
-       JOIN roots ON roots.leaf_id = c.id
+       JOIN orchestrators ON orchestrators.leaf_id = c.id
        LEFT JOIN "user" actor ON actor.id = c.created_by`,
     [workspaceId, runId],
   );
@@ -311,7 +314,7 @@ export async function getOutputForWorkspace(
 
 export async function listOutputFacets(workspaceId: string): Promise<OutputFacets> {
   const eligible = "workspace_id = $1 AND status = 'succeeded' AND BTRIM(output) <> ''";
-  const [agents, users, operators] = await Promise.all([
+  const [agents, users, orchestrators] = await Promise.all([
     db.query<{ agent_name: string }>(
       `SELECT DISTINCT agent_name FROM run WHERE ${eligible} ORDER BY agent_name`,
       [workspaceId],
@@ -326,34 +329,39 @@ export async function listOutputFacets(workspaceId: string): Promise<OutputFacet
         ORDER BY actor.name NULLS LAST, actor.email`,
       [workspaceId],
     ),
-    db.query<{ operator_name: string }>(
+    db.query<{ orchestrator_name: string }>(
       `WITH RECURSIVE output_runs AS (
-         SELECT id, parent_run_id, agent_name
+         SELECT id, orchestrator_run_id, agent_name
            FROM run
           WHERE ${eligible}
-       ), ancestry AS (
-         SELECT id AS leaf_id, id, parent_run_id, agent_name, 0 AS depth,
+       ), run_chain AS (
+         SELECT id AS leaf_id, id, orchestrator_run_id, agent_name, 0 AS depth,
                 ARRAY[id] AS path
            FROM output_runs
          UNION ALL
-         SELECT a.leaf_id, parent.id, parent.parent_run_id, parent.agent_name,
-                a.depth + 1, a.path || parent.id
-           FROM ancestry a
-           JOIN run parent ON parent.id = a.parent_run_id
-                          AND parent.workspace_id = $1
-          WHERE a.depth < 50 AND NOT parent.id = ANY(a.path)
-       ), roots AS (
-         SELECT DISTINCT ON (leaf_id) leaf_id, agent_name AS operator_name
-           FROM ancestry
+         SELECT chain.leaf_id, orchestrator.id,
+                orchestrator.orchestrator_run_id, orchestrator.agent_name,
+                chain.depth + 1, chain.path || orchestrator.id
+           FROM run_chain chain
+           JOIN run orchestrator
+             ON orchestrator.id = chain.orchestrator_run_id
+            AND orchestrator.workspace_id = $1
+          WHERE chain.depth < 50 AND NOT orchestrator.id = ANY(chain.path)
+       ), orchestrators AS (
+         SELECT DISTINCT ON (leaf_id)
+                leaf_id, agent_name AS orchestrator_name
+           FROM run_chain
           ORDER BY leaf_id, depth DESC
        )
-       SELECT DISTINCT operator_name FROM roots ORDER BY operator_name`,
+       SELECT DISTINCT orchestrator_name
+         FROM orchestrators
+        ORDER BY orchestrator_name`,
       [workspaceId],
     ),
   ]);
   return {
     agents: agents.rows.map((row) => row.agent_name),
-    operators: operators.rows.map((row) => row.operator_name),
+    orchestrators: orchestrators.rows.map((row) => row.orchestrator_name),
     users: users.rows,
   };
 }

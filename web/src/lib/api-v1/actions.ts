@@ -113,9 +113,8 @@ export type TriggerRunInput = {
   agent: string;
   message?: string;
   preferDraft?: boolean;
-  /** The run that triggered this one (set when called from /mcp inside a run),
-   *  recorded on the new run so the parent can roll up its sub-runs' cost. */
-  parentRunId?: string;
+  /** The orchestrator run that triggered this sub-agent through /mcp. */
+  orchestratorRunId?: string;
 };
 
 export async function triggerRun(
@@ -159,7 +158,7 @@ export async function triggerRun(
       trigger: "manual",
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
-      parentRunId: input.parentRunId,
+      orchestratorRunId: input.orchestratorRunId,
       delivery: r.delivery,
     });
     // Not audited explicitly: the run row projects into the audit timeline as a
@@ -529,11 +528,11 @@ async function finishTask(args: {
  *  completing an item is recorded as that agent (not the underlying user). */
 async function actingAgentName(
   ctx: ApiCtx,
-  parentRunId: string | undefined,
+  orchestratorRunId: string | undefined,
 ): Promise<string | null> {
-  if (!parentRunId) return null;
+  if (!orchestratorRunId) return null;
   try {
-    const run = await getRun(parentRunId, ctx.workspace.id);
+    const run = await getRun(orchestratorRunId, ctx.workspace.id);
     return run?.agentName ?? null;
   } catch {
     return null;
@@ -557,7 +556,7 @@ export type ProduceInboxItemInput = {
   /** Source's latest-activity time (epoch ms); newer than stored reopens the item. */
   externalTs?: number;
   /** The run producing this item (set when called from /mcp inside a run). */
-  parentRunId?: string;
+  orchestratorRunId?: string;
 };
 
 // Keep only well-formed http(s) links, de-dupe by url (first occurrence wins, so
@@ -631,7 +630,7 @@ export async function produceInboxItemFor(
   const itemType = input.itemType?.trim();
   if (!itemType) return { ok: false, status: 400, error: "itemType is required" };
 
-  const producedByRunId = input.parentRunId ?? null;
+  const producedByRunId = input.orchestratorRunId ?? null;
   const item = await createInboxItem({
     workspaceId: ctx.workspace.id,
     source: input.source?.trim() || "agent",
@@ -694,9 +693,9 @@ export async function getInboxItemFor(
 
 export async function claimInboxItemFor(
   ctx: ApiCtx,
-  input: { id: string; parentRunId?: string },
+  input: { id: string; orchestratorRunId?: string },
 ): Promise<{ ok: true; item: InboxItem } | ActionFailure> {
-  const agent = await actingAgentName(ctx, input.parentRunId);
+  const agent = await actingAgentName(ctx, input.orchestratorRunId);
   const ok = agent
     ? await claimInboxItem(input.id, ctx.workspace.id, "agent", agent, ctx.userId)
     : await claimInboxItem(input.id, ctx.workspace.id, "human", ctx.userId, ctx.userId);

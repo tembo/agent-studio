@@ -5,10 +5,19 @@ vi.mock("@/lib/api-v1/actions", () => ({
 }));
 vi.mock("@/lib/automations-api", () => ({
   listEnabledAutomations: vi.fn(),
+}));
+vi.mock("@/lib/automation-events", () => ({
+  agentResolutionFailure: vi.fn((error: { kind: string; message: string }) => ({
+    code: error.kind,
+    summary: error.message,
+    recommendation: "Fix it.",
+  })),
+  automationServiceConfigurationFailure: vi.fn(),
   pauseAutomationsWithMissingOwners: vi.fn().mockResolvedValue(0),
-  setAutomationFired: vi.fn(),
-  setAutomationRetrying: vi.fn(),
-  setAutomationSkipped: vi.fn(),
+  recordAutomationFailure: vi.fn(),
+  recordAutomationSuccess: vi.fn(),
+  runApiFailure: vi.fn(),
+  unexpectedDispatchFailure: vi.fn(),
 }));
 vi.mock("@/lib/agent-learning-api", () => ({
   listDueLearningConfigs: vi.fn().mockResolvedValue([]),
@@ -28,21 +37,18 @@ vi.mock("@/lib/workspace-agents", () => ({
   resolveAgentForDispatch: vi.fn(),
 }));
 
+import { listEnabledAutomations, type Automation } from "@/lib/automations-api";
 import {
-  listEnabledAutomations,
   pauseAutomationsWithMissingOwners,
-  setAutomationRetrying,
-  setAutomationSkipped,
-  type Automation,
-} from "@/lib/automations-api";
+  recordAutomationFailure,
+} from "@/lib/automation-events";
 import { startScheduler, stopScheduler } from "@/lib/scheduler";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 
 const mockListEnabled = vi.mocked(listEnabledAutomations);
 const mockPauseMissingOwners = vi.mocked(pauseAutomationsWithMissingOwners);
 const mockResolveDispatch = vi.mocked(resolveAgentForDispatch);
-const mockSetRetrying = vi.mocked(setAutomationRetrying);
-const mockSetSkipped = vi.mocked(setAutomationSkipped);
+const mockRecordFailure = vi.mocked(recordAutomationFailure);
 
 const automation: Automation = {
   id: "automation-1",
@@ -54,6 +60,7 @@ const automation: Automation = {
   enabled: true,
   lastFiredAt: null,
   lastFireError: null,
+  lastFireEventId: null,
   createdBy: "user-1",
   createdByName: null,
   createdByEmail: null,
@@ -93,13 +100,14 @@ describe("scheduler agent-source failures", () => {
 
     startScheduler();
 
-    await vi.waitFor(() => expect(mockSetRetrying).toHaveBeenCalledOnce());
-    expect(mockSetRetrying).toHaveBeenCalledWith({
+    await vi.waitFor(() => expect(mockRecordFailure).toHaveBeenCalledOnce());
+    expect(mockRecordFailure).toHaveBeenCalledWith({
+      kind: "schedule",
       id: automation.id,
-      error:
-        "Could not read the connected agent repository: GitHub rate-limited the request.",
+      occurredAt: expect.any(Date),
+      failure: expect.objectContaining({ code: "source-unavailable" }),
+      advanceFiringFloor: false,
     });
-    expect(mockSetSkipped).not.toHaveBeenCalled();
   });
 
   it("advances the firing floor for a genuinely missing agent", async () => {
@@ -113,8 +121,13 @@ describe("scheduler agent-source failures", () => {
 
     startScheduler();
 
-    await vi.waitFor(() => expect(mockSetSkipped).toHaveBeenCalledOnce());
-    expect(mockSetRetrying).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(mockRecordFailure).toHaveBeenCalledOnce());
+    expect(mockRecordFailure).toHaveBeenCalledWith({
+      kind: "schedule",
+      id: automation.id,
+      occurredAt: expect.any(Date),
+      failure: expect.objectContaining({ code: "not-found" }),
+    });
   });
 });
 

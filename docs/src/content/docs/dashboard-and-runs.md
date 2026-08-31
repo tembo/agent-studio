@@ -34,7 +34,7 @@ Filter by agent, status, and trigger to find what you're looking for, then open
 any run for its [detail page](/agent-studio/running-agents/) — output, tokens,
 cost, tools used, and the effective **Run as** identity. The workspace list,
 agent run lists and recent-run panels, automation history, and run detail all
-use the same identity. Parent run pages also show the identity for each
+use the same identity. Orchestrator run pages also show the identity for each
 sub-run. If a historical identity is no longer available, TAS displays
 **Unavailable member** instead of exposing an internal user identifier.
 
@@ -64,7 +64,7 @@ missing LLM key) link straight to the relevant surface.
 
 The **Outputs** page is a report-first view of successful runs. Every successful
 run with non-empty output appears here, including sub-agent runs. Search the
-output body, or filter by producing agent, root operator, **Run as** member,
+output body, or filter by producing agent, orchestrator, **Run as** member,
 completion date, and delivery evidence. Open a result to see a rendered Markdown
 preview, the exact raw text, its agent version and execution provenance, and a
 link to the source run.
