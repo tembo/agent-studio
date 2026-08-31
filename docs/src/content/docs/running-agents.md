@@ -35,7 +35,9 @@ Each run records and displays:
   mark and (on failure) the error. This is captured for Pydantic agents on both
   successful and failed runs — so a run that broke before reaching a step still
   shows what it did call. The same data rolls up in
-  [Tool uses](/agent-studio/tools-and-tool-uses/).
+  [Tool uses](/agent-studio/tools-and-tool-uses/). When one step makes more than
+  five calls, its remaining calls start collapsed with the total and failure
+  count visible; expand them to browse the bounded, scrollable list.
 - **Timing & trigger** — when it ran and what triggered it (manual, schedule, or
   event).
 

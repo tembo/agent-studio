@@ -88,19 +88,12 @@ export default async function AgentDefinitionPage({
 
   return (
     <>
-      <Section
-        title="Definition"
-        description="The live draft plus every promoted version. Edits go through Git — framework and model changes take the same review path as any other change, never a live console."
-      >
-        <SpecVersionViewer items={specItems} />
-      </Section>
-
       {commits.length > 0 && repo && (
         <Section
-          title="History"
+          title={`History (${commits.length})`}
           description="Every version of this spec file that landed on GitHub, newest first. Click a hash to view that version on GitHub."
         >
-          <ul className="flex flex-col divide-y divide-[var(--color-border-weak)]">
+          <ul className="flex max-h-80 flex-col divide-y divide-[var(--color-border-weak)] overflow-y-auto">
             {commits.map((c) => (
               <li
                 key={c.sha}
@@ -131,10 +124,19 @@ export default async function AgentDefinitionPage({
         </Section>
       )}
 
+      <Section
+        title="Full definition"
+        description={`${specLanguage.toUpperCase()} · ${countLines(raw)} lines. Expand to view, choose a promoted version, or copy the source.`}
+        collapsible
+      >
+        <SpecVersionViewer items={specItems} />
+      </Section>
+
       {toolsModule && (
         <Section
           title="Tools module"
-          description={`Deterministic Python functions the model calls as tools, from ${toolsModule}. Runs in the agent's process with no token cost — the LLM supervises which functions to call.`}
+          description={`Deterministic Python functions the model calls as tools, from ${toolsModule}${toolsModuleContent ? ` · ${countLines(toolsModuleContent)} lines` : ""}. Runs in the agent's process with no token cost.`}
+          collapsible
         >
           {toolsModuleContent ? (
             <pre className="bg-surface border-border text-foreground overflow-x-auto rounded-lg border p-4 font-mono text-sm leading-5">
@@ -152,6 +154,11 @@ export default async function AgentDefinitionPage({
       )}
     </>
   );
+}
+
+function countLines(source: string): number {
+  const content = source.trimEnd();
+  return content ? content.split(/\r\n|\r|\n/).length : 0;
 }
 
 const tokenClasses: Partial<Record<AgentSpecHighlightKind, string>> = {

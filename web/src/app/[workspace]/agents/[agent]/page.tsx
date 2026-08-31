@@ -40,15 +40,6 @@ export default async function AgentOverviewPage({
 
   return (
     <>
-      <AgentDashboard
-        stats={stats}
-        daily={daily}
-        failures={failures}
-        toolUsage={toolUsage}
-        workspaceSlug={workspace.slug}
-        agentName={canonicalName}
-      />
-
       <Section
         title="Recent runs"
         actions={
@@ -73,6 +64,15 @@ export default async function AgentOverviewPage({
           }
         />
       </Section>
+
+      <AgentDashboard
+        stats={stats}
+        daily={daily}
+        failures={failures}
+        toolUsage={toolUsage}
+        workspaceSlug={workspace.slug}
+        agentName={canonicalName}
+      />
     </>
   );
 }

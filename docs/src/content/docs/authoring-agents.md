@@ -113,6 +113,14 @@ Your connected repo also carries an authoring guide (`AGENTS.md` and per-framewo
 `AGENT_GUIDE.md`) that TAS keeps current — that's the canonical, always-up-to-date
 field reference for coding agents.
 
+### Inspecting the definition
+
+The agent's **Definition** tab puts recent repository history above the static
+source. The full draft definition and sidecar tools module start collapsed with
+their format and line counts visible; expand either section to inspect or copy
+all of its source. Promoted definitions remain available from the version
+selector and the **Versions** tab.
+
 ### Built-in run date and time
 
 Every Pydantic agent has a **`get_run_datetime`** tool; no connection or agent

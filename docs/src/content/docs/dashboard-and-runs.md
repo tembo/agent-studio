@@ -11,6 +11,11 @@ trend, the top-failing agents, and recent improvements. Each agent also has its
 own dashboard with the same shape scoped to that agent — useful for deciding
 whether a model downgrade held up or an agent started failing.
 
+An agent overview puts its five most recent runs first, ahead of the 30-day
+configuration and health details. Tool usage shows the five most-used tools and
+the total tool and call counts; expand the remainder to browse it in a bounded,
+scrollable list.
+
 ### Team (workspace admins)
 
 Below the headline tiles, the **Team** section lists every workspace member with
