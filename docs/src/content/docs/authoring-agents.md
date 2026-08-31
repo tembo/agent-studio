@@ -210,10 +210,10 @@ scaledown:
 All members' agents live in one repo, so the agents list can get crowded. To
 keep your day-to-day view tidy:
 
-- **Star** any agent (the ☆ on its row) to add it to your personal list. The
-  list defaults to **Mine + Starred** — agents you own or starred — with a
-  **View all** toggle to see everyone's. Stars are personal; they don't change
-  the shared repo or the `labels:` taxonomy.
+- **Star** any agent with the ☆ on its row. Stars are personal; they don't
+  change the shared repo or the `labels:` taxonomy. Use separate **Owner**
+  (**Me** or **Others**) and **Starred** (**True** or **False**) filters to
+  combine ownership and star status however you need.
 - Search finds agents by name, description, label, model, or connection. Rows
   default to most recently run (agents with no run history come last); use the
   **Sort** menu for name, status, trailing-30-day runs/cost/success, or recent
@@ -221,6 +221,28 @@ keep your day-to-day view tidy:
   open it. The trailing-30-day count, average cost, and success rate stay hidden
   until the agent has at least one run in that window; missing model or cost
   values are left blank instead of showing placeholder dashes.
+- Add structured filters from **Add filter**. Each active filter is an editable
+  pill, and the list updates immediately when you change or remove it. Click
+  **is** to switch a filter to **is not**; list-valued filters accept multiple
+  selections and match any selected value. Alongside owner, star status,
+  status, label, model, and connection filters, you can filter agents by the
+  observed **Orchestrator** or **Sub-agent** role, or show only the sub-agents
+  called by a particular orchestrator. These relationships come from run
+  history; they are not fields in the agent spec, and an agent can match both
+  roles in a nested workflow.
+- The built-in **All** and **Mine** views are always available and cannot be
+  renamed or deleted. Changing their filters marks the view **Unsaved**;
+  choosing **Save** creates a custom view without changing the built-in. Views
+  appear as pills above search and sort; when space is limited, additional
+  views move into the **more** menu.
+- Choose **New view** to name and save the current search, filters, and sort.
+  Personal views are visible only to you; shared views are available to every
+  member of the workspace. You can keep editing filters while naming a view and
+  watch the result list update before you save it. Changing an owned saved view
+  keeps it selected, marks it **Unsaved**, and reveals **Save** so you can
+  update it in place. Customizing a shared view that you cannot edit creates a
+  custom copy instead. Use **Edit view** to rename a custom view or change its
+  visibility.
 - **Fork** an agent (the **Fork** button on its page) to make your own editable
   copy. The copy is named with an **owner prefix** — `sales-gen` forked by `ryw`
   becomes **`ryw.sales-gen`** — so two people can each keep their own without a
