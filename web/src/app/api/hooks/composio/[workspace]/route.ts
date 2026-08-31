@@ -171,6 +171,7 @@ export async function POST(
         trigger: "event",
         agent_version_id: r.versionId,
         agent_version_label: r.versionLabel,
+        output_delivery: r.delivery,
       }),
     });
     if (!res.ok) {

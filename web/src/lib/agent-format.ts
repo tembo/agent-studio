@@ -33,8 +33,25 @@ type AgentSpecBase = {
    * launch the agent. Parsed from a `labels:` array or comma string.
    */
   labels: string[];
+  /** Optional, agent-authored delivery intent snapshotted onto every run. */
+  delivery?: AgentDelivery;
   /** Raw parsed object preserved for round-tripping. */
   raw: Record<string, unknown>;
+};
+
+export type AgentDeliveryEvidence =
+  | { type: "inbox_item" }
+  | { type: "tool_call"; tool: string };
+
+export type AgentDeliveryDestination = {
+  key: string;
+  label: string;
+  evidence: AgentDeliveryEvidence;
+};
+
+export type AgentDelivery = {
+  note: string;
+  destinations: AgentDeliveryDestination[];
 };
 
 /** Human label for an agent: the free-text `title` if set, else the slug. */
@@ -136,6 +153,7 @@ export type ParseAgentError =
   | "missing-name"
   | "missing-model"
   | "missing-instructions"
+  | "invalid-delivery"
   | "invalid-name";
 
 export type ParseAgentResult =
@@ -157,6 +175,75 @@ const NAME_RE = new RegExp(`^(?:${SLUG}\\.)?${SLUG}$`);
 
 export function validateAgentName(name: string): boolean {
   return name.length >= 2 && name.length <= 64 && NAME_RE.test(name);
+}
+
+function parseDeliveryField(
+  raw: unknown,
+): { ok: true; delivery?: AgentDelivery } | { ok: false; detail: string } {
+  if (raw === undefined || raw === null) return { ok: true };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ok: false, detail: "`delivery` must be an object." };
+  }
+  const value = raw as Record<string, unknown>;
+  const note = typeof value.note === "string" ? value.note.trim() : "";
+  if (!note) {
+    return { ok: false, detail: "`delivery.note` must be a non-empty string." };
+  }
+  if (!Array.isArray(value.destinations) || value.destinations.length === 0) {
+    return {
+      ok: false,
+      detail: "`delivery.destinations` must contain at least one destination.",
+    };
+  }
+
+  const destinations: AgentDeliveryDestination[] = [];
+  const keys = new Set<string>();
+  for (const entry of value.destinations) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return { ok: false, detail: "Each delivery destination must be an object." };
+    }
+    const destination = entry as Record<string, unknown>;
+    const key = typeof destination.key === "string" ? destination.key.trim() : "";
+    const label =
+      typeof destination.label === "string" ? destination.label.trim() : "";
+    if (!key || !label) {
+      return {
+        ok: false,
+        detail: "Each delivery destination needs non-empty `key` and `label` fields.",
+      };
+    }
+    if (keys.has(key)) {
+      return { ok: false, detail: `Duplicate delivery destination key: ${key}.` };
+    }
+    keys.add(key);
+
+    const rawEvidence = destination.evidence;
+    if (!rawEvidence || typeof rawEvidence !== "object" || Array.isArray(rawEvidence)) {
+      return { ok: false, detail: `Delivery destination ${key} needs evidence.` };
+    }
+    const evidence = rawEvidence as Record<string, unknown>;
+    if (evidence.type === "inbox_item") {
+      destinations.push({ key, label, evidence: { type: "inbox_item" } });
+      continue;
+    }
+    if (evidence.type === "tool_call") {
+      const tool = typeof evidence.tool === "string" ? evidence.tool.trim() : "";
+      if (!tool) {
+        return {
+          ok: false,
+          detail: `Tool-call delivery destination ${key} needs a non-empty tool name.`,
+        };
+      }
+      destinations.push({ key, label, evidence: { type: "tool_call", tool } });
+      continue;
+    }
+    return {
+      ok: false,
+      detail: `Unsupported evidence type for delivery destination ${key}.`,
+    };
+  }
+
+  return { ok: true, delivery: { note, destinations } };
 }
 
 /** A kebab handle from a user's email local-part (`ryw@tembo.io` → `ryw`), for
@@ -404,11 +491,16 @@ export function parseAgentContent(
 
   const description =
     typeof obj.description === "string" ? obj.description : undefined;
+  const delivery = parseDeliveryField(obj.delivery);
+  if (!delivery.ok) {
+    return { ok: false, error: "invalid-delivery", detail: delivery.detail };
+  }
   const base: AgentSpecBase = {
     name,
     title: parseTitleField(obj.title),
     description,
     labels: parseLabelsField(obj.labels),
+    delivery: delivery.delivery,
     raw: obj,
   };
 
@@ -444,4 +536,3 @@ export function parseAgentFile(
   }
   return parseAgentContent(content, format);
 }
-

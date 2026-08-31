@@ -257,6 +257,7 @@ fn prepare_spec(native_json: &str, user_message: &str) -> anyhow::Result<String>
     // don't trip schema enforcement on its end.
     obj.remove("name");
     obj.remove("description");
+    obj.remove("delivery");
     obj.remove("runtime_vars");
 
     obj.entry("version")
@@ -455,6 +456,14 @@ mod tests {
         let native = serde_json::json!({
             "name": "hello",
             "description": "studio metadata",
+            "delivery": {
+                "note": "Send the result",
+                "destinations": [{
+                    "key": "email",
+                    "label": "Email",
+                    "evidence": { "type": "tool_call", "tool": "SEND_EMAIL" }
+                }]
+            },
             "runtime_vars": { "model": "openai:gpt-4o-mini" },
             "inputs": [{ "type": "text", "text": "Hi" }],
             "agent_schema": { "properties": { "reply": { "type": "string" } } },
@@ -464,6 +473,7 @@ mod tests {
         let parsed: Value = serde_json::from_str(&prepared).unwrap();
         assert!(parsed.get("name").is_none());
         assert!(parsed.get("description").is_none());
+        assert!(parsed.get("delivery").is_none());
         assert!(parsed.get("runtime_vars").is_none());
     }
 

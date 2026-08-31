@@ -57,6 +57,29 @@ Key fields:
   `aggressive`).
 - **`skills:`** (optional) — names of [Skills](/agent-studio/skills/) to load,
   giving the agent reusable instructions/procedures on top of `instructions`.
+- **`delivery:`** (optional) — describe where this agent intends to deliver its
+  result and what durable evidence TAS can observe. The declaration is
+  snapshotted on each run, so later edits do not rewrite output history.
+
+  ```yaml
+  delivery:
+    note: Daily brief for the account team
+    destinations:
+      - key: tasks-inbox
+        label: Tasks Inbox
+        evidence:
+          type: inbox_item
+      - key: email
+        label: Email
+        evidence:
+          type: tool_call
+          tool: GMAIL_SEND_EMAIL
+  ```
+
+  Destinations are agent-defined — use any stable `key` and human-readable
+  `label`. Evidence can be an `inbox_item` produced by the run or a named
+  `tool_call`. TAS records the tool name and success only; tool arguments and
+  results remain unstored because they may contain secrets or personal data.
 - **`model_settings:`** (optional) — a map of model knobs passed through to the
   model, e.g. `max_tokens`, `temperature`, `parallel_tool_calls`. TAS defaults
   `parallel_tool_calls: false` (so tools run one at a time unless you set it

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { AgentDelivery } from "@/lib/agent-format";
 import { claimAgentOwner } from "@/lib/agent-versions";
 
 // Typed client for the Rust API's /internal/runs surface. Auth is a
@@ -49,6 +50,9 @@ export type CreateRunInput = {
   // versionLabel is the human string ("v3" | "draft") for the UI.
   agentVersionId?: string | null;
   agentVersionLabel?: string | null;
+  /** Agent-authored delivery intent from the exact spec this run executes. */
+  delivery?: AgentDelivery;
+  automationId?: string;
   // The run that triggered this one (an orchestrator calling trigger_run from
   // inside its own run). Recorded so the parent's page can roll up sub-runs.
   parentRunId?: string;
@@ -177,9 +181,11 @@ export async function createRun(input: CreateRunInput): Promise<CreateRunRespons
       tools_module_content: input.toolsModuleContent,
       skills_content: input.skillsContent,
       trigger: input.trigger,
+      automation_id: input.automationId,
       agent_version_id: input.agentVersionId,
       agent_version_label: input.agentVersionLabel,
       parent_run_id: input.parentRunId,
+      output_delivery: input.delivery,
     }),
   });
   if (!res.ok) {

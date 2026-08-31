@@ -50,3 +50,54 @@ describe("agentspec `title:` + agentDisplayName", () => {
     );
   });
 });
+
+describe("agentspec `delivery:` parsing", () => {
+  it("parses inbox and tool-call evidence without hard-coded destinations", () => {
+    const r = parseAgentContent(
+      pyd(`delivery:
+  note: Daily brief for the account team
+  destinations:
+    - key: tasks-inbox
+      label: Tasks Inbox
+      evidence:
+        type: inbox_item
+    - key: email
+      label: Email
+      evidence:
+        type: tool_call
+        tool: GMAIL_SEND_EMAIL`),
+      "yaml",
+    );
+
+    expect(r.ok && r.spec.delivery).toEqual({
+      note: "Daily brief for the account team",
+      destinations: [
+        {
+          key: "tasks-inbox",
+          label: "Tasks Inbox",
+          evidence: { type: "inbox_item" },
+        },
+        {
+          key: "email",
+          label: "Email",
+          evidence: { type: "tool_call", tool: "GMAIL_SEND_EMAIL" },
+        },
+      ],
+    });
+  });
+
+  it("rejects malformed declarations instead of silently losing provenance", () => {
+    const r = parseAgentContent(
+      pyd(`delivery:
+  note: Daily brief
+  destinations:
+    - key: email
+      label: Email
+      evidence:
+        type: tool_call`),
+      "yaml",
+    );
+
+    expect(r).toMatchObject({ ok: false, error: "invalid-delivery" });
+  });
+});

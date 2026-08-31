@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::runs::{cargo_ai, pydantic};
+use crate::runs::{cargo_ai, delivery, pydantic};
 use crate::workspace::{
     get_workspace_secret_plaintext, list_active_composio_connections,
     list_active_native_connections, list_workspace_secret_connections, SecretKind,
@@ -936,20 +936,54 @@ async fn mark_succeeded(
         ),
         None => None,
     };
+    let mut tx = state.db.begin().await?;
+    let declaration_json: Option<serde_json::Value> =
+        sqlx::query_scalar("SELECT output_delivery FROM run WHERE id = $1 FOR UPDATE")
+            .bind(run_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            .flatten();
+    let declaration = declaration_json
+        .map(serde_json::from_value::<delivery::DeliveryDeclaration>)
+        .transpose()
+        .context("decode output delivery declaration")?;
+    let (delivery_status, delivery_evidence) = if let Some(declaration) = declaration.as_ref() {
+        let tool_calls = sqlx::query_as::<_, (String, Option<bool>)>(
+            "SELECT tool_name, ok FROM run_tool_call WHERE run_id = $1",
+        )
+        .bind(run_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        let produced_inbox_item: bool = sqlx::query_scalar(
+            "SELECT EXISTS(SELECT 1 FROM inbox_item WHERE produced_by_run_id = $1)",
+        )
+        .bind(run_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        delivery::derive_delivery_status(Some(declaration), &tool_calls, produced_inbox_item)
+    } else {
+        delivery::derive_delivery_status(None, &[], false)
+    };
+    let delivery_evidence = serde_json::to_value(delivery_evidence)?;
+
     sqlx::query(
         "UPDATE run SET status = 'succeeded', output = $1, completed_at = $2, \
                         tokens_input = $3, tokens_output = $4, cost_usd = $5, \
-                        streamed_output = NULL \
-                  WHERE id = $6 AND status = 'running'",
+                        streamed_output = NULL, delivery_status = $6, \
+                        delivery_evidence = $7 \
+                  WHERE id = $8 AND status = 'running'",
     )
     .bind(output)
     .bind(Utc::now())
     .bind(tokens_in)
     .bind(tokens_out)
     .bind(cost_usd)
+    .bind(delivery_status.as_str())
+    .bind(delivery_evidence)
     .bind(run_id)
-    .execute(&state.db)
+    .execute(&mut *tx)
     .await?;
+    tx.commit().await?;
     Ok(())
 }
 

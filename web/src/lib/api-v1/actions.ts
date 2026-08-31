@@ -160,6 +160,7 @@ export async function triggerRun(
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
       parentRunId: input.parentRunId,
+      delivery: r.delivery,
     });
     // Not audited explicitly: the run row projects into the audit timeline as a
     // run.* event attributed to ctx.userId (see auditApiMutation note).
