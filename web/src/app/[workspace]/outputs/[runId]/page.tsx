@@ -83,7 +83,12 @@ export default async function OutputDetailPage({
                 {output.output}
               </pre>
             ) : (
-              <Markdown size="lg">{output.output}</Markdown>
+              <Markdown
+                size="lg"
+                className="prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg prose-h4:text-base"
+              >
+                {output.output}
+              </Markdown>
             )}
           </div>
         </Section>
