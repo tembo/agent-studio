@@ -19,6 +19,23 @@ they are no longer release versions. Phase scope now lives in
 
 ## Unreleased
 
+### Added
+
+- **Searchable Outputs library.** Successful non-empty run outputs, including
+  sub-agent results, are now searchable independently of the Runs log and can
+  be filtered by agent, root operator, acting user, date, and delivery evidence.
+  Output detail renders Markdown with an exact raw view and preserves the source
+  run, version, execution identity, trigger, and model. Agents can optionally
+  declare delivery intent in their spec; each run snapshots it and records
+  durable inbox/tool-call evidence as confirmed, partial, failed, or unobserved.
+
+### Changed
+
+- **Agent inventory prioritizes recent activity.** Live-agent rows now open from
+  any non-control click and default to most-recently-run order, with an explicit
+  sort menu for the compact headerless layout. Agents with no trailing-30-day
+  runs remain visible without empty run-count, average-cost, or success fields.
+
 ### Fixed
 
 - **Cargo AI provider keys no longer appear in process command lines.**

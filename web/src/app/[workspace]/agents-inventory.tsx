@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useActionState, useMemo, useState, useTransition } from "react";
 
 import { IconApiConnection, IconPlusLarge, IconStar } from "central-icons";
@@ -78,6 +79,16 @@ export type InventoryAgent =
 
 type StatusBucket = "active" | "idle" | "error" | "pending" | "invalid";
 type EnrichedRow = { agent: InventoryAgent; bucket: StatusBucket };
+type SortKey = "last-run" | "name" | "status" | "runs" | "cost" | "success";
+
+const SORT_OPTIONS = [
+  { value: "last-run", label: "Sort: Recently run" },
+  { value: "name", label: "Sort: Name A–Z" },
+  { value: "status", label: "Sort: Status" },
+  { value: "runs", label: "Sort: Most T30 runs" },
+  { value: "cost", label: "Sort: Highest avg cost" },
+  { value: "success", label: "Sort: Lowest success" },
+];
 
 type Props = {
   agents: InventoryAgent[];
@@ -103,6 +114,7 @@ export function AgentsInventory({
   const [mcpFilter, setMcpFilter] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
+  const [sortKey, setSortKey] = useState<SortKey>("last-run");
   const [view, setView] = useState<"mine" | "all">(
     !initialPromotionOnly &&
       agents.some((agent) =>
@@ -218,7 +230,7 @@ export function AgentsInventory({
       );
     }
 
-    return [...rows].sort((a, b) => compareNames(a.agent, b.agent));
+    return [...rows].sort((a, b) => compareRows(a, b, sortKey));
   }, [
     enriched,
     query,
@@ -228,6 +240,7 @@ export function AgentsInventory({
     labelFilter,
     modelFilter,
     mcpFilter,
+    sortKey,
   ]);
 
   const activeAdvancedFilters = [labelFilter, modelFilter, mcpFilter].filter(
@@ -273,14 +286,23 @@ export function AgentsInventory({
           className="max-w-sm"
           aria-label="Search agents"
         />
-        {canCreate && (
-          <Button asChild>
-            <Link href={newAgentHref}>
-              <IconPlusLarge size={16} />
-              <span>New agent</span>
-            </Link>
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          <Select
+            value={sortKey}
+            onValueChange={(value) => setSortKey(value as SortKey)}
+            options={SORT_OPTIONS}
+            ariaLabel="Sort agents"
+            className="min-w-[180px]"
+          />
+          {canCreate && (
+            <Button asChild>
+              <Link href={newAgentHref}>
+                <IconPlusLarge size={16} />
+                <span>New agent</span>
+              </Link>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -431,14 +453,21 @@ function LiveInventoryRow({
   bucket: StatusBucket;
   workspaceSlug: string;
 }) {
+  const router = useRouter();
   const connections = [...agent.mcps, ...agent.subMcps];
-  const successRate =
+  const successLabel =
     agent.runs30d > 0
       ? `${Math.round((agent.succeeded30d / agent.runs30d) * 100)}%`
       : "—";
 
   return (
-    <article className="border-border-weak hover:bg-interactive-state-hover grid grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-2 border-b bg-surface-raised px-4 py-4 transition-colors last:border-b-0 lg:grid-cols-[2rem_minmax(0,1fr)_minmax(24rem,auto)] lg:grid-rows-2 lg:gap-x-5">
+    <article
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a, button")) return;
+        router.push(agent.detailHref);
+      }}
+      className="border-border-weak hover:bg-interactive-state-hover grid cursor-pointer grid-cols-[2rem_minmax(0,1fr)] gap-x-3 gap-y-2 border-b bg-surface-raised px-4 py-4 transition-colors last:border-b-0 lg:grid-cols-[2rem_minmax(0,1fr)_minmax(24rem,auto)] lg:grid-rows-2 lg:gap-x-5"
+    >
       <div className="row-span-4 flex justify-center pt-0.5 lg:row-span-2">
         <StarButton
           workspaceSlug={workspaceSlug}
@@ -457,18 +486,24 @@ function LiveInventoryRow({
       <AgentMetadata agent={agent} connections={connections} />
 
       <div className="text-foreground col-start-2 flex min-w-0 flex-wrap items-center gap-x-5 gap-y-1 font-mono text-sm lg:col-start-3 lg:row-start-1 lg:justify-self-end">
-        <span
-          title="Average cost per run in the trailing 30 days"
-          aria-label={`Average cost per run: ${agent.avgCostUsd30d === null ? "not available" : formatCurrency(agent.avgCostUsd30d)}`}
-        >
-          {agent.avgCostUsd30d === null ? "—" : formatCurrency(agent.avgCostUsd30d)}
-        </span>
-        <span
-          title="Success rate in the trailing 30 days"
-          aria-label={`Success rate: ${successRate}`}
-        >
-          {successRate}
-        </span>
+        {agent.runs30d > 0 && (
+          <>
+            <span
+              title="Average cost per run in the trailing 30 days"
+              aria-label={`Average cost per run: ${agent.avgCostUsd30d === null ? "not available" : formatCurrency(agent.avgCostUsd30d)}`}
+            >
+              {agent.avgCostUsd30d === null
+                ? "—"
+                : formatCurrency(agent.avgCostUsd30d)}
+            </span>
+            <span
+              title="Success rate in the trailing 30 days"
+              aria-label={`Success rate: ${successLabel}`}
+            >
+              {successLabel}
+            </span>
+          </>
+        )}
         <StatusDot bucket={bucket} />
         <span
           className="text-foreground-weak whitespace-nowrap"
@@ -485,12 +520,15 @@ function LiveInventoryRow({
         </span>
       </div>
 
-      <span
-        className="text-foreground-weak col-start-2 font-mono text-sm lg:col-start-3 lg:row-start-2 lg:justify-self-end"
-        title="Runs in the trailing 30 days"
-      >
-        {agent.runs30d.toLocaleString("en-US")} T30 {agent.runs30d === 1 ? "run" : "runs"}
-      </span>
+      {agent.runs30d > 0 && (
+        <span
+          className="text-foreground-weak col-start-2 font-mono text-sm lg:col-start-3 lg:row-start-2 lg:justify-self-end"
+          title="Runs in the trailing 30 days"
+        >
+          {agent.runs30d.toLocaleString("en-US")} T30{" "}
+          {agent.runs30d === 1 ? "run" : "runs"}
+        </span>
+      )}
     </article>
   );
 }
@@ -867,27 +905,32 @@ function DismissPendingButton({
 
 const STATUS_META: Record<
   StatusBucket,
-  { label: string; dotClass: string }
+  { label: string; dotClass: string; order: number }
 > = {
   error: {
     label: "Error",
     dotClass: "bg-[var(--color-sentiment-negative)]",
+    order: 0,
   },
   invalid: {
     label: "Invalid",
     dotClass: "bg-[var(--color-sentiment-negative)]",
+    order: 1,
   },
   pending: {
     label: "Pending",
     dotClass: "bg-[var(--color-blue-500)]",
+    order: 2,
   },
   active: {
     label: "Active",
     dotClass: "bg-[var(--color-sentiment-positive)]",
+    order: 3,
   },
   idle: {
     label: "Idle",
     dotClass: "bg-[var(--color-foreground-muted)]",
+    order: 4,
   },
 };
 
@@ -908,6 +951,62 @@ function compareNames(a: InventoryAgent, b: InventoryAgent): number {
   const nameA = a.kind === "invalid" ? a.filename : a.name;
   const nameB = b.kind === "invalid" ? b.filename : b.name;
   return nameA.localeCompare(nameB);
+}
+
+function compareRows(a: EnrichedRow, b: EnrichedRow, key: SortKey): number {
+  let result = 0;
+  switch (key) {
+    case "name":
+      return compareNames(a.agent, b.agent);
+    case "status":
+      result = STATUS_META[a.bucket].order - STATUS_META[b.bucket].order;
+      break;
+    case "last-run":
+      result = compareNumbersDesc(lastRunTime(a.agent), lastRunTime(b.agent));
+      break;
+    case "runs":
+      result = compareNumbersDesc(runCount(a.agent), runCount(b.agent));
+      break;
+    case "cost":
+      result = compareNumbersDesc(averageCost(a.agent), averageCost(b.agent));
+      break;
+    case "success":
+      result = compareNumbersAsc(successRate(a.agent), successRate(b.agent));
+      break;
+  }
+  return result || compareNames(a.agent, b.agent);
+}
+
+function compareNumbersDesc(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1;
+  if (b === null) return -1;
+  return b - a;
+}
+
+function compareNumbersAsc(a: number | null, b: number | null): number {
+  if (a === null) return b === null ? 0 : 1;
+  if (b === null) return -1;
+  return a - b;
+}
+
+function lastRunTime(agent: InventoryAgent): number | null {
+  return agent.kind === "live" && agent.lastRun
+    ? new Date(agent.lastRun.createdAtIso).getTime()
+    : null;
+}
+
+function runCount(agent: InventoryAgent): number | null {
+  return agent.kind === "live" ? agent.runs30d : null;
+}
+
+function averageCost(agent: InventoryAgent): number | null {
+  return agent.kind === "live" ? agent.avgCostUsd30d : null;
+}
+
+function successRate(agent: InventoryAgent): number | null {
+  return agent.kind === "live" && agent.runs30d > 0
+    ? agent.succeeded30d / agent.runs30d
+    : null;
 }
 
 function shortModel(model: string | null): string {
