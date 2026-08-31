@@ -25,12 +25,18 @@ import "server-only";
 import { requestAgentChangeSystem } from "@/lib/api-v1/actions";
 import {
   listEnabledAutomations,
-  pauseAutomationsWithMissingOwners,
-  setAutomationFired,
-  setAutomationRetrying,
-  setAutomationSkipped,
   type Automation,
 } from "@/lib/automations-api";
+import {
+  agentResolutionFailure,
+  automationServiceConfigurationFailure,
+  pauseAutomationsWithMissingOwners,
+  recordAutomationFailure,
+  recordAutomationSuccess,
+  runApiFailure,
+  unexpectedDispatchFailure,
+  type AutomationDispatchFailure,
+} from "@/lib/automation-events";
 import {
   listDueLearningConfigs,
   setAgentLearned,
@@ -118,10 +124,11 @@ async function tick() {
     } catch (e) {
       console.error("[scheduler] maybeFire threw", a.id, e);
       sourceRetries.delete(a.id);
-      await setAutomationSkipped({
+      await recordAutomationFailure({
+        kind: "schedule",
         id: a.id,
-        firedAt: now,
-        error: e instanceof Error ? e.message : String(e),
+        occurredAt: now,
+        failure: unexpectedDispatchFailure(e),
       });
     }
   }
@@ -164,10 +171,16 @@ async function maybeFire(a: Automation, now: Date) {
         `in ${delay}ms`,
         dispatch.error.message,
       );
-      await setAutomationRetrying({ id: a.id, error: dispatch.error.message });
+      await recordAutomationFailure({
+        kind: "schedule",
+        id: a.id,
+        occurredAt: now,
+        failure: agentResolutionFailure(dispatch.error),
+        advanceFiringFloor: false,
+      });
       return;
     }
-    await recordSkipAndAdvance(a, now, dispatch.error.message);
+    await recordSkipAndAdvance(a, now, agentResolutionFailure(dispatch.error));
     return;
   }
   sourceRetries.delete(a.id);
@@ -183,7 +196,7 @@ async function maybeFire(a: Automation, now: Date) {
     await recordSkipAndAdvance(
       a,
       now,
-      "INTERNAL_API_TOKEN is unset; scheduler cannot reach the run API.",
+      automationServiceConfigurationFailure(),
     );
     return;
   }
@@ -220,16 +233,19 @@ async function maybeFire(a: Automation, now: Date) {
   });
 
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    await recordSkipAndAdvance(
-      a,
-      now,
-      `Run API returned ${res.status}: ${body.slice(0, 300)}`,
-    );
+    await recordSkipAndAdvance(a, now, runApiFailure(res.status));
     return;
   }
 
-  await setAutomationFired({ id: a.id, firedAt: now });
+  const body = (await res.json().catch(() => null)) as {
+    run_id?: string;
+  } | null;
+  await recordAutomationSuccess({
+    kind: "schedule",
+    id: a.id,
+    occurredAt: now,
+    runId: body?.run_id ?? null,
+  });
 }
 
 // Advance last_fired_at even when we couldn't actually fire, so a
@@ -240,11 +256,16 @@ async function maybeFire(a: Automation, now: Date) {
 async function recordSkipAndAdvance(
   a: Automation,
   now: Date,
-  error: string,
+  failure: AutomationDispatchFailure,
 ): Promise<void> {
   sourceRetries.delete(a.id);
-  console.warn("[scheduler] skip fire", a.id, error);
-  await setAutomationSkipped({ id: a.id, firedAt: now, error });
+  console.warn("[scheduler] skip fire", a.id, failure.code, failure.summary);
+  await recordAutomationFailure({
+    kind: "schedule",
+    id: a.id,
+    occurredAt: now,
+    failure,
+  });
 }
 
 // ── Batched Tasks Inbox learning pass ─────────────────────────────────

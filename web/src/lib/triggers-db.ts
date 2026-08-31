@@ -25,6 +25,7 @@ export type WorkspaceTrigger = {
   enabled: boolean;
   lastFiredAt: Date | null;
   lastFireError: string | null;
+  lastFireEventId: string | null;
   createdBy: string;
   createdAt: Date;
   updatedAt: Date;
@@ -43,13 +44,14 @@ type Row = {
   enabled: boolean;
   last_fired_at: Date | null;
   last_fire_error: string | null;
+  last_fire_event_id: string | null;
   created_by: string;
   created_at: Date;
   updated_at: Date;
 };
 
 const COLUMNS =
-  "id, workspace_id, user_id, agent_name, composio_trigger_id, toolkit_slug, trigger_type, connection_id, trigger_config, enabled, last_fired_at, last_fire_error, created_by, created_at, updated_at";
+  "id, workspace_id, user_id, agent_name, composio_trigger_id, toolkit_slug, trigger_type, connection_id, trigger_config, enabled, last_fired_at, last_fire_error, last_fire_event_id, created_by, created_at, updated_at";
 
 function rowToTrigger(r: Row): WorkspaceTrigger {
   return {
@@ -65,6 +67,7 @@ function rowToTrigger(r: Row): WorkspaceTrigger {
     enabled: r.enabled,
     lastFiredAt: r.last_fired_at,
     lastFireError: r.last_fire_error,
+    lastFireEventId: r.last_fire_event_id,
     createdBy: r.created_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -184,20 +187,4 @@ export async function deleteTriggerLocal(
     [workspaceId, id],
   );
   return (rowCount ?? 0) > 0;
-}
-
-/**
- * Webhook bookkeeping — bump last_fired_at and either clear or set the
- * last_fire_error string. Cheap to call from the webhook handler.
- */
-export async function recordTriggerFire(
-  id: string,
-  error: string | null,
-): Promise<void> {
-  await db.query(
-    `UPDATE workspace_trigger
-        SET last_fired_at = NOW(), last_fire_error = $2, updated_at = NOW()
-      WHERE id = $1`,
-    [id, error],
-  );
 }

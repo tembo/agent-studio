@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ORPHANED_AUTOMATION_ERROR } from "@/lib/automations-api";
+import { ORPHANED_AUTOMATION_FAILURE } from "@/lib/automation-events";
 import { db } from "@/lib/db";
 import { isWorkspaceRole, type WorkspaceRole } from "@/lib/rbac";
 
@@ -119,12 +119,48 @@ export async function offboardWorkspaceMember(
     } else {
       pausedAutomationCount = automationRows.filter((row) => row.enabled).length;
       if (pausedAutomationCount > 0) {
-        await client.query(
-          `UPDATE automation
-              SET enabled = FALSE, last_fire_error = $3, updated_at = NOW()
-            WHERE workspace_id = $1 AND owner_user_id = $2 AND enabled = TRUE`,
-          [workspaceId, targetUserId, ORPHANED_AUTOMATION_ERROR],
-        );
+        for (const automation of automationRows.filter((row) => row.enabled)) {
+          const { rows: eventRows } = await client.query<{ id: string }>(
+            `INSERT INTO automation_dispatch_event
+               (workspace_id, automation_kind, automation_id, automation_name,
+                agent_name, outcome, attempt, failure_code, failure_summary,
+                failure_recommendation)
+             SELECT a.workspace_id, 'schedule', a.id, a.name, a.agent_name,
+                    'failed',
+                    COALESCE((
+                      SELECT CASE WHEN e.outcome = 'failed' THEN e.attempt + 1 ELSE 1 END
+                        FROM automation_dispatch_event e
+                       WHERE e.workspace_id = a.workspace_id
+                         AND e.automation_kind = 'schedule'
+                         AND e.automation_id = a.id
+                       ORDER BY e.occurred_at DESC, e.id DESC
+                       LIMIT 1
+                    ), 1),
+                    $2, $3, $4
+               FROM automation a
+              WHERE a.id = $1
+             RETURNING id`,
+            [
+              automation.id,
+              ORPHANED_AUTOMATION_FAILURE.code,
+              ORPHANED_AUTOMATION_FAILURE.summary,
+              ORPHANED_AUTOMATION_FAILURE.recommendation,
+            ],
+          );
+          await client.query(
+            `UPDATE automation
+                SET enabled = FALSE,
+                    last_fire_error = $2,
+                    last_fire_event_id = $3,
+                    updated_at = NOW()
+              WHERE id = $1`,
+            [
+              automation.id,
+              ORPHANED_AUTOMATION_FAILURE.summary,
+              eventRows[0].id,
+            ],
+          );
+        }
       }
     }
 

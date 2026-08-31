@@ -1,9 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import {
+  agentResolutionFailure,
+  automationServiceConfigurationFailure,
+  recordAutomationFailure,
+  recordAutomationSuccess,
+  runApiFailure,
+  runApiRequestFailure,
+} from "@/lib/automation-events";
 import { verifyTriggerWebhook } from "@/lib/composio";
 import {
   getTriggerByComposioId,
-  recordTriggerFire,
   type WorkspaceTrigger,
 } from "@/lib/triggers-db";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
@@ -115,7 +122,11 @@ export async function POST(
     trigger.agentName,
   );
   if (!dispatch.ok) {
-    await recordTriggerFire(trigger.id, dispatch.error.message);
+    await recordAutomationFailure({
+      kind: "trigger",
+      id: trigger.id,
+      failure: agentResolutionFailure(dispatch.error),
+    });
     return NextResponse.json(
       { status: `agent-${dispatch.error.kind}` },
       { status: 200 },
@@ -137,10 +148,11 @@ export async function POST(
   const apiUrl = process.env.API_INTERNAL_URL ?? "http://localhost:8080";
   const token = process.env.INTERNAL_API_TOKEN;
   if (!token) {
-    await recordTriggerFire(
-      trigger.id,
-      "INTERNAL_API_TOKEN is unset; web cannot reach the run API.",
-    );
+    await recordAutomationFailure({
+      kind: "trigger",
+      id: trigger.id,
+      failure: automationServiceConfigurationFailure(),
+    });
     return NextResponse.json({ status: "misconfigured" }, { status: 500 });
   }
 
@@ -175,11 +187,11 @@ export async function POST(
       }),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      await recordTriggerFire(
-        trigger.id,
-        `Run API returned ${res.status}: ${body.slice(0, 300)}`,
-      );
+      await recordAutomationFailure({
+        kind: "trigger",
+        id: trigger.id,
+        failure: runApiFailure(res.status),
+      });
       return NextResponse.json(
         { status: "run-api-error", upstream: res.status },
         { status: 200 },
@@ -188,12 +200,19 @@ export async function POST(
     const j = (await res.json()) as { run_id?: string };
     runId = j.run_id ?? null;
   } catch (e) {
-    const err = e as Error;
-    await recordTriggerFire(trigger.id, `Run API fetch failed: ${err.message}`);
+    await recordAutomationFailure({
+      kind: "trigger",
+      id: trigger.id,
+      failure: runApiRequestFailure(e),
+    });
     return NextResponse.json({ status: "run-api-throw" }, { status: 200 });
   }
 
-  await recordTriggerFire(trigger.id, null);
+  await recordAutomationSuccess({
+    kind: "trigger",
+    id: trigger.id,
+    runId,
+  });
   // Surface the run id for Composio's webhook log — useful when
   // tracing "this event produced that run" in their dashboard.
   return NextResponse.json({ status: "ok", run_id: runId }, { status: 200 });

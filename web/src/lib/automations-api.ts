@@ -2,9 +2,6 @@ import "server-only";
 
 import { db } from "@/lib/db";
 
-export const ORPHANED_AUTOMATION_ERROR =
-  "Paused because the Run as owner is no longer a workspace member.";
-
 // CRUD for the `automation` table. An automation is a saved
 // (agent, cron) pairing that fires runs on its own — see migration
 // 0015 for the table contract. v0.2 ships schedule triggers only;
@@ -24,6 +21,7 @@ export interface Automation {
   enabled: boolean;
   lastFiredAt: Date | null;
   lastFireError: string | null;
+  lastFireEventId: string | null;
   createdBy: string;
   createdByName: string | null;
   createdByEmail: string | null;
@@ -52,6 +50,7 @@ type Row = {
   enabled: boolean;
   last_fired_at: Date | null;
   last_fire_error: string | null;
+  last_fire_event_id: string | null;
   created_by: string;
   created_by_name: string | null;
   created_by_email: string | null;
@@ -74,6 +73,7 @@ function rowToAutomation(r: Row): Automation {
     enabled: r.enabled,
     lastFiredAt: r.last_fired_at,
     lastFireError: r.last_fire_error,
+    lastFireEventId: r.last_fire_event_id,
     createdBy: r.created_by,
     createdByName: r.created_by_name,
     createdByEmail: r.created_by_email,
@@ -88,7 +88,7 @@ function rowToAutomation(r: Row): Automation {
 
 const COLUMNS = `
   a.id, a.workspace_id, a.name, a.agent_name, a.cron, a.input_message,
-  a.enabled, a.last_fired_at, a.last_fire_error, a.created_by,
+  a.enabled, a.last_fired_at, a.last_fire_error, a.last_fire_event_id, a.created_by,
   u.name AS created_by_name, u.email AS created_by_email,
   a.owner_user_id,
   o.name AS owner_user_name, o.email AS owner_user_email,
@@ -148,15 +148,15 @@ export async function updateAutomation(input: {
   ownerUserId: string;
   useDraft?: boolean;
 }): Promise<Automation> {
-  // Reset last_fire_error on edit so a fix to a broken cron doesn't
-  // leave a stale red badge on the row. last_fired_at is intentionally
-  // preserved so renaming an automation doesn't refire its window.
+  // An edit is not evidence that the dispatch problem recovered. Keep the
+  // current health summary until a run is successfully queued; durable event
+  // history records both the failure and that later recovery.
   const res = await db.query<Row>(
     `WITH updated AS (
        UPDATE automation
        SET name = $2, agent_name = $3, cron = $4, input_message = $5,
            enabled = $6, owner_user_id = $7, use_draft = $8,
-           last_fire_error = NULL, updated_at = NOW()
+           updated_at = NOW()
        WHERE id = $1
        RETURNING *
      )
@@ -180,51 +180,6 @@ export async function updateAutomation(input: {
 
 export async function deleteAutomation(id: string): Promise<void> {
   await db.query(`DELETE FROM automation WHERE id = $1`, [id]);
-}
-
-export async function setAutomationFired(input: {
-  id: string;
-  firedAt: Date;
-}): Promise<void> {
-  await db.query(
-    `UPDATE automation
-     SET last_fired_at = $2, last_fire_error = NULL, updated_at = NOW()
-     WHERE id = $1`,
-    [input.id, input.firedAt],
-  );
-}
-
-// Skip path: the scheduler decided not to fire this window (bad
-// cron, missing agent, etc). We advance last_fired_at so we don't
-// churn the DB every tick, AND record the error so the UI can show
-// it. Distinct from setAutomationFired, which intentionally clears
-// the error column on a successful fire.
-export async function setAutomationSkipped(input: {
-  id: string;
-  firedAt: Date;
-  error: string;
-}): Promise<void> {
-  await db.query(
-    `UPDATE automation
-     SET last_fired_at = $2, last_fire_error = $3, updated_at = NOW()
-     WHERE id = $1`,
-    [input.id, input.firedAt, input.error.slice(0, 1000)],
-  );
-}
-
-// Transient source failures stay due so the scheduler can catch up after its
-// bounded backoff. Persist the error for operators without moving the firing
-// floor; a successful retry clears it through setAutomationFired.
-export async function setAutomationRetrying(input: {
-  id: string;
-  error: string;
-}): Promise<void> {
-  await db.query(
-    `UPDATE automation
-     SET last_fire_error = $2, updated_at = NOW()
-     WHERE id = $1`,
-    [input.id, input.error.slice(0, 1000)],
-  );
 }
 
 export async function getAutomation(id: string): Promise<Automation | null> {
@@ -277,24 +232,6 @@ export async function listErroredEnabledAutomations(
     [workspaceId, limit],
   );
   return res.rows.map(rowToAutomation);
-}
-
-/** Disable enabled schedules whose Run as owner has left the workspace. */
-export async function pauseAutomationsWithMissingOwners(): Promise<number> {
-  const result = await db.query<{ id: string }>(
-    `UPDATE automation a
-        SET enabled = FALSE, last_fire_error = $1, updated_at = NOW()
-      WHERE a.enabled = TRUE
-        AND NOT EXISTS (
-          SELECT 1
-            FROM workspace_member m
-           WHERE m.workspace_id = a.workspace_id
-             AND m.user_id = a.owner_user_id
-        )
-      RETURNING a.id`,
-    [ORPHANED_AUTOMATION_ERROR],
-  );
-  return result.rows.length;
 }
 
 // All enabled automations across all workspaces. The scheduler tick

@@ -33,6 +33,7 @@ export type AgentAutomationRow = {
   enabled: boolean;
   lastFiredAtIso: string | null;
   lastFireError: string | null;
+  lastFireEventId: string | null;
   href: string | null;
   cron?: string;
   toolkitSlug?: string;
@@ -176,11 +177,19 @@ export function AgentAutomationsTable({
       cell: (r) => (
         <>
           <StatusBadge enabled={r.enabled} error={r.lastFireError} />
-          {r.lastFireError && (
-            <p className="text-sentiment-negative mt-1 max-w-[220px] text-sm leading-4">
-              {r.lastFireError}
-            </p>
-          )}
+          {r.lastFireError &&
+            (r.lastFireEventId ? (
+              <Link
+                href={`/${workspaceSlug}/automations/history/${r.lastFireEventId}`}
+                className="text-sentiment-negative mt-1 block max-w-[220px] text-sm leading-4 hover:underline"
+              >
+                {r.lastFireError}
+              </Link>
+            ) : (
+              <p className="text-sentiment-negative mt-1 max-w-[220px] text-sm leading-4">
+                {r.lastFireError}
+              </p>
+            ))}
         </>
       ),
     },
