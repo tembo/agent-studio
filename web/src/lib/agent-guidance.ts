@@ -361,6 +361,16 @@ one evidence rule:
 The Outputs page says **Confirmed**, not "Delivered": a successful API call is
 durable evidence, but it cannot prove a person received or read the result.
 
+Only add \`delivery\` when the agent is actually expected to publish its result
+outside its own run. Omit it for agents that only return output to their caller.
+\`delivery\` describes destinations and evidence; it does not shape the response
+— use \`output_schema\` for that.
+
+Evidence is scoped to the exact run carrying the declaration. If an orchestrator
+delegates delivery to a sub-agent, put \`delivery\` on the sub-agent that creates
+the inbox item or calls the delivery tool. Evidence from a sub-agent does not
+roll up into the orchestrator's declaration.
+
 ### deps_schema
 
 JSON Schema for *runtime dependencies* the agent expects to be
