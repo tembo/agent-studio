@@ -209,7 +209,7 @@ export function RunsList({
               <span className="text-foreground-muted">—</span>
             ) : null}
             {run.errorMessagePreview && (
-              <div className="text-sentiment-negative mt-0.5 line-clamp-2 font-mono text-sm leading-4">
+              <div className="text-foreground-sentiment-negative mt-0.5 line-clamp-2 font-mono text-sm leading-4">
                 {run.errorMessagePreview}
               </div>
             )}

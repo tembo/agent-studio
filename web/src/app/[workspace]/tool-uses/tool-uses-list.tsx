@@ -143,7 +143,7 @@ export function ToolUsesList({
         <>
           <code className="text-foreground text-sm">{t.toolName}</code>
           {t.ok === false && t.errorMessage && (
-            <div className="text-sentiment-negative mt-0.5 line-clamp-2 font-mono text-xs leading-4">
+            <div className="text-foreground-sentiment-negative mt-0.5 line-clamp-2 font-mono text-xs leading-4">
               {t.errorMessage}
             </div>
           )}
@@ -301,7 +301,7 @@ function ExpandedDetail({
           <span className="text-foreground-weak text-xs font-medium uppercase tracking-wide">
             Error
           </span>
-          <pre className="text-sentiment-negative mt-1 whitespace-pre-wrap font-mono text-xs leading-5">
+          <pre className="text-foreground-sentiment-negative mt-1 whitespace-pre-wrap font-mono text-xs leading-5">
             {toolCall.errorMessage}
           </pre>
         </div>

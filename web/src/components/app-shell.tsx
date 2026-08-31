@@ -166,7 +166,7 @@ export async function AppShell({
                         </span>{" "}
                         — add an Anthropic or OpenAI key to run agents
                       </span>
-                      <Button asChild variant="orange" size="small">
+                      <Button asChild variant="inverted" size="small">
                         <Link href={`/${workspace.slug}/settings/providers`}>
                           Add a key
                         </Link>
@@ -191,7 +191,7 @@ export async function AppShell({
                           ? "has changes awaiting promotion"
                           : "are awaiting promotion"}
                       </span>
-                      <Button asChild variant="orange" size="small">
+                      <Button asChild variant="inverted" size="small">
                         <Link
                           href={
                             pendingPromotions.length === 1
@@ -212,14 +212,14 @@ export async function AppShell({
                   >
                     <IconExclamationTriangle
                       size={14}
-                      className="text-sentiment-negative mt-0.5 shrink-0"
+                      className="text-icon-sentiment-negative mt-0.5 shrink-0"
                     />
                     <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-                      <span className="text-sentiment-negative text-sm leading-tight">
+                      <span className="text-foreground-sentiment-negative text-sm leading-tight">
                         <span className="font-semibold">{automation.name}</span>{" "}
                         did not fire for {automation.agentName}
                       </span>
-                      <Button asChild variant="destructive" size="small">
+                      <Button asChild variant="inverted" size="small">
                         <Link
                           href={`/${workspace.slug}/automations/${automation.id}`}
                         >
@@ -238,16 +238,16 @@ export async function AppShell({
                     >
                       <IconExclamationTriangle
                         size={14}
-                        className="text-sentiment-negative mt-0.5 shrink-0"
+                        className="text-icon-sentiment-negative mt-0.5 shrink-0"
                       />
                       <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
-                        <span className="text-sentiment-negative text-sm leading-tight">
+                        <span className="text-foreground-sentiment-negative text-sm leading-tight">
                           <span className="font-semibold">{f.agentName}</span>{" "}
                           failed{" "}
                           <span className="font-semibold">{f.failures}×</span> in
                           24h
                         </span>
-                        <Button asChild variant="destructive" size="small">
+                        <Button asChild variant="inverted" size="small">
                           <Link href={agentHref}>Open</Link>
                         </Button>
                       </div>
