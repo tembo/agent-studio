@@ -14,11 +14,13 @@ export type AgentInventorySort =
   | "success";
 
 export type AgentInventoryType = "orchestrator" | "sub-agent";
+export type AgentInventoryOwner = "me" | "others";
 export type AgentInventoryViewVisibility = "personal" | "shared";
 
 export type AgentInventoryFilters = {
   query: string;
-  membership: "mine" | "all";
+  owner: AgentInventoryOwner | "";
+  starred: boolean | null;
   status: AgentInventoryStatus | null;
   promotionOnly: boolean;
   label: string;
@@ -70,7 +72,9 @@ export function normalizeAgentInventoryFilters(
   const input = record(value);
   return {
     query: shortString(input.query),
-    membership: input.membership === "mine" ? "mine" : "all",
+    owner:
+      input.owner === "me" || input.owner === "others" ? input.owner : "",
+    starred: typeof input.starred === "boolean" ? input.starred : null,
     status: STATUSES.includes(input.status as AgentInventoryStatus)
       ? (input.status as AgentInventoryStatus)
       : null,
@@ -86,6 +90,18 @@ export function normalizeAgentInventoryFilters(
       ? (input.sort as AgentInventorySort)
       : "last-run",
   };
+}
+
+export function matchesAgentOwnershipFilters(
+  agent: { kind: string; isMine?: boolean; isStarred?: boolean },
+  owner: AgentInventoryOwner | "",
+  starred: boolean | null,
+): boolean {
+  if (!owner && starred === null) return true;
+  if (agent.kind !== "live") return false;
+  if (owner === "me" && !agent.isMine) return false;
+  if (owner === "others" && agent.isMine) return false;
+  return starred === null || Boolean(agent.isStarred) === starred;
 }
 
 export function matchesAgentRelationshipFilters(

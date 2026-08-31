@@ -20,7 +20,7 @@ describe("agent inventory views", () => {
           name: "My failing agents",
           visibility: "personal",
           created_by: "user-1",
-          filters: { membership: "mine", status: "error" },
+          filters: { owner: "me", starred: true, status: "error" },
         },
       ],
     });
@@ -30,7 +30,7 @@ describe("agent inventory views", () => {
     ).resolves.toMatchObject([
       {
         name: "My failing agents",
-        filters: { membership: "mine", status: "error" },
+        filters: { owner: "me", starred: true, status: "error" },
       },
     ]);
     expect(query.mock.calls[0]?.[0]).toMatch(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  matchesAgentOwnershipFilters,
   matchesAgentRelationshipFilters,
   normalizeAgentInventoryFilters,
 } from "./agent-inventory-view-types";
@@ -10,7 +11,8 @@ describe("agent inventory saved-view filters", () => {
     expect(
       normalizeAgentInventoryFilters({
         query: "  daily reports  ",
-        membership: "mine",
+        owner: "me",
+        starred: false,
         status: "error",
         promotionOnly: true,
         label: "finance",
@@ -22,7 +24,8 @@ describe("agent inventory saved-view filters", () => {
       }),
     ).toEqual({
       query: "daily reports",
-      membership: "mine",
+      owner: "me",
+      starred: false,
       status: "error",
       promotionOnly: true,
       label: "finance",
@@ -37,19 +40,42 @@ describe("agent inventory saved-view filters", () => {
   it("drops unsupported and malformed values", () => {
     expect(
       normalizeAgentInventoryFilters({
-        membership: "team",
+        owner: "team",
+        starred: "yes",
         status: "broken",
         promotionOnly: "yes",
         agentType: "operator",
         sort: "expensive",
       }),
     ).toMatchObject({
-      membership: "all",
+      owner: "",
+      starred: null,
       status: null,
       promotionOnly: false,
       agentType: "",
       sort: "last-run",
     });
+  });
+});
+
+describe("agent inventory owner and star filters", () => {
+  const mine = { kind: "live", isMine: true, isStarred: false };
+  const theirs = { kind: "live", isMine: false, isStarred: true };
+
+  it("filters ownership and stars independently", () => {
+    expect(matchesAgentOwnershipFilters(mine, "me", null)).toBe(true);
+    expect(matchesAgentOwnershipFilters(theirs, "me", null)).toBe(false);
+    expect(matchesAgentOwnershipFilters(theirs, "others", true)).toBe(true);
+    expect(matchesAgentOwnershipFilters(theirs, "others", false)).toBe(false);
+  });
+
+  it("excludes non-live rows when either filter is active", () => {
+    expect(matchesAgentOwnershipFilters({ kind: "invalid" }, "me", null)).toBe(
+      false,
+    );
+    expect(
+      matchesAgentOwnershipFilters({ kind: "pending-create" }, "", false),
+    ).toBe(false);
   });
 });
 

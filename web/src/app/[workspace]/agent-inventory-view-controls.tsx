@@ -109,7 +109,7 @@ export function AgentInventoryViewControls({
             setName("");
             setVisibility("personal");
             setSaveError("");
-            onApply({ ...defaultFilters, membership: "all" });
+            onApply(defaultFilters);
             setCreating(true);
           }}
         >

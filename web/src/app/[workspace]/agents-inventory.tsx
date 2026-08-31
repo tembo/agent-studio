@@ -14,12 +14,16 @@ import { formatCurrency } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type {
   AgentInventoryFilters,
+  AgentInventoryOwner,
   AgentInventorySort,
   AgentInventoryStatus,
   AgentInventoryType,
   AgentInventoryView,
 } from "@/lib/agent-inventory-view-types";
-import { matchesAgentRelationshipFilters } from "@/lib/agent-inventory-view-types";
+import {
+  matchesAgentOwnershipFilters,
+  matchesAgentRelationshipFilters,
+} from "@/lib/agent-inventory-view-types";
 
 import { toggleAgentStarAction } from "./agent-stars-actions";
 import { AgentInventoryFilterBar } from "./agent-inventory-filter-bar";
@@ -125,14 +129,10 @@ export function AgentsInventory({
   currentUserId,
   canManageSharedViews,
 }: Props) {
-  const defaultMembership =
-    !initialPromotionOnly &&
-    agents.some((agent) =>
-      agent.kind === "live" ? agent.isMine || agent.isStarred : false,
-    )
-      ? "mine"
-      : "all";
   const [query, setQuery] = useState("");
+  const [ownerFilter, setOwnerFilter] =
+    useState<AgentInventoryOwner | "">("");
+  const [starredFilter, setStarredFilter] = useState<boolean | null>(null);
   const [bucket, setBucket] = useState<StatusBucket | null>(null);
   const [labelFilter, setLabelFilter] = useState("");
   const [modelFilter, setModelFilter] = useState("");
@@ -142,11 +142,11 @@ export function AgentsInventory({
   const [orchestratorFilter, setOrchestratorFilter] = useState("");
   const [promotionOnly, setPromotionOnly] = useState(initialPromotionOnly);
   const [sortKey, setSortKey] = useState<SortKey>("last-run");
-  const [view, setView] = useState<"mine" | "all">(defaultMembership);
 
   const defaultFilters: AgentInventoryFilters = {
     query: "",
-    membership: defaultMembership,
+    owner: "",
+    starred: null,
     status: null,
     promotionOnly: initialPromotionOnly,
     label: "",
@@ -158,7 +158,8 @@ export function AgentsInventory({
   };
   const currentFilters: AgentInventoryFilters = {
     query,
-    membership: view,
+    owner: ownerFilter,
+    starred: starredFilter,
     status: bucket,
     promotionOnly,
     label: labelFilter,
@@ -171,7 +172,8 @@ export function AgentsInventory({
 
   function applyFilters(filters: AgentInventoryFilters) {
     setQuery(filters.query);
-    setView(filters.membership);
+    setOwnerFilter(filters.owner);
+    setStarredFilter(filters.starred);
     setBucket(filters.status);
     setPromotionOnly(filters.promotionOnly);
     setLabelFilter(filters.label);
@@ -276,9 +278,9 @@ export function AgentsInventory({
         })
       : enriched;
 
-    if (view === "mine") {
-      rows = rows.filter(
-        ({ agent }) => agent.kind !== "live" || agent.isMine || agent.isStarred,
+    if (ownerFilter || starredFilter !== null) {
+      rows = rows.filter(({ agent }) =>
+        matchesAgentOwnershipFilters(agent, ownerFilter, starredFilter),
       );
     }
     if (promotionOnly) {
@@ -318,7 +320,8 @@ export function AgentsInventory({
   }, [
     enriched,
     query,
-    view,
+    ownerFilter,
+    starredFilter,
     promotionOnly,
     bucket,
     labelFilter,

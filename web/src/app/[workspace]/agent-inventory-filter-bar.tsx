@@ -5,12 +5,14 @@ import { useState } from "react";
 import { Select, type SelectOption } from "@/components/ui/select";
 import type {
   AgentInventoryFilters,
+  AgentInventoryOwner,
   AgentInventoryStatus,
   AgentInventoryType,
 } from "@/lib/agent-inventory-view-types";
 
 type FilterKey =
-  | "membership"
+  | "owner"
+  | "starred"
   | "status"
   | "promotionOnly"
   | "label"
@@ -59,17 +61,30 @@ export function AgentInventoryFilterBar({
 
   return (
     <div className="border-border bg-surface-raised flex min-h-11 flex-wrap items-center gap-2 rounded-lg border px-3 py-2">
-      {filters.membership === "mine" && (
+      {filters.owner && (
         <FilterPill
-          label="List"
-          value={filters.membership}
+          label="Owner"
+          value={filters.owner}
           options={[
-            { value: "mine", label: "Mine + Starred" },
-            { value: "all", label: "All agents" },
+            { value: "me", label: "Me" },
+            { value: "others", label: "Others" },
           ]}
           ariaLabel="Filter agent ownership"
-          onChange={(value) => update("membership", value as "mine" | "all")}
-          onRemove={() => update("membership", "all")}
+          onChange={(value) => update("owner", value as AgentInventoryOwner)}
+          onRemove={() => update("owner", "")}
+        />
+      )}
+      {filters.starred !== null && (
+        <FilterPill
+          label="Starred"
+          value={String(filters.starred)}
+          options={[
+            { value: "true", label: "True" },
+            { value: "false", label: "False" },
+          ]}
+          ariaLabel="Filter starred agents"
+          onChange={(value) => update("starred", value === "true")}
+          onRemove={() => update("starred", null)}
         />
       )}
       {filters.status && (
@@ -258,8 +273,9 @@ function filterChoices(args: {
   orchestratorOptions: SelectOption[];
 }): Array<{ key: FilterKey; label: string }> {
   const result: Array<{ key: FilterKey; label: string }> = [];
-  if (args.filters.membership === "all") {
-    result.push({ key: "membership", label: "Mine + Starred" });
+  if (!args.filters.owner) result.push({ key: "owner", label: "Owner" });
+  if (args.filters.starred === null) {
+    result.push({ key: "starred", label: "Starred" });
   }
   if (!args.filters.status) result.push({ key: "status", label: "Status" });
   if (!args.filters.promotionOnly && args.pendingPromotionCount > 0) {
@@ -295,7 +311,8 @@ function addFilter(
   },
 ) {
   const defaults: Record<FilterKey, AgentInventoryFilters[FilterKey]> = {
-    membership: "mine",
+    owner: "me",
+    starred: true,
     status: "active",
     promotionOnly: true,
     label: options.labelOptions[1]?.value ?? "",
