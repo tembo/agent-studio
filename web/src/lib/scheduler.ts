@@ -49,6 +49,7 @@ import {
   type InboxAction,
   type InboxItem,
 } from "@/lib/inbox-api";
+import { isAgentCreatePending } from "@/lib/improvements-api";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 import { maybeReconcileToolCaches } from "@/lib/tool-reconcile";
 
@@ -69,6 +70,10 @@ const MAX_LEARNING_CASES = 20;
 let started = false;
 let timer: NodeJS.Timeout | null = null;
 const sourceRetries = new Map<
+  string,
+  { attempts: number; retryAfter: number }
+>();
+const pendingCreateRetries = new Map<
   string,
   { attempts: number; retryAfter: number }
 >();
@@ -106,6 +111,7 @@ export function stopScheduler() {
   timer = null;
   started = false;
   sourceRetries.clear();
+  pendingCreateRetries.clear();
 }
 
 async function tick() {
@@ -124,6 +130,7 @@ async function tick() {
     } catch (e) {
       console.error("[scheduler] maybeFire threw", a.id, e);
       sourceRetries.delete(a.id);
+      pendingCreateRetries.delete(a.id);
       await recordAutomationFailure({
         kind: "schedule",
         id: a.id,
@@ -146,6 +153,8 @@ async function maybeFire(a: Automation, now: Date) {
   if (!a.lastFireError) sourceRetries.delete(a.id);
   const pendingRetry = sourceRetries.get(a.id);
   if (pendingRetry && pendingRetry.retryAfter > now.getTime()) return;
+  const pendingCreateRetry = pendingCreateRetries.get(a.id);
+  if (pendingCreateRetry && pendingCreateRetry.retryAfter > now.getTime()) return;
 
   // Resolve the agent — the stable snapshot by default, or the live draft
   // when the automation opts in. listEnabledAutomations doesn't pre-fetch
@@ -154,6 +163,28 @@ async function maybeFire(a: Automation, now: Date) {
     preferDraft: a.useDraft,
   });
   if (!dispatch.ok) {
+    if (
+      dispatch.error.kind === "not-found" &&
+      (await isAgentCreatePending(a.workspaceId, a.agentName))
+    ) {
+      const previousAttempts = pendingCreateRetries.get(a.id)?.attempts ?? 0;
+      const attempts = previousAttempts + 1;
+      const delay = Math.min(
+        TICK_MS * 2 ** Math.min(attempts - 1, 10),
+        SOURCE_RETRY_MAX_MS,
+      );
+      pendingCreateRetries.set(a.id, {
+        attempts,
+        retryAfter: now.getTime() + delay,
+      });
+      console.log(
+        "[scheduler] agent creation pending; retrying",
+        a.id,
+        `in ${delay}ms`,
+      );
+      return;
+    }
+    pendingCreateRetries.delete(a.id);
     if (dispatch.error.kind === "source-unavailable" && dispatch.error.retryable) {
       const previousAttempts = sourceRetries.get(a.id)?.attempts ?? 0;
       const attempts = previousAttempts + 1;
@@ -184,6 +215,7 @@ async function maybeFire(a: Automation, now: Date) {
     return;
   }
   sourceRetries.delete(a.id);
+  pendingCreateRetries.delete(a.id);
   const r = dispatch.resolved;
 
   // POST directly to /internal/runs with the new spec_content /
@@ -259,6 +291,7 @@ async function recordSkipAndAdvance(
   failure: AutomationDispatchFailure,
 ): Promise<void> {
   sourceRetries.delete(a.id);
+  pendingCreateRetries.delete(a.id);
   console.warn("[scheduler] skip fire", a.id, failure.code, failure.summary);
   await recordAutomationFailure({
     kind: "schedule",
