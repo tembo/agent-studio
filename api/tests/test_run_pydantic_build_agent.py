@@ -222,6 +222,76 @@ tools = [echo]
     assert set(agent._function_toolset.tools) == {"get_run_datetime", "echo"}
 
 
+@pytest.mark.parametrize("teardown_error", [None, RuntimeError("502 Bad Gateway")])
+def test_managed_toolset_run_preserves_result_after_cleanup(
+    teardown_error: Exception | None,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class FakeResult:
+        output = "completed work"
+
+    class FakeAgent:
+        async def __aenter__(self) -> "FakeAgent":
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            if teardown_error is not None:
+                raise teardown_error
+
+        async def run(self, prompt: str, **_kwargs: object) -> FakeResult:
+            assert prompt == "do the work"
+            return FakeResult()
+
+    result = asyncio.run(
+        run_pydantic._run_with_managed_toolsets(
+            FakeAgent(), [object()], "do the work", {}
+        )
+    )
+
+    assert result.output == "completed work"
+    stderr = capsys.readouterr().err
+    if teardown_error is None:
+        assert "cleanup failed" not in stderr
+    else:
+        assert "cleanup failed after the agent completed" in stderr
+        assert "502 Bad Gateway" in stderr
+
+
+def test_managed_toolset_run_does_not_hide_execution_failure() -> None:
+    class FakeAgent:
+        async def __aenter__(self) -> "FakeAgent":
+            return self
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+        async def run(self, _prompt: str, **_kwargs: object) -> None:
+            raise RuntimeError("tool call failed")
+
+    with pytest.raises(RuntimeError, match="tool call failed"):
+        asyncio.run(
+            run_pydantic._run_with_managed_toolsets(
+                FakeAgent(), [object()], "do the work", {}
+            )
+        )
+
+
+def test_managed_toolset_run_does_not_hide_setup_failure() -> None:
+    class FakeAgent:
+        async def __aenter__(self) -> None:
+            raise RuntimeError("Failed to initialize server session")
+
+        async def __aexit__(self, *_exc: object) -> None:
+            return None
+
+    with pytest.raises(RuntimeError, match="Failed to initialize server session"):
+        asyncio.run(
+            run_pydantic._run_with_managed_toolsets(
+                FakeAgent(), [object()], "do the work", {}
+            )
+        )
+
+
 def test_get_run_datetime_returns_stable_local_run_date(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
