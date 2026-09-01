@@ -63,9 +63,11 @@ for PAT scopes.
 ## Members
 
 Add and remove workspace members, set their [roles](/agent-studio/audit-and-roles/)
-(admin / operator / viewer), and copy an invite template. Invited users join the
-workspace on first sign-in. Workspace admins can click a member to open their
-[member detail view](/agent-studio/dashboard-and-runs/#member-detail-admins).
+(admin / operator / viewer), and copy an invite template. **TAS does not send an
+email when you add someone.** The workspace admin must copy the invitation
+message and send it to the new member directly. Invited users join the workspace
+on first sign-in. Workspace admins can click a member to open their [member
+detail view](/agent-studio/dashboard-and-runs/#member-detail-admins).
 
 ## Slack apps
 

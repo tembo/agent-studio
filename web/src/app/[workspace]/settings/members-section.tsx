@@ -43,7 +43,7 @@ export function MembersSection({
       title="Members"
       description={
         canManage
-          ? "Invite a member by email or change their role. Invitees join on their first sign-in. Roles enforce at the API layer, not just the UI."
+          ? "Add a member by email or change their role. TAS does not email new members, so you must notify them yourself. Invitees join on their first sign-in."
           : "Workspace members and their roles. Ask a workspace admin to change yours."
       }
     >
@@ -122,7 +122,7 @@ export function MembersSection({
         {canManage && (
           <details className="bg-surface border-border rounded-lg border p-3">
             <summary className="text-foreground cursor-pointer text-sm font-medium">
-              Invite a member
+              Add a member
             </summary>
             <div className="mt-3">
               <AddMemberForm workspaceSlug={workspaceSlug} />
