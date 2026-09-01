@@ -106,6 +106,7 @@ describe("auth provider configuration", () => {
     expect(genericOAuthConfigs()).toMatchObject([
       {
         providerId: "microsoft",
+        accountIssuer: "local:oauth:microsoft",
         discoveryUrl:
           "https://login.microsoftonline.com/tenant-123/v2.0/.well-known/openid-configuration",
         clientId: "microsoft-id",
@@ -116,6 +117,7 @@ describe("auth provider configuration", () => {
       },
       {
         providerId: "oidc",
+        accountIssuer: "local:oauth:oidc",
         discoveryUrl: "https://idp.example.com/.well-known/openid-configuration",
         clientId: "oidc-id",
         clientSecret: "oidc-secret",

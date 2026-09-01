@@ -45,6 +45,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Google and other OAuth sign-ins work after the Better Auth 1.7 upgrade.**
+  The account schema now includes and backfills Better Auth's required `issuer`
+  identity field with each configured provider's stable namespace. Previously
+  every OAuth callback failed its first account lookup with
+  `internal_server_error`.
 - **Top-level outputs no longer repeat the agent as its own orchestrator.**
   Output cards and provenance show orchestrator metadata only for sub-agent
   runs, using the current Orchestrator terminology throughout.
