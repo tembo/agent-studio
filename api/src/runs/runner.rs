@@ -759,10 +759,14 @@ async fn run_pydantic(
     // module, since secrets are consumed by Python tools (via
     // tas_tools.secret), never by the model directly — least privilege.
     let secrets_json: Option<String> = if ctx.tools_module_content.is_some() {
-        let rows =
-            list_workspace_secret_connections(&state.db, &state.encryption_key, ctx.workspace_id)
-                .await
-                .unwrap_or_default();
+        let rows = list_workspace_secret_connections(
+            &state.db,
+            &state.encryption_key,
+            ctx.workspace_id,
+            &ctx.acting_user_id,
+        )
+        .await
+        .unwrap_or_default();
         if rows.is_empty() {
             None
         } else {

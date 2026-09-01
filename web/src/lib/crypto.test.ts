@@ -9,7 +9,7 @@ beforeAll(() => {
 // Imported after the env guard above is declared; getMasterKey reads env per
 // call so import order doesn't matter, but keep it explicit.
 const { encryptSecret, decryptSecret } = await import("./crypto");
-const { aadWorkspaceSecret } = await import("./crypto-aad");
+const { aadSecretConnection, aadWorkspaceSecret } = await import("./crypto-aad");
 
 describe("crypto AES-GCM blobs", () => {
   it("round-trips without AAD (legacy layout)", () => {
@@ -27,6 +27,15 @@ describe("crypto AES-GCM blobs", () => {
   it("builds the canonical cross-language AAD (must match api/src/crypto.rs)", () => {
     expect(aadWorkspaceSecret("00000000-0000-0000-0000-000000000000", "kind")).toBe(
       "workspace_secret\u{1f}00000000-0000-0000-0000-000000000000\u{1f}kind",
+    );
+  });
+
+  it("keeps shared secret AAD stable and binds personal secrets to their owner", () => {
+    expect(aadSecretConnection("ws-1", "clay")).toBe(
+      "secret_connection\u{1f}ws-1\u{1f}clay",
+    );
+    expect(aadSecretConnection("ws-1", "clay", "user-1")).toBe(
+      "secret_connection\u{1f}ws-1\u{1f}clay\u{1f}user-1",
     );
   });
 

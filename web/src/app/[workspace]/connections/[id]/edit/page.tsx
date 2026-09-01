@@ -43,7 +43,12 @@ export default async function EditConnectionPage({
     session.user.id,
     requestedUser,
   );
-  const loaded = await loadConnection(workspace.id, view.userId, ref);
+  const loaded = await loadConnection(
+    workspace.id,
+    view.userId,
+    ref,
+    view.viewingOther ? undefined : session.user.id,
+  );
   if (!loaded) notFound();
 
   // Native manual / self-key connections have nothing to edit (name is fixed) —
@@ -58,6 +63,14 @@ export default async function EditConnectionPage({
   // Manual-credential edits are done via the connect form (/connections/new),
   // not this rename/rotate page.
   if (loaded.kind === "manual-cred") notFound();
+  if (
+    loaded.kind === "secret" &&
+    (view.viewingOther ||
+      view.role === "viewer" ||
+      (loaded.secret.scope === "workspace" && !view.isAdmin))
+  ) {
+    notFound();
+  }
 
   const userQs = view.viewingOther
     ? `?user=${encodeURIComponent(view.userId)}`
@@ -85,6 +98,7 @@ export default async function EditConnectionPage({
       {loaded.kind === "secret" ? (
         <SecretEditForm
           workspaceSlug={workspace.slug}
+          id={loaded.secret.id}
           slug={loaded.secret.slug}
           description={loaded.secret.description}
         />

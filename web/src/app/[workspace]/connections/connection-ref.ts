@@ -19,13 +19,14 @@ import {
   type ManualCredentialProvider,
 } from "@/lib/manual-credential-providers";
 import {
+  getSecretConnectionById,
   listSecretConnections,
   type SecretConnectionPreview,
 } from "@/lib/secret-connections";
 
 // One Connections list/view/edit surface spans three record types. We address
 // them through a single composite ref encoded into the [id] route segment:
-//   composio~<uuid> | native~<uuid> | secret~<slug>
+//   composio~<uuid> | native~<uuid> | secret~<uuid>
 // The separator is "~" (RFC 3986 unreserved — never percent-encoded, never
 // special in a path). A ":" reads as a scheme/port to some routers and proxies
 // and broke the [id] route; "~" appears in neither uuids, kinds, nor secret
@@ -103,11 +104,12 @@ function nativeTitle(conn: WorkspaceConnection): string {
 export async function listAllConnections(
   workspaceId: string,
   viewUserId: string,
+  personalSecretUserId?: string,
 ): Promise<ConnectionRow[]> {
   const [native, composio, secrets] = await Promise.all([
     listNativeConnectionsForUser(workspaceId, viewUserId),
     listConnectionsForUser(workspaceId, viewUserId),
-    listSecretConnections(workspaceId),
+    listSecretConnections(workspaceId, personalSecretUserId),
   ]);
 
   const nativeRows: ConnectionRow[] = native
@@ -145,16 +147,18 @@ export async function listAllConnections(
   // Secrets owned by a manual-credential provider are shown as one grouped row
   // (below), not as individual secret rows.
   const owned = manualCredentialSecretSlugs();
-  const present = new Set(secrets.map((s) => s.slug));
+  const present = new Set(
+    secrets.filter((s) => s.scope === "workspace").map((s) => s.slug),
+  );
 
   const secretRows: ConnectionRow[] = secrets
     .filter((s) => !owned.has(s.slug))
     .map((s) => ({
-      ref: encodeConnectionRef("secret", s.slug),
+      ref: encodeConnectionRef("secret", s.id),
       kind: "secret" as const,
       title: s.slug,
       slot: null,
-      typeLabel: "Secret",
+      typeLabel: s.scope === "personal" ? "Personal secret" : "Workspace secret",
       logoSlug: null,
       statusLabel: "set",
       statusVariant: "green" as const,
@@ -207,6 +211,7 @@ export async function loadConnection(
   workspaceId: string,
   viewUserId: string,
   ref: ConnectionRef,
+  personalSecretUserId?: string,
 ): Promise<LoadedConnection | null> {
   if (ref.kind === "native") {
     const conn = await getNativeConnectionById(workspaceId, ref.key);
@@ -231,8 +236,10 @@ export async function loadConnection(
     if (fields.every((f) => f.preview === null)) return null;
     return { kind: "manual-cred", provider, fields };
   }
-  const secret = (await listSecretConnections(workspaceId)).find(
-    (s) => s.slug === ref.key,
+  const secret = await getSecretConnectionById(
+    workspaceId,
+    ref.key,
+    personalSecretUserId,
   );
   return secret ? { kind: "secret", secret } : null;
 }

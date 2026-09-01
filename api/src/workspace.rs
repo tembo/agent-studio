@@ -149,10 +149,8 @@ pub async fn list_active_native_connections(
     Ok(out)
 }
 
-/// Decrypted Secrets (the 3rd connection substrate) for a workspace — free-form
-/// `(slug, value)` API keys an admin set under Connections → Secrets. Unlike
-/// native/Composio connections these are per-WORKSPACE (no user filter): a
-/// service API key like Clay is one org-wide value. The runner serializes these
+/// Decrypted free-form secrets visible to an acting user. A personal value wins
+/// when its slug matches a workspace-shared fallback. The runner serializes these
 /// into a flat `{slug: value}` JSON and hands it to the wrapper as TAS_SECRETS,
 /// where sidecar tools read it via `tas_tools.secret("<slug>")`.
 ///
@@ -162,20 +160,24 @@ pub async fn list_workspace_secret_connections(
     pool: &PgPool,
     key: &MasterKey,
     workspace_id: uuid::Uuid,
+    acting_user_id: &str,
 ) -> anyhow::Result<Vec<(String, String)>> {
-    let rows: Vec<(String, Vec<u8>)> = sqlx::query_as(
-        "SELECT slug, ciphertext \
+    let rows: Vec<(String, Vec<u8>, Option<String>)> = sqlx::query_as(
+        "SELECT DISTINCT ON (slug) slug, ciphertext, user_id \
            FROM workspace_secret_connection \
-          WHERE workspace_id = $1",
+          WHERE workspace_id = $1 \
+            AND (user_id IS NULL OR user_id = $2) \
+          ORDER BY slug, (user_id IS NOT NULL) DESC",
     )
     .bind(workspace_id)
+    .bind(acting_user_id)
     .fetch_all(pool)
     .await
     .context("failed to list workspace_secret_connection")?;
 
     let mut out = Vec::with_capacity(rows.len());
-    for (slug, ciphertext) in rows {
-        let aad = crate::crypto::aad::secret_connection(workspace_id, &slug);
+    for (slug, ciphertext, user_id) in rows {
+        let aad = crate::crypto::aad::secret_connection(workspace_id, &slug, user_id.as_deref());
         match key.decrypt_aad(&ciphertext, aad.as_bytes()) {
             Ok(value) => out.push((slug, value)),
             Err(e) => {

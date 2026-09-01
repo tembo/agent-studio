@@ -21,6 +21,7 @@ export type ConnectionsView = {
   /** Admin is viewing a member other than themselves. */
   viewingOther: boolean;
   isAdmin: boolean;
+  role: Awaited<ReturnType<typeof getWorkspaceRole>>;
   /** Member who's being viewed (for the header), when viewingOther. */
   viewedMember: ConnectionMember | null;
 };
@@ -37,6 +38,7 @@ export async function resolveConnectionsView(
       userId: sessionUserId,
       viewingOther: false,
       isAdmin,
+      role,
       viewedMember: null,
     };
   }
@@ -47,6 +49,7 @@ export async function resolveConnectionsView(
       userId: sessionUserId,
       viewingOther: false,
       isAdmin,
+      role,
       viewedMember: null,
     };
   }
@@ -54,6 +57,7 @@ export async function resolveConnectionsView(
     userId: target.userId,
     viewingOther: true,
     isAdmin,
+    role,
     viewedMember: {
       userId: target.userId,
       name: target.name,

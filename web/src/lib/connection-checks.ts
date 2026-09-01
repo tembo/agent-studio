@@ -134,7 +134,7 @@ export async function findMissingConnections(
   const [composio, native, secrets] = await Promise.all([
     listConnectionsForUser(workspaceId, actingUserId).catch(() => []),
     listNativeConnectionsForUser(workspaceId, actingUserId).catch(() => []),
-    listSecretConnections(workspaceId).catch(() => []),
+    listSecretConnections(workspaceId, actingUserId).catch(() => []),
   ]);
   const sets = buildConnectionSlotSets(composio, native, secrets);
 

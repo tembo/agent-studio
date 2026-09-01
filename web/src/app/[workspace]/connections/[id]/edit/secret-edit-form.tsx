@@ -19,10 +19,12 @@ const INITIAL: SecretActionState = {};
 // success (to the view, or the list on delete).
 export function SecretEditForm({
   workspaceSlug,
+  id,
   slug,
   description,
 }: {
   workspaceSlug: string;
+  id: string;
   slug: string;
   description: string | null;
 }) {
@@ -38,6 +40,7 @@ export function SecretEditForm({
     <div className="flex flex-col gap-6">
       <form action={action} className="flex flex-col gap-3">
         <input type="hidden" name="workspace" value={workspaceSlug} />
+        <input type="hidden" name="id" value={id} />
         <input type="hidden" name="slug" value={slug} />
         <div className="grid gap-1.5">
           <Label htmlFor="secret-value" className="text-sm">
@@ -79,7 +82,7 @@ export function SecretEditForm({
       <div className="border-t border-[var(--color-border-weak)] pt-4">
         <form action={removeAction}>
           <input type="hidden" name="workspace" value={workspaceSlug} />
-          <input type="hidden" name="slug" value={slug} />
+          <input type="hidden" name="id" value={id} />
           <button
             type="submit"
             disabled={removing}

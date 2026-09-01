@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import { getManualCredentialProvider } from "@/lib/manual-credential-providers";
 import {
-  deleteSecretConnection,
+  deleteSharedSecretConnection,
   listSecretConnections,
   upsertSecretConnection,
 } from "@/lib/secret-connections";
@@ -57,7 +57,8 @@ export async function setManualCredentialAction(
       slug: f.key,
       value: v,
       description: `${provider.displayName} · ${f.label}`,
-      userId,
+      actorUserId: userId,
+      ownerUserId: null,
     });
     if (!res.ok) {
       return { error: `Couldn't save ${f.label} (${res.error}).` };
@@ -85,7 +86,7 @@ export async function removeManualCredentialAction(
   if (!provider) return { error: "Unknown provider." };
 
   for (const f of provider.fields) {
-    await deleteSecretConnection(workspace.id, f.key);
+    await deleteSharedSecretConnection(workspace.id, f.key);
   }
 
   redirect(`/${slug}/connections`);

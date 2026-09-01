@@ -114,7 +114,7 @@ export default async function WorkspaceLayout({
     listAgents(workspace.id).catch(() => null),
     listConnectionsForUser(workspace.id, session.user.id).catch(() => []),
     listNativeConnectionsForUser(workspace.id, session.user.id).catch(() => []),
-    listSecretConnections(workspace.id).catch(() => []),
+    listSecretConnections(workspace.id, session.user.id).catch(() => []),
     listFailingAgents24h(workspace.id, session.user.id).catch(() => []),
     listErroredEnabledAutomations(workspace.id).catch(() => []),
     getWorkspaceSecretPreview(workspace.id, "anthropic_api_key").catch(

@@ -33,7 +33,7 @@ export default async function AgentLibraryPage({
   const [composio, native, secrets, slackApps, library] = await Promise.all([
     listConnectionsForUser(workspace.id, session.user.id).catch(() => []),
     listNativeConnectionsForUser(workspace.id, session.user.id).catch(() => []),
-    listSecretConnections(workspace.id).catch(() => []),
+    listSecretConnections(workspace.id, session.user.id).catch(() => []),
     listSlackApps(workspace.id).catch(() => []),
     loadAgentLibrary(),
   ]);
