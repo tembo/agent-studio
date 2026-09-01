@@ -51,7 +51,7 @@ triggers a run, writes an automation, or kicks off the coding agent needs
 | `GET /agents` | List agents in the connected repo (valid + invalid). | viewer |
 | `GET /agents/{name}` | One agent, including the raw spec text. | viewer |
 | `POST /agents/validate` | Parse a spec without writing it. | viewer |
-| `GET /runs` | List runs (`?status=`, `?agent=`, `?trigger=`, `?limit=`, `?before=`). | viewer |
+| `GET /runs` | List runs (`?status=`, `?agent=`, `?trigger=`, `?environment=`, `?limit=`, `?before=`). | viewer |
 | `POST /runs` | Trigger a run → `202 { run_id }`. | operator |
 | `GET /runs/{id}` | Full run incl. output, safe failure guidance, tokens, and cost. Workspace admins additionally receive `errorDetails`. | viewer |
 | `GET /tools` | Your cached tool catalog (slugs for `connections:`). | viewer |
@@ -127,6 +127,9 @@ of the change.
 
 - **Runs are asynchronous.** `POST /runs` returns `202` with a `run_id`
   immediately; poll `GET /runs/{id}` until `status` is `succeeded` or `failed`.
+- **Run responses include `runEnvironment`.** Filter `GET /runs` with
+  `?environment=production`, `development`, or both as a comma-separated list.
+  Draft runs are Development; promoted/versioned runs are Production.
 - **Failure details follow your live role.** Failed runs return `failureCode`,
   a safe `errorMessage`, and `failureRecommendation` to every member. Only a
   workspace-admin key receives the raw runner trace in `errorDetails`.

@@ -4,10 +4,13 @@ import { LocalTime } from "@/components/local-time";
 import { formatCurrency } from "@/lib/pricing";
 import {
   type AgentDailyRunBands,
-  type AgentFailureGroup,
   type AgentStats30d,
+} from "@/lib/run-analytics-db";
+import {
+  type AgentFailureGroup,
   type AgentToolUsage,
 } from "@/lib/runs-db";
+import type { RunEnvironmentFilter } from "@/lib/run-environment";
 
 import { DailyTrend } from "../../dashboard/workspace-dashboard";
 
@@ -28,6 +31,7 @@ type Props = {
   toolUsage: AgentToolUsage[];
   workspaceSlug: string;
   agentName: string;
+  environment: RunEnvironmentFilter;
 };
 
 const TOOL_USAGE_PREVIEW = 5;
@@ -39,6 +43,7 @@ export function AgentDashboard({
   toolUsage,
   workspaceSlug,
   agentName,
+  environment,
 }: Props) {
   // Empty state when an agent has no run history at all in 30d —
   // tiles would all show "0" which is technically true but reads
@@ -52,7 +57,11 @@ export function AgentDashboard({
 
   return (
     <div className="flex flex-col gap-5">
-      <StatTiles stats={stats} successRate={successRate} />
+      <StatTiles
+        stats={stats}
+        successRate={successRate}
+        environment={environment}
+      />
       <DailyTrend daily={daily} />
       {toolUsage.length > 0 && <ToolUsage toolUsage={toolUsage} />}
       {failures.length > 0 && (
@@ -130,10 +139,14 @@ function ToolUsageRow({ tool }: { tool: AgentToolUsage }) {
 function StatTiles({
   stats,
   successRate,
+  environment,
 }: {
   stats: AgentStats30d;
   successRate: number;
+  environment: RunEnvironmentFilter;
 }) {
+  const scope =
+    environment === "all" ? "all environments" : `${environment} only`;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Tile
@@ -144,7 +157,7 @@ function StatTiles({
       <Tile
         label="Success rate"
         value={`${Math.round(successRate * 100)}%`}
-        sub={stats.totalRuns === 0 ? "no runs yet" : "last 30 days"}
+        sub={scope}
       />
       <Tile
         label="Spend (30d)"

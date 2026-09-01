@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LocalTime } from "@/components/local-time";
+import { RunEnvironmentTabs } from "@/components/run-environment-tabs";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { scheduleImprovementScan } from "@/lib/improvement-scan";
@@ -14,12 +15,15 @@ import {
 import {
   getWorkspaceDailyRunBands30d,
   getWorkspaceStats30d,
-  listRunsForWorkspace,
   listWorkspaceTopFailingAgents30d,
+} from "@/lib/run-analytics-db";
+import {
+  listRunsForWorkspace,
   type RunListItem,
 } from "@/lib/runs-db";
 import { listMemberActivity } from "@/lib/member-stats";
 import { runIdentityLabel } from "@/lib/run-identity";
+import { parseRunEnvironmentFilter } from "@/lib/run-environment";
 import { listAgentOwners } from "@/lib/agent-versions";
 import { listAgents } from "@/lib/workspace-agents";
 import { getServerSession } from "@/lib/session";
@@ -36,10 +40,13 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default async function DashboardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ workspace: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { workspace: slug } = await params;
+  const [{ workspace: slug }, sp] = await Promise.all([params, searchParams]);
+  const environment = parseRunEnvironmentFilter(sp.environment);
 
   const session = await getServerSession();
   if (!session) notFound();
@@ -63,12 +70,18 @@ export default async function DashboardPage({
     role,
     openImprovements,
   ] = await Promise.all([
-    getWorkspaceStats30d(workspace.id),
-    getWorkspaceDailyRunBands30d(workspace.id),
-    listWorkspaceTopFailingAgents30d(workspace.id, 5),
+    getWorkspaceStats30d(workspace.id, environment),
+    getWorkspaceDailyRunBands30d(workspace.id, environment),
+    listWorkspaceTopFailingAgents30d(workspace.id, 5, environment),
     countImprovementsSince(workspace.id, since),
     listImprovements(workspace.id, 10),
-    listRunsForWorkspace(workspace.id, {}, { limit: 8 }),
+    listRunsForWorkspace(
+      workspace.id,
+      {
+        environments: environment === "all" ? undefined : [environment],
+      },
+      { limit: 8 },
+    ),
     listMemberActivity(workspace.id),
     listAgents(workspace.id).catch(() => null),
     listAgentOwners(workspace.id).catch(() => new Map<string, string>()),
@@ -127,11 +140,17 @@ export default async function DashboardPage({
 
       <hr className="border-[var(--color-border-weak)]" />
 
+      <RunEnvironmentTabs
+        active={environment}
+        baseHref={`/${workspace.slug}/dashboard`}
+      />
+
       <WorkspaceDashboard
         stats={stats}
         daily={daily}
         topFailing={topFailing}
         workspaceSlug={workspace.slug}
+        environment={environment}
       />
 
       <Section

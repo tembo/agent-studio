@@ -39,6 +39,7 @@ describe("long tool lists", () => {
         daily={[]}
         failures={[]}
         toolUsage={toolUsage(7)}
+        environment="production"
         workspaceSlug="workspace"
         agentName="agent"
       />,

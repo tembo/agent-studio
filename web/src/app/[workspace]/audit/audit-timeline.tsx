@@ -422,6 +422,9 @@ function EventSummary({ entry }: { entry: LoadedAuditEntry }) {
     case "run.running":
     case "run.queued": {
       const status = String(p.status ?? "");
+      const environment = p.environment
+        ? ` · ${String(p.environment)}`
+        : "";
       const cost = p.costUsd ? ` · ~$${Number(p.costUsd).toFixed(4)}` : "";
       const dur = p.durationMs
         ? ` · ${(Number(p.durationMs) / 1000).toFixed(1)}s`
@@ -432,6 +435,7 @@ function EventSummary({ entry }: { entry: LoadedAuditEntry }) {
       return (
         <span className="text-foreground-weak text-sm">
           {status}
+          {environment}
           {dur}
           {cost}
           {err}

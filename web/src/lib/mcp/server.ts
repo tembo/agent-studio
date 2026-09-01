@@ -139,7 +139,7 @@ export function buildMcpServer(
     {
       description:
         "List recent agent runs for this workspace, newest first. Filter by " +
-        "status, agent name, and/or trigger. Returns compact rows (status, " +
+        "status, agent name, trigger, and/or environment. Returns compact rows (status, " +
         "cost, previews) — call get_run for full output.",
       inputSchema: {
         status: z
@@ -153,13 +153,19 @@ export function buildMcpServer(
           .array()
           .optional()
           .describe("Only runs from these triggers."),
+        environment: z
+          .enum(["production", "development"])
+          .array()
+          .optional()
+          .describe("Only runs from these environments."),
         limit: z.number().int().min(1).max(50).optional().describe("Max rows (default 50)."),
       },
     },
-    async ({ status, agent, trigger, limit }) => {
+    async ({ status, agent, trigger, environment, limit }) => {
       const filters: RunListFilters = {
         ...(status?.length ? { statuses: status } : {}),
         ...(trigger?.length ? { triggers: trigger } : {}),
+        ...(environment?.length ? { environments: environment } : {}),
         ...(agent ? { agentName: agent } : {}),
       };
       const runs = await listRunsForWorkspace(ctx.workspace.id, filters, {

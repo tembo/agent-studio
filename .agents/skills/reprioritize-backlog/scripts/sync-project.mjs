@@ -140,6 +140,7 @@ async function getProject() {
             items(first: 100, after: $after) {
               nodes {
                 id
+                isArchived
                 content {
                   ... on Issue {
                     id number title state
@@ -389,7 +390,8 @@ for (const name of ["Priority", "Status", "Initiative", "Order"]) {
 }
 await ensureVisibleFields(project, fields);
 
-const managedItems = project.items.filter(
+const activeProjectItems = project.items.filter((item) => !item.isArchived);
+const managedItems = activeProjectItems.filter(
   (item) => item.content?.repository?.nameWithOwner === repository,
 );
 const openItems = [];
@@ -452,13 +454,13 @@ for (const [index, entry] of ordered.entries()) {
 
 const managedOpenIds = new Set(ordered.map((entry) => entry.item.id));
 const managedClosed = managedItems.filter((item) => !managedOpenIds.has(item.id));
-const unmanaged = project.items.filter((item) => !managedItems.includes(item));
+const unmanaged = activeProjectItems.filter((item) => !managedItems.includes(item));
 const desiredPositions = [
   ...ordered.map((entry) => entry.item),
   ...managedClosed,
   ...unmanaged,
 ];
-const currentPositions = project.items.map((item) => item.id);
+const currentPositions = activeProjectItems.map((item) => item.id);
 if (desiredPositions.some((item, index) => item.id !== currentPositions[index])) {
   let afterId = null;
   for (const item of desiredPositions) {

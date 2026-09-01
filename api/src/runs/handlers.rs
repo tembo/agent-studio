@@ -156,19 +156,45 @@ pub async fn create_run(
         .output_delivery
         .as_ref()
         .map(|delivery| serde_json::json!(delivery));
+    let lifecycle_environment =
+        run_environment_for_version_label(req.agent_version_label.as_deref());
+    let run_environment = if let Some(orchestrator_run_id) = req.orchestrator_run_id {
+        sqlx::query_scalar::<_, String>(
+            "SELECT run_environment FROM run WHERE id = $1 AND workspace_id = $2",
+        )
+        .bind(orchestrator_run_id)
+        .bind(req.workspace_id)
+        .fetch_optional(&state.db)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("orchestrator lookup: {e}"),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_REQUEST,
+                "orchestrator run was not found in this workspace".to_string(),
+            )
+        })?
+    } else {
+        lifecycle_environment.to_string()
+    };
 
     sqlx::query(
         r#"INSERT INTO run
             (id, workspace_id, agent_name, agent_path, model, status,
              failure_code, failure_summary, failure_recommendation,
              created_by, user_message, trigger, automation_id,
-             agent_version_id, agent_version_label, orchestrator_run_id,
+             agent_version_id, agent_version_label, run_environment,
+             orchestrator_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
              execution_skills_content, output_delivery)
             VALUES ($1, $2, $3, $4, $5, 'queued', NULL, NULL, NULL,
-                    $6, $7, $8, $9, $10, $11, $12,
-                    $13, $14, $15, $16, $17, $18)"#,
+                    $6, $7, $8, $9, $10, $11, $12, $13,
+                    $14, $15, $16, $17, $18, $19)"#,
     )
     .bind(run_id)
     .bind(req.workspace_id)
@@ -181,6 +207,7 @@ pub async fn create_run(
     .bind(req.automation_id)
     .bind(req.agent_version_id)
     .bind(&req.agent_version_label)
+    .bind(&run_environment)
     .bind(req.orchestrator_run_id)
     .bind(framework_name)
     .bind(req.spec_content.as_deref())
@@ -242,6 +269,14 @@ fn parse_framework(s: &str) -> runner::Framework {
     }
 }
 
+fn run_environment_for_version_label(version_label: Option<&str>) -> &'static str {
+    if version_label == Some("draft") {
+        "development"
+    } else {
+        "production"
+    }
+}
+
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct RunRecord {
     pub id: Uuid,
@@ -273,6 +308,7 @@ pub struct RunRecord {
     pub automation_id: Option<Uuid>,
     pub agent_version_id: Option<Uuid>,
     pub agent_version_label: Option<String>,
+    pub run_environment: String,
     /// Number of times this run was reconstructed after an API restart.
     pub resume_count: i32,
     pub resumed_at: Option<DateTime<Utc>>,
@@ -295,7 +331,7 @@ pub async fn get_run(
                   started_at, completed_at, tokens_input, tokens_output,
                   scaledown_original_tokens, scaledown_compressed_tokens,
                   trigger, automation_id, agent_version_id, agent_version_label,
-                  resume_count, resumed_at
+                  run_environment, resume_count, resumed_at
              FROM run
              WHERE id = $1 AND workspace_id = $2"#,
     )
@@ -353,4 +389,23 @@ pub async fn cancel_run(
     Ok(Json(CancelRunResponse {
         cancelled: res.rows_affected() > 0,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::run_environment_for_version_label;
+
+    #[test]
+    fn draft_runs_are_development() {
+        assert_eq!(
+            run_environment_for_version_label(Some("draft")),
+            "development"
+        );
+    }
+
+    #[test]
+    fn promoted_and_unversioned_runs_are_production() {
+        assert_eq!(run_environment_for_version_label(Some("v3")), "production");
+        assert_eq!(run_environment_for_version_label(None), "production");
+    }
 }

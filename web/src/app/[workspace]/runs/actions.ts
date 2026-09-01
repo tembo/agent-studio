@@ -23,6 +23,7 @@ export type LoadRunsArgs = {
     statuses?: RunListFilters["statuses"];
     agentName?: string;
     triggers?: RunListFilters["triggers"];
+    environments?: RunListFilters["environments"];
     search?: string;
   };
   beforeIso?: string;

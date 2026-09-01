@@ -1,6 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type {
+  RunEnvironment,
+  RunEnvironmentFilter,
+} from "@/lib/run-environment";
 import type { RunSummary, RunTrigger } from "@/lib/runs-db";
 
 type RunSummaryRow = {
@@ -13,6 +17,7 @@ type RunSummaryRow = {
   automation_id: string | null;
   created_by_name: string | null;
   created_by_email: string | null;
+  run_environment: RunEnvironment;
 };
 
 export type RunExecutionIdentity = {
@@ -31,6 +36,7 @@ function toRunSummary(row: RunSummaryRow): RunSummary {
     automationId: row.automation_id,
     createdByName: row.created_by_name,
     createdByEmail: row.created_by_email,
+    runEnvironment: row.run_environment,
   };
 }
 
@@ -38,17 +44,19 @@ export async function listRecentRunsForAgent(
   workspaceId: string,
   agentName: string,
   limit = 10,
+  environment: RunEnvironmentFilter = "all",
 ): Promise<RunSummary[]> {
   const { rows } = await db.query<RunSummaryRow>(
     `SELECT r.id, r.agent_name, r.status, r.created_at, r.completed_at,
-            r.trigger, r.automation_id,
+            r.trigger, r.automation_id, r.run_environment,
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
       WHERE r.workspace_id = $1 AND r.agent_name = $2
+        AND ($3::TEXT = 'all' OR r.run_environment = $3)
       ORDER BY r.created_at DESC
-      LIMIT $3`,
-    [workspaceId, agentName, limit],
+      LIMIT $4`,
+    [workspaceId, agentName, environment, limit],
   );
   return rows.map(toRunSummary);
 }
@@ -60,7 +68,7 @@ export async function listRecentRunsForAutomation(
 ): Promise<RunSummary[]> {
   const { rows } = await db.query<RunSummaryRow>(
     `SELECT r.id, r.agent_name, r.status, r.created_at, r.completed_at,
-            r.trigger, r.automation_id,
+            r.trigger, r.automation_id, r.run_environment,
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by

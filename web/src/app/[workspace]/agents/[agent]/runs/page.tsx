@@ -30,6 +30,9 @@ export default async function AgentRunsPage({
     agentName: canonicalName,
     statuses: filters.statuses.length ? filters.statuses : undefined,
     triggers: filters.triggers.length ? filters.triggers : undefined,
+    environments: filters.environments.length
+      ? filters.environments
+      : undefined,
     search: filters.search || undefined,
   });
 
@@ -43,6 +46,7 @@ export default async function AgentRunsPage({
         initialFilters={{
           statuses: filters.statuses,
           triggers: filters.triggers,
+          environments: filters.environments,
           agentName: canonicalName,
           search: filters.search,
         }}
