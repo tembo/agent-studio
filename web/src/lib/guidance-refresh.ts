@@ -57,7 +57,22 @@ export async function setGuidanceRefreshCadence(
 async function markGuidanceRefreshed(
   workspaceId: string,
   at: Date,
+  claimedAt?: Date,
 ): Promise<void> {
+  if (claimedAt) {
+    await db.query(
+      `UPDATE workspace
+          SET guidance_refreshed_at = $2,
+              guidance_refresh_claimed_at = CASE
+                WHEN guidance_refresh_claimed_at = $3 THEN NULL
+                ELSE guidance_refresh_claimed_at
+              END
+        WHERE id = $1`,
+      [workspaceId, at, claimedAt],
+    );
+    return;
+  }
+
   await db.query(
     `UPDATE workspace
         SET guidance_refreshed_at = $2
@@ -73,12 +88,13 @@ export async function refreshWorkspaceGuidance(args: {
   trigger: "manual" | "schedule";
   cadence?: Exclude<GuidanceRefreshCadence, "off">;
   at?: Date;
+  claimedAt?: Date;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const result = await refreshAllGuidanceFiles(args.workspaceId);
   if (!result.ok) return result;
 
   const refreshedAt = args.at ?? new Date();
-  await markGuidanceRefreshed(args.workspaceId, refreshedAt);
+  await markGuidanceRefreshed(args.workspaceId, refreshedAt, args.claimedAt);
   await writeAuditEvent({
     workspaceId: args.workspaceId,
     actorUserId: args.actorUserId,
@@ -118,10 +134,14 @@ export async function claimDueGuidanceRefreshes(
               END
             )
           )
+          AND (
+            w.guidance_refresh_claimed_at IS NULL
+            OR w.guidance_refresh_claimed_at < $1::timestamptz - INTERVAL '15 minutes'
+          )
         FOR UPDATE OF w SKIP LOCKED
      )
      UPDATE workspace w
-        SET guidance_refreshed_at = $1
+        SET guidance_refresh_claimed_at = $1
        FROM due
       WHERE w.id = due.id
       RETURNING w.id, w.guidance_refresh_cadence, w.guidance_refreshed_at`,
@@ -147,6 +167,7 @@ export async function runDueGuidanceRefreshes(now = new Date()): Promise<void> {
         trigger: "schedule",
         cadence: workspace.cadence,
         at: now,
+        claimedAt: now,
       });
       if (!result.ok) {
         console.warn(

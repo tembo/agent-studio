@@ -80,7 +80,7 @@ describe("guidance refresh", () => {
       { workspaceId: "workspace-2", cadence: "weekly" },
     ]);
     expect(mocks.query.mock.calls[0]?.[0]).toMatch(
-      /JOIN workspace_repo[\s\S]*INTERVAL '1 day'[\s\S]*INTERVAL '7 days'[\s\S]*FOR UPDATE OF w SKIP LOCKED[\s\S]*SET guidance_refreshed_at = \$1/,
+      /JOIN workspace_repo[\s\S]*INTERVAL '1 day'[\s\S]*INTERVAL '7 days'[\s\S]*guidance_refresh_claimed_at < \$1::timestamptz - INTERVAL '15 minutes'[\s\S]*FOR UPDATE OF w SKIP LOCKED[\s\S]*SET guidance_refresh_claimed_at = \$1/,
     );
   });
 
@@ -113,6 +113,34 @@ describe("guidance refresh", () => {
     );
   });
 
+  it("keeps a retry lease without advancing the refresh floor on failure", async () => {
+    const at = new Date("2026-09-01T12:00:00Z");
+    mocks.query
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "workspace-1",
+            guidance_refresh_cadence: "daily",
+            guidance_refreshed_at: null,
+          },
+        ],
+      })
+      .mockResolvedValue({ rows: [] });
+    mocks.refreshAllGuidanceFiles.mockResolvedValue({
+      ok: false,
+      error: "github unavailable",
+    });
+
+    await runDueGuidanceRefreshes(at);
+
+    expect(mocks.query).toHaveBeenCalledOnce();
+    expect(mocks.query).not.toHaveBeenCalledWith(
+      expect.stringMatching(/SET guidance_refreshed_at = \$2/),
+      expect.anything(),
+    );
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+  });
+
   it("runs due refreshes as auditable system work", async () => {
     const at = new Date("2026-09-01T12:00:00Z");
     mocks.query
@@ -136,6 +164,12 @@ describe("guidance refresh", () => {
         source: "system",
         payload: { trigger: "schedule", cadence: "daily" },
       }),
+    );
+    expect(mocks.query).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /SET guidance_refreshed_at = \$2,[\s\S]*guidance_refresh_claimed_at = CASE/,
+      ),
+      ["workspace-1", at, at],
     );
   });
 
