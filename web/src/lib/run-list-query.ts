@@ -1,3 +1,8 @@
+import {
+  RUN_ENVIRONMENTS,
+  type RunEnvironment,
+} from "@/lib/run-environment";
+
 export type RunListStatus =
   | "queued"
   | "running"
@@ -24,6 +29,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 export type RunListQuery = {
   statuses: RunListStatus[];
   triggers: RunListTrigger[];
+  environments: RunEnvironment[];
   agentName: string;
   search: string;
 };
@@ -32,6 +38,10 @@ export function parseRunListQuery(searchParams: SearchParams): RunListQuery {
   return {
     statuses: parseMultiParam(searchParams.status, RUN_LIST_STATUSES),
     triggers: parseMultiParam(searchParams.trigger, RUN_LIST_TRIGGERS),
+    environments: parseMultiParam(
+      searchParams.environment,
+      RUN_ENVIRONMENTS,
+    ),
     agentName: parseSingleParam(searchParams.agent),
     search: parseSingleParam(searchParams.q).slice(0, 200),
   };
@@ -48,7 +58,7 @@ function parseSingleParam(raw: string | string[] | undefined): string {
 
 function parseMultiParam<T extends string>(
   raw: string | string[] | undefined,
-  allowed: T[],
+  allowed: readonly T[],
 ): T[] {
   if (!raw) return [];
   const values = (Array.isArray(raw) ? raw : [raw])

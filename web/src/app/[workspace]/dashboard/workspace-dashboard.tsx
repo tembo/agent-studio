@@ -7,7 +7,8 @@ import {
   type AgentStats30d,
   type DailyRunBand,
   type WorkspaceTopFailingAgent,
-} from "@/lib/runs-db";
+} from "@/lib/run-analytics-db";
+import type { RunEnvironmentFilter } from "@/lib/run-environment";
 
 // Workspace-level operational dashboard. Mirrors the per-agent
 // dashboard's structure so an operator's reading flow is the same
@@ -22,6 +23,7 @@ type Props = {
   daily: AgentDailyRunBands[];
   topFailing: WorkspaceTopFailingAgent[];
   workspaceSlug: string;
+  environment: RunEnvironmentFilter;
 };
 
 export function WorkspaceDashboard({
@@ -29,13 +31,14 @@ export function WorkspaceDashboard({
   daily,
   topFailing,
   workspaceSlug,
+  environment,
 }: Props) {
   if (stats.totalRuns === 0) {
     return (
       <div className="text-foreground-weak flex flex-col items-center gap-2 rounded-lg border border-dashed border-[var(--color-border)] px-4 py-6 text-center text-sm">
         <p>
-          No runs in the last 30 days yet — the dashboard fills in as
-          agents start firing.
+          No {environment === "all" ? "" : `${environment} `}runs in the last
+          30 days yet — the dashboard fills in as agents start firing.
         </p>
         <Link
           href={`/${workspaceSlug}`}
@@ -51,7 +54,11 @@ export function WorkspaceDashboard({
 
   return (
     <div className="flex flex-col gap-5">
-      <StatTiles stats={stats} successRate={successRate} />
+      <StatTiles
+        stats={stats}
+        successRate={successRate}
+        environment={environment}
+      />
       <DailyTrend daily={daily} />
       {topFailing.length > 0 && (
         <TopFailingAgents
@@ -66,10 +73,14 @@ export function WorkspaceDashboard({
 function StatTiles({
   stats,
   successRate,
+  environment,
 }: {
   stats: AgentStats30d;
   successRate: number;
+  environment: RunEnvironmentFilter;
 }) {
+  const scope =
+    environment === "all" ? "all environments" : `${environment} only`;
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       <Tile
@@ -80,7 +91,7 @@ function StatTiles({
       <Tile
         label="Success rate"
         value={`${Math.round(successRate * 100)}%`}
-        sub="last 30 days"
+        sub={scope}
       />
       <Tile
         label="Spend (30d)"

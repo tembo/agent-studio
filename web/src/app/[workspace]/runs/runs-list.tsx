@@ -15,6 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/pricing";
 import {
+  RUN_ENVIRONMENTS,
+  runEnvironmentLabel,
+  type RunEnvironment,
+} from "@/lib/run-environment";
+import {
   RUN_LIST_STATUSES,
   RUN_LIST_TRIGGERS,
   type RunListStatus,
@@ -28,6 +33,7 @@ import type { LoadedRun } from "./shape";
 const PAGE_SIZE = 50;
 const NO_STATUSES: RunListStatus[] = [];
 const NO_TRIGGERS: RunListTrigger[] = [];
+const NO_ENVIRONMENTS: RunEnvironment[] = [];
 
 type Props = {
   workspaceSlug: string;
@@ -42,6 +48,7 @@ type Props = {
   initialFilters?: {
     statuses?: RunListStatus[];
     triggers?: RunListTrigger[];
+    environments?: RunEnvironment[];
     agentName?: string;
     search?: string;
   };
@@ -66,6 +73,7 @@ export function RunsList({
   const urlSearchParams = useSearchParams();
   const statuses = initialFilters?.statuses ?? NO_STATUSES;
   const triggers = initialFilters?.triggers ?? NO_TRIGGERS;
+  const environments = initialFilters?.environments ?? NO_ENVIRONMENTS;
   const agentName = lockedAgent ?? initialFilters?.agentName ?? "";
   const activeSearch = initialFilters?.search ?? "";
   const [search, setSearch] = useState(activeSearch);
@@ -77,7 +85,10 @@ export function RunsList({
   const navigateWithFilters = useCallback(
     (
       updates: Partial<
-        Record<"status" | "trigger" | "agent" | "q", string | null>
+        Record<
+          "status" | "trigger" | "environment" | "agent" | "q",
+          string | null
+        >
       >,
     ) => {
       const next = new URLSearchParams(urlSearchParams.toString());
@@ -104,6 +115,7 @@ export function RunsList({
         filters: {
           statuses: statuses.length ? statuses : undefined,
           triggers: triggers.length ? triggers : undefined,
+          environments: environments.length ? environments : undefined,
           agentName: agentName || undefined,
           search: activeSearch || undefined,
         },
@@ -112,11 +124,20 @@ export function RunsList({
       setRows((prev) => [...prev, ...next]);
       setMore(next.length >= PAGE_SIZE);
     });
-  }, [rows, workspaceSlug, statuses, triggers, agentName, activeSearch]);
+  }, [
+    rows,
+    workspaceSlug,
+    statuses,
+    triggers,
+    environments,
+    agentName,
+    activeSearch,
+  ]);
 
   const hasFilters =
     statuses.length > 0 ||
     triggers.length > 0 ||
+    environments.length > 0 ||
     (!agentScoped && agentName !== "") ||
     activeSearch !== "";
 
@@ -305,6 +326,25 @@ export function RunsList({
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
+            Environment
+          </span>
+          {RUN_ENVIRONMENTS.map((environment) => (
+            <FilterChip
+              key={environment}
+              active={environments.includes(environment)}
+              onClick={() => {
+                const next = toggle(environment, environments);
+                navigateWithFilters({
+                  environment: next.length > 0 ? next.join(",") : null,
+                });
+              }}
+              label={runEnvironmentLabel(environment)}
+            />
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
             Trigger
           </span>
           {RUN_LIST_TRIGGERS.map((trigger) => (
@@ -473,6 +513,12 @@ function SourceCell({ run }: { run: LoadedRun }) {
           {run.agentVersionLabel}
         </span>
       )}
+      <Badge
+        variant={run.runEnvironment === "production" ? "gray" : "yellow"}
+        size="small"
+      >
+        {runEnvironmentLabel(run.runEnvironment)}
+      </Badge>
     </div>
   );
 }

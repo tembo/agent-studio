@@ -11,6 +11,11 @@ trend, the top-failing agents, and recent improvements. Each agent also has its
 own dashboard with the same shape scoped to that agent — useful for deciding
 whether a model downgrade held up or an agent started failing.
 
+Dashboard metrics show **Production** runs by default, so draft testing does
+not lower the live success rate. Use the **Development** or **All runs** tabs to
+inspect testing activity or compare the combined workload. The selected tab
+applies to the headline metrics, trend, failures, tool use, and recent runs.
+
 An agent overview puts its five most recent runs first, ahead of the 30-day
 configuration and health details. Tool usage shows the five most-used tools and
 the total tool and call counts; expand the remainder to browse it in a bounded,
@@ -35,13 +40,16 @@ someone who owns connections or automations.
 ## Runs
 
 The **Runs** page is the full, filterable history of every run in the workspace.
-Filter by agent, status, and trigger to find what you're looking for, then open
-any run for its [detail page](/agent-studio/running-agents/) — output, tokens,
-cost, tools used, and the effective **Run as** identity. The workspace list,
-agent run lists and recent-run panels, automation history, and run detail all
-use the same identity. Orchestrator run pages also show the identity for each
-sub-run. If a historical identity is no longer available, TAS displays
-**Unavailable member** instead of exposing an internal user identifier.
+Filter by agent, status, trigger, and **Environment** to find what you're
+looking for, then open any run for its
+[detail page](/agent-studio/running-agents/) — output, tokens, cost, tools used,
+environment, and the effective **Run as** identity. Production and Development
+badges keep excluded testing runs visible even when browsing all history. The
+workspace list, agent run lists and recent-run panels, automation history, and
+run detail all use the same identity. Orchestrator run pages also show the
+identity for each sub-run. If a historical identity is no longer available,
+TAS displays **Unavailable member** instead of exposing an internal user
+identifier.
 
 Use **Search** on either the workspace Runs page or an agent's Runs tab to find
 runs by agent name, full run ID, **Run as** member name or email, input, output,
@@ -49,6 +57,23 @@ or error text. Search combines with the agent, status, and trigger filters. The
 active search and filters are stored in the page URL, so copying the URL shares
 the same view. Submit an empty search or choose **Clear** to remove only the
 search while keeping the other filters.
+
+### Environment rules
+
+The environment is recorded when a run is created and does not change later:
+
+| Selected agent version | Run environment |
+| ---------------------- | --------------- |
+| **Draft** | **Development** |
+| **Promoted/versioned** | **Production** |
+
+A sub-run always inherits the orchestrator run's environment. This keeps one
+orchestrated workflow in a single analytics bucket even when its child agents
+use different selected versions. For runs created before environment tracking
+was added, TAS applies the same rule from the recorded version label and carries
+the root run's environment through its historical sub-runs. Older runs without
+a recorded version are treated as Production because their original lifecycle
+cannot be reconstructed safely.
 
 ### Source column
 

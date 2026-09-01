@@ -61,6 +61,14 @@ export function RunHistoryList({
                 <Badge variant={tone.variant} size="small">
                   {STATUS_LABELS[run.status]}
                 </Badge>
+                <Badge
+                  variant={
+                    run.runEnvironment === "production" ? "gray" : "yellow"
+                  }
+                  size="small"
+                >
+                  {run.runEnvironment === "production" ? "Production" : "Development"}
+                </Badge>
                 {run.trigger === "schedule" && (
                   <Badge variant="blue" size="small">
                     Scheduled

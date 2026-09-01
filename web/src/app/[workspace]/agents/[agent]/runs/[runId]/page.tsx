@@ -9,6 +9,7 @@ import { scanImprovementsForPRs } from "@/lib/improvement-scan";
 import { listImprovementsForRun } from "@/lib/improvements-api";
 import { estimateRunCost, formatCurrency, formatTokens } from "@/lib/pricing";
 import { getRunExecutionIdentity } from "@/lib/run-history-db";
+import { runEnvironmentLabel } from "@/lib/run-environment";
 import { runIdentityLabel } from "@/lib/run-identity";
 import {
   listSubAgentRuns,
@@ -267,6 +268,14 @@ export default async function RunDetailPage({
               ) : (
                 "Manual"
               )}
+            </dd>
+          </div>
+          <div className="flex gap-3">
+            <dt className="text-foreground-weak w-24 shrink-0 font-medium">
+              Environment
+            </dt>
+            <dd className="text-foreground">
+              {runEnvironmentLabel(run.runEnvironment)}
             </dd>
           </div>
           <div className="flex gap-3">

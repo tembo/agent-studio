@@ -5,6 +5,10 @@ import { triggerRun } from "@/lib/api-v1/actions";
 import { apiError, authErrorResponse } from "@/lib/api-v1/http";
 import { serializeRunListItem } from "@/lib/api-v1/serializers";
 import {
+  RUN_ENVIRONMENTS,
+  type RunEnvironment,
+} from "@/lib/run-environment";
+import {
   listRunsForWorkspace,
   type RunListFilters,
   type RunTrigger,
@@ -44,10 +48,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     (TRIGGERS as string[]).includes(t),
   );
   const agentName = sp.get("agent") ?? undefined;
+  const environments = csv(sp.get("environment")).filter(
+    (environment): environment is RunEnvironment =>
+      (RUN_ENVIRONMENTS as readonly string[]).includes(environment),
+  );
 
   const filters: RunListFilters = {
     ...(statuses.length ? { statuses } : {}),
     ...(triggers.length ? { triggers } : {}),
+    ...(environments.length ? { environments } : {}),
     ...(agentName ? { agentName } : {}),
   };
 

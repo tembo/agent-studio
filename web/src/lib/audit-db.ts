@@ -309,6 +309,7 @@ async function fetchRunEvents(
     at: Date;
     status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
     trigger: "manual" | "schedule" | "event";
+    run_environment: "production" | "development";
     agent_name: string;
     duration_ms: string | null;
     cost_usd: string | null;
@@ -317,7 +318,7 @@ async function fetchRunEvents(
     `SELECT r.id, r.workspace_id, r.created_by,
             u.name AS actor_name, u.email AS actor_email,
             COALESCE(r.completed_at, r.started_at, r.created_at) AS at,
-            r.status, r.trigger, r.agent_name,
+            r.status, r.trigger, r.run_environment, r.agent_name,
             (EXTRACT(EPOCH FROM (r.completed_at - r.started_at)) * 1000)::TEXT AS duration_ms,
             r.cost_usd::TEXT AS cost_usd,
             r.failure_summary
@@ -344,6 +345,7 @@ async function fetchRunEvents(
     payload: {
       status: r.status,
       trigger: r.trigger,
+      environment: r.run_environment,
       durationMs: r.duration_ms ? Number(r.duration_ms) : null,
       costUsd: r.cost_usd ? Number(r.cost_usd) : null,
       errorMessage:

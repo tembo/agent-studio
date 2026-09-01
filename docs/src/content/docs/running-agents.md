@@ -16,6 +16,12 @@ tested. The confirmation dialog names the selected version and lets you choose
 the numbered stable snapshot instead. Schedules and other automated runs still
 default to stable.
 
+The selected lifecycle also sets the run's analytics environment: a **draft**
+run is **Development**, while a promoted/versioned run is **Production**. This
+classification is recorded with the run, so later promotions do not rewrite
+historical metrics. A sub-run inherits its orchestrator's environment even if
+the child agent uses a different version.
+
 The API limits how many agents execute simultaneously. When all execution slots
 are occupied, newly accepted runs stay **queued** and start automatically as
 capacity becomes available. Instance operators configure the cap with
@@ -41,6 +47,8 @@ Each run records and displays:
   count visible; expand them to browse the bounded, scrollable list.
 - **Timing & trigger** — when it ran and what triggered it (manual, schedule, or
   event).
+- **Environment** — Production or Development, based on the lifecycle rule in
+  effect when the run was created.
 
 Pydantic runs checkpoint their message history after each model/tool node. If
 the API or host restarts mid-run, TAS reconstructs the run from its last

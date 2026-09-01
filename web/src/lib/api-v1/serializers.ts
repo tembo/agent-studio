@@ -84,6 +84,7 @@ export type SerializedRun = {
   trigger: RunRecord["trigger"];
   automationId: string | null;
   agentVersionLabel: string | null;
+  runEnvironment: RunRecord["runEnvironment"];
 };
 
 /** Full run record (output, stream, safe failure copy, tokens). */
@@ -120,6 +121,7 @@ export function serializeRunRecord(
     trigger: r.trigger,
     automationId: r.automationId,
     agentVersionLabel: r.agentVersionLabel,
+    runEnvironment: r.runEnvironment,
   };
   if (options.includeDiagnostics && r.status === "failed" && r.errorMessage) {
     serialized.errorDetails = r.errorMessage;
@@ -139,6 +141,7 @@ export type SerializedRunListItem = {
   errorMessagePreview: string | null;
   costUsd: number | null;
   agentVersionLabel: string | null;
+  runEnvironment: RunListItem["runEnvironment"];
 };
 
 /** Compact list row — the GET /runs body. No full output (use GET /runs/[id]). */
@@ -155,6 +158,7 @@ export function serializeRunListItem(r: RunListItem): SerializedRunListItem {
     errorMessagePreview: r.errorMessagePreview,
     costUsd: r.costUsd,
     agentVersionLabel: r.agentVersionLabel,
+    runEnvironment: r.runEnvironment,
   };
 }
 

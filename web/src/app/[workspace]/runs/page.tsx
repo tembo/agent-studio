@@ -38,6 +38,9 @@ export default async function RunsPage({
     listRunsForWorkspace(workspace.id, {
       statuses: filters.statuses.length ? filters.statuses : undefined,
       triggers: filters.triggers.length ? filters.triggers : undefined,
+      environments: filters.environments.length
+        ? filters.environments
+        : undefined,
       agentName: filters.agentName || undefined,
       search: filters.search || undefined,
     }),
@@ -53,8 +56,8 @@ export default async function RunsPage({
         <p className="text-foreground-weak text-base">
           Every agent run in{" "}
           <span className="text-foreground font-medium">{workspace.name}</span>
-          . Filter by status, agent, or trigger, or search by agent, run ID,
-          Run as identity, input, output, or error.
+          . Filter by environment, status, agent, or trigger, or search by
+          agent, run ID, Run as identity, input, output, or error.
         </p>
       </div>
 
@@ -68,6 +71,7 @@ export default async function RunsPage({
         initialFilters={{
           statuses: filters.statuses,
           triggers: filters.triggers,
+          environments: filters.environments,
           agentName: filters.agentName,
           search: filters.search,
         }}

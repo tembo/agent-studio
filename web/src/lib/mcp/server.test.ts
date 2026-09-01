@@ -225,17 +225,31 @@ describe("buildMcpServer", () => {
         createdByEmail: null,
         slack: null,
         agentVersionLabel: "v1",
+        runEnvironment: "production",
       },
     ]);
     const client = await connectedClient();
     const out = parse(
-      await client.callTool({ name: "list_runs", arguments: { status: ["succeeded"], limit: 10 } }),
-    ) as { runs: { id: string; createdAt: string }[] };
+      await client.callTool({
+        name: "list_runs",
+        arguments: {
+          status: ["succeeded"],
+          environment: ["production"],
+          limit: 10,
+        },
+      }),
+    ) as {
+      runs: { id: string; createdAt: string; runEnvironment: string }[];
+    };
     expect(out.runs[0].id).toBe("run-1");
     expect(out.runs[0].createdAt).toBe("2026-06-13T00:00:00.000Z");
+    expect(out.runs[0].runEnvironment).toBe("production");
     const [wsId, filters, options] = mockListRuns.mock.calls[0];
     expect(wsId).toBe("ws-1");
-    expect(filters).toEqual({ statuses: ["succeeded"] });
+    expect(filters).toEqual({
+      statuses: ["succeeded"],
+      environments: ["production"],
+    });
     expect(options).toEqual({ limit: 10 });
   });
 
@@ -266,14 +280,16 @@ describe("buildMcpServer", () => {
       automationId: null,
       agentVersionId: null,
       agentVersionLabel: null,
+      runEnvironment: "production",
       resumeCount: 0,
       resumedAt: null,
     });
     const client = await connectedClient();
     const out = parse(await client.callTool({ name: "get_run", arguments: { id: "run-1" } })) as {
-      run: { output: string };
+      run: { output: string; runEnvironment: string };
     };
     expect(out.run.output).toBe("Hello!");
+    expect(out.run.runEnvironment).toBe("production");
     expect(mockGetRun).toHaveBeenCalledWith("run-1", "ws-1");
   });
 
@@ -304,6 +320,7 @@ describe("buildMcpServer", () => {
       automationId: null,
       agentVersionId: null,
       agentVersionLabel: null,
+      runEnvironment: "development",
       resumeCount: 0,
       resumedAt: null,
     });

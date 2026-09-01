@@ -27,6 +27,7 @@ const runRow = {
   slack_permalink: null,
   slack_channel: null,
   agent_version_label: "v3",
+  run_environment: "production",
 };
 
 describe("listRunsForWorkspace", () => {
@@ -44,6 +45,7 @@ describe("listRunsForWorkspace", () => {
         userMessagePreview: "Summarize this morning's updates",
         costUsd: 0.0125,
         createdByName: "Ada Lovelace",
+        runEnvironment: "production",
       },
     ]);
 
@@ -66,6 +68,7 @@ describe("listRunsForWorkspace", () => {
         statuses: ["failed"],
         agentName: "daily-digest",
         triggers: ["schedule"],
+        environments: ["development"],
         search: "Ada",
       },
       { before: new Date("2026-08-31T00:00:00Z") },
@@ -80,12 +83,14 @@ describe("listRunsForWorkspace", () => {
     const [sql, params] = query.mock.calls[1] ?? [];
     expect(sql).toContain(`r.agent_name || E'\n'`);
     expect(sql).toContain("COALESCE(r.output, '')");
-    expect(sql).toContain("r.created_by = ANY($6::text[])");
+    expect(sql).toContain("r.run_environment = ANY($5::text[])");
+    expect(sql).toContain("r.created_by = ANY($7::text[])");
     expect(params).toEqual([
       "workspace-1",
       ["failed"],
       "daily-digest",
       ["schedule"],
+      ["development"],
       "%Ada%",
       ["user-ada"],
       new Date("2026-08-31T00:00:00Z"),

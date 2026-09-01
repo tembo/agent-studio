@@ -2,6 +2,7 @@ import "server-only";
 
 import type { AgentDelivery } from "@/lib/agent-format";
 import { claimAgentOwner } from "@/lib/agent-versions";
+import type { RunEnvironment } from "@/lib/run-environment";
 
 // Typed client for the Rust API's /internal/runs surface. Auth is a
 // shared bearer (INTERNAL_API_TOKEN env var); the web container reaches
@@ -93,6 +94,7 @@ export type RunRecord = {
   automationId: string | null;
   agentVersionId: string | null;
   agentVersionLabel: string | null;
+  runEnvironment: RunEnvironment;
   /** Number of API restarts this run recovered from. */
   resumeCount: number;
   resumedAt: string | null;
@@ -124,6 +126,7 @@ type ApiRunRecord = {
   automation_id: string | null;
   agent_version_id: string | null;
   agent_version_label: string | null;
+  run_environment: RunEnvironment;
   resume_count: number;
   resumed_at: string | null;
 };
@@ -155,6 +158,7 @@ function fromApi(r: ApiRunRecord): RunRecord {
     automationId: r.automation_id,
     agentVersionId: r.agent_version_id,
     agentVersionLabel: r.agent_version_label,
+    runEnvironment: r.run_environment,
     resumeCount: r.resume_count,
     resumedAt: r.resumed_at,
   };

@@ -1,12 +1,14 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type { RunEnvironment } from "@/lib/run-environment";
 import type { RunSummary, RunTrigger } from "@/lib/runs-db";
 
 export type RunListFilters = {
   statuses?: RunSummary["status"][];
   agentName?: string;
   triggers?: RunTrigger[];
+  environments?: RunEnvironment[];
   search?: string;
   /** Acting user (run.created_by) — used by the member-detail view. */
   createdBy?: string;
@@ -33,6 +35,7 @@ export type RunListItem = {
     channel: string;
   } | null;
   agentVersionLabel: string | null;
+  runEnvironment: RunEnvironment;
 };
 
 const LIST_RUNS_MAX_PAGE = 50;
@@ -67,6 +70,10 @@ export async function listRunsForWorkspace(
   if (filters.triggers && filters.triggers.length > 0) {
     params.push(filters.triggers);
     where.push(`r.trigger = ANY($${params.length}::text[])`);
+  }
+  if (filters.environments && filters.environments.length > 0) {
+    params.push(filters.environments);
+    where.push(`r.run_environment = ANY($${params.length}::text[])`);
   }
   if (filters.createdBy && filters.createdBy.trim()) {
     params.push(filters.createdBy.trim());
@@ -118,10 +125,12 @@ export async function listRunsForWorkspace(
     slack_permalink: string | null;
     slack_channel: string | null;
     agent_version_label: string | null;
+    run_environment: RunEnvironment;
   }>(
     `SELECT r.id, r.agent_name, r.status, r.trigger, r.automation_id,
             r.created_at, r.started_at, r.completed_at, r.user_message,
             r.failure_summary, r.cost_usd, r.agent_version_label,
+            r.run_environment,
             u.name AS created_by_name, u.email AS created_by_email,
             sa.name AS slack_app_name, sd.slack_user_id,
             sd.permalink AS slack_permalink, sd.channel AS slack_channel
@@ -161,6 +170,7 @@ export async function listRunsForWorkspace(
         }
       : null,
     agentVersionLabel: row.agent_version_label,
+    runEnvironment: row.run_environment,
   }));
 }
 

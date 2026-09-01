@@ -1,6 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type {
+  RunEnvironment,
+  RunEnvironmentFilter,
+} from "@/lib/run-environment";
 
 // Read-only DB views of the run table. The Rust API owns writes (creating
 // runs, marking them succeeded/failed); the web layer reads for list +
@@ -18,11 +22,12 @@ export type RunSummary = {
   automationId: string | null;
   createdByName: string | null;
   createdByEmail: string | null;
+  runEnvironment: RunEnvironment;
 };
 
 export type AgentSummary = {
   agentName: string;
-  /** Last 30 days. Both ok/failed live here, used for the success rate. */
+  /** Production runs in the last 30 days, used for the success rate. */
   totalRuns30d: number;
   succeeded30d: number;
   failed30d: number;
@@ -72,6 +77,7 @@ export async function listAgentSummaries30d(
             AVG(cost_usd) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days' AND cost_usd IS NOT NULL)   AS avg_cost_30d
           FROM run
          WHERE workspace_id = $1 AND agent_name = ANY($2::text[])
+           AND run_environment = 'production'
          GROUP BY agent_name
      ),
      latest AS (
@@ -113,136 +119,6 @@ export {
   listRunsForWorkspace,
 } from "@/lib/run-list-db";
 export type { RunListFilters, RunListItem } from "@/lib/run-list-db";
-
-// ── Operational dashboard aggregations ──────────────────────────────
-//
-// These feed the per-agent dashboard at /<workspace>/agents/<name>.
-// All scoped to (workspace_id, agent_name) and the last 30 days so
-// queries stay cheap and stats reflect "recent" behavior rather
-// than lifetime totals (which would mask new failures behind old
-// successes once an agent has been around for a while).
-
-export type AgentStats30d = {
-  totalRuns: number;
-  succeeded: number;
-  failed: number;
-  /** Sum of cost_usd over the window, in USD. Null tokens count as 0. */
-  totalCostUsd: number;
-  /** Mean (completed_at - started_at), in ms, for runs that completed. */
-  avgDurationMs: number | null;
-};
-
-export async function getAgentStats30d(
-  workspaceId: string,
-  agentName: string,
-): Promise<AgentStats30d> {
-  const { rows } = await db.query<{
-    total_runs: string;
-    succeeded: string;
-    failed: string;
-    total_cost_usd: string | null;
-    avg_duration_ms: string | null;
-  }>(
-    `SELECT
-        COUNT(*)::TEXT                                            AS total_runs,
-        COUNT(*) FILTER (WHERE status = 'succeeded')::TEXT        AS succeeded,
-        COUNT(*) FILTER (WHERE status = 'failed')::TEXT           AS failed,
-        COALESCE(SUM(cost_usd), 0)::TEXT                          AS total_cost_usd,
-        ROUND(AVG(EXTRACT(EPOCH FROM (completed_at - started_at))
-                    * 1000) FILTER (WHERE completed_at IS NOT NULL
-                                      AND started_at IS NOT NULL))::TEXT
-                                                                  AS avg_duration_ms
-       FROM run
-      WHERE workspace_id = $1 AND agent_name = $2
-        AND created_at >= NOW() - INTERVAL '30 days'`,
-    [workspaceId, agentName],
-  );
-  const r = rows[0];
-  return {
-    totalRuns: Number(r.total_runs ?? "0"),
-    succeeded: Number(r.succeeded ?? "0"),
-    failed: Number(r.failed ?? "0"),
-    totalCostUsd: Number(r.total_cost_usd ?? "0"),
-    avgDurationMs: r.avg_duration_ms ? Number(r.avg_duration_ms) : null,
-  };
-}
-
-export type DailyRunBand = {
-  status: "success" | "failed" | "other";
-  /** How many consecutive runs of this status lit up in this band. */
-  count: number;
-};
-
-export type AgentDailyRunBands = {
-  /** Calendar date in UTC, YYYY-MM-DD. */
-  day: string;
-  /** Run-length-encoded sequence of statuses, time-ordered earliest
-   *  → latest. A day with `4 failed → 3 succeeded → 3 failed` lands
-   *  here as three bands so the dashboard can render it as three
-   *  stacked color stripes. */
-  bands: DailyRunBand[];
-  /** Convenience: sum of band counts. The trend chart uses this to
-   *  size each band's flex-basis within the day's box. */
-  total: number;
-};
-
-type RunStatusRow = { day: Date; status: string; created_at: Date };
-
-function rowsToBands(rows: RunStatusRow[]): AgentDailyRunBands[] {
-  // SQL returns one row per run, sorted by created_at. We bucket by
-  // day and RLE within each day. Status normalisation collapses
-  // anything that isn't "succeeded" or "failed" into "other" so the
-  // rendering layer doesn't have to deal with queued/running/cancelled
-  // bands separately.
-  const out = new Map<string, AgentDailyRunBands>();
-  for (const r of rows) {
-    const day = r.day.toISOString().slice(0, 10);
-    const status: DailyRunBand["status"] =
-      r.status === "succeeded"
-        ? "success"
-        : r.status === "failed"
-          ? "failed"
-          : "other";
-    let entry = out.get(day);
-    if (!entry) {
-      entry = { day, bands: [], total: 0 };
-      out.set(day, entry);
-    }
-    const last = entry.bands[entry.bands.length - 1];
-    if (last && last.status === status) last.count += 1;
-    else entry.bands.push({ status, count: 1 });
-    entry.total += 1;
-  }
-  return Array.from(out.values());
-}
-
-/**
- * Per-day, time-ordered run-status bands for the last 30 days.
- * Sparse — days with zero runs aren't returned; the dashboard fills
- * the gaps when rendering so the chart is always 30 boxes wide.
- *
- * One row per run with day + status + created_at, RLE'd in JS into
- * consecutive same-status bands. The window function alternative
- * (precomputing RLE in SQL with `LAG`) would be cleaner but the
- * 30-day per-agent volume is bounded at low thousands, so the
- * client-side roll-up stays cheap and easy to reason about.
- */
-export async function getAgentDailyRunBands30d(
-  workspaceId: string,
-  agentName: string,
-): Promise<AgentDailyRunBands[]> {
-  const { rows } = await db.query<RunStatusRow>(
-    `SELECT date_trunc('day', created_at) AS day,
-            status,
-            created_at
-       FROM run
-      WHERE workspace_id = $1 AND agent_name = $2
-        AND created_at >= NOW() - INTERVAL '30 days'
-      ORDER BY created_at ASC`,
-    [workspaceId, agentName],
-  );
-  return rowsToBands(rows);
-}
 
 export type AgentFailureGroup = {
   /** Safe failure summary, used as the grouping key. */
@@ -317,167 +193,11 @@ export async function listFailingAgents24h(
   }));
 }
 
-export type WorkspaceTopFailingAgent = {
-  agentName: string;
-  failures: number;
-  /** Total runs in the window — denominator for the failure rate. */
-  totalRuns: number;
-  lastSeen: Date;
-  exampleRunId: string;
-};
-
-/**
- * Top-K agents by 30-day failure count. Workspace-wide equivalent
- * of the per-agent failure-prefix grouping — at the workspace level
- * "which agent is failing" is the useful pivot, since the same
- * error string can come from very different agents.
- */
-export async function listWorkspaceTopFailingAgents30d(
-  workspaceId: string,
-  limit = 5,
-): Promise<WorkspaceTopFailingAgent[]> {
-  const { rows } = await db.query<{
-    agent_name: string;
-    failures: string;
-    total_runs: string;
-    last_seen: Date;
-    example_run_id: string;
-  }>(
-    `SELECT
-        agent_name,
-        COUNT(*) FILTER (WHERE status = 'failed')::TEXT  AS failures,
-        COUNT(*)::TEXT                                    AS total_runs,
-        MAX(created_at) FILTER (WHERE status = 'failed') AS last_seen,
-        (ARRAY_AGG(id ORDER BY created_at DESC)
-           FILTER (WHERE status = 'failed'))[1]          AS example_run_id
-       FROM run
-      WHERE workspace_id = $1
-        AND created_at >= NOW() - INTERVAL '30 days'
-      GROUP BY agent_name
-     HAVING COUNT(*) FILTER (WHERE status = 'failed') > 0
-      ORDER BY failures DESC, last_seen DESC
-      LIMIT $2`,
-    [workspaceId, limit],
-  );
-  return rows.map((r) => ({
-    agentName: r.agent_name,
-    failures: Number(r.failures),
-    totalRuns: Number(r.total_runs),
-    lastSeen: r.last_seen,
-    exampleRunId: r.example_run_id,
-  }));
-}
-
-export async function getWorkspaceStats30d(
-  workspaceId: string,
-): Promise<AgentStats30d> {
-  const { rows } = await db.query<{
-    total_runs: string;
-    succeeded: string;
-    failed: string;
-    total_cost_usd: string | null;
-    avg_duration_ms: string | null;
-  }>(
-    `SELECT
-        COUNT(*)::TEXT                                            AS total_runs,
-        COUNT(*) FILTER (WHERE status = 'succeeded')::TEXT        AS succeeded,
-        COUNT(*) FILTER (WHERE status = 'failed')::TEXT           AS failed,
-        COALESCE(SUM(cost_usd), 0)::TEXT                          AS total_cost_usd,
-        ROUND(AVG(EXTRACT(EPOCH FROM (completed_at - started_at))
-                    * 1000) FILTER (WHERE completed_at IS NOT NULL
-                                      AND started_at IS NOT NULL))::TEXT
-                                                                  AS avg_duration_ms
-       FROM run
-      WHERE workspace_id = $1
-        AND created_at >= NOW() - INTERVAL '30 days'`,
-    [workspaceId],
-  );
-  const r = rows[0];
-  return {
-    totalRuns: Number(r.total_runs ?? "0"),
-    succeeded: Number(r.succeeded ?? "0"),
-    failed: Number(r.failed ?? "0"),
-    totalCostUsd: Number(r.total_cost_usd ?? "0"),
-    avgDurationMs: r.avg_duration_ms ? Number(r.avg_duration_ms) : null,
-  };
-}
-
-/**
- * Workspace-scope sibling of {@link getAgentDailyRunBands30d}.
- *
- * This one spans every agent in the workspace, so the "bounded at low
- * thousands" assumption that makes the per-agent JS roll-up cheap doesn't
- * hold — a busy workspace shipped one row per run to Node on every dashboard
- * render. The run-length encoding happens in SQL here instead, so the result
- * set is one row per *band* (what the chart actually draws) rather than one
- * row per run.
- */
-export async function getWorkspaceDailyRunBands30d(
-  workspaceId: string,
-): Promise<AgentDailyRunBands[]> {
-  const { rows } = await db.query<{
-    day: Date;
-    status: DailyRunBand["status"];
-    count: string;
-  }>(
-    `WITH normalised AS (
-       SELECT date_trunc('day', created_at) AS day,
-              CASE status
-                WHEN 'succeeded' THEN 'success'
-                WHEN 'failed'    THEN 'failed'
-                ELSE 'other'
-              END AS status,
-              created_at
-         FROM run
-        WHERE workspace_id = $1
-          AND created_at >= NOW() - INTERVAL '30 days'
-     ),
-     -- Flag each run whose status differs from the previous run that day.
-     -- A running sum of those flags numbers the consecutive same-status
-     -- groups, which is exactly the run-length encoding the chart wants.
-     marked AS (
-       SELECT day, status, created_at,
-              CASE
-                WHEN LAG(status) OVER (PARTITION BY day ORDER BY created_at)
-                     IS DISTINCT FROM status
-                THEN 1 ELSE 0
-              END AS starts_band
-         FROM normalised
-     ),
-     banded AS (
-       SELECT day, status, created_at,
-              SUM(starts_band) OVER (
-                PARTITION BY day ORDER BY created_at
-                ROWS UNBOUNDED PRECEDING
-              ) AS band
-         FROM marked
-     )
-     SELECT day, status, COUNT(*)::TEXT AS count
-       FROM banded
-      GROUP BY day, band, status
-      ORDER BY day ASC, MIN(created_at) ASC`,
-    [workspaceId],
-  );
-
-  const out = new Map<string, AgentDailyRunBands>();
-  for (const r of rows) {
-    const day = r.day.toISOString().slice(0, 10);
-    let entry = out.get(day);
-    if (!entry) {
-      entry = { day, bands: [], total: 0 };
-      out.set(day, entry);
-    }
-    const count = Number(r.count);
-    entry.bands.push({ status: r.status, count });
-    entry.total += count;
-  }
-  return Array.from(out.values());
-}
-
 export async function listAgentFailureGroups30d(
   workspaceId: string,
   agentName: string,
   limit = 5,
+  environment: RunEnvironmentFilter = "production",
 ): Promise<AgentFailureGroup[]> {
   const { rows } = await db.query<{
     error_prefix: string;
@@ -493,11 +213,12 @@ export async function listAgentFailureGroups30d(
        FROM run
       WHERE workspace_id = $1 AND agent_name = $2
         AND status = 'failed'
+        AND ($4::TEXT = 'all' OR run_environment = $4)
         AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY error_prefix
       ORDER BY occurrences DESC, last_seen DESC
       LIMIT $3`,
-    [workspaceId, agentName, limit],
+    [workspaceId, agentName, limit, environment],
   );
   return rows.map((r) => ({
     errorPrefix: r.error_prefix,
@@ -602,6 +323,7 @@ export async function listAgentToolUsage30d(
   workspaceId: string,
   agentName: string,
   limit = 50,
+  environment: RunEnvironmentFilter = "production",
 ): Promise<AgentToolUsage[]> {
   const { rows } = await db.query<{
     tool_name: string;
@@ -616,11 +338,12 @@ export async function listAgentToolUsage30d(
        FROM run_tool_call tc
        JOIN run r ON r.id = tc.run_id
       WHERE r.workspace_id = $1 AND r.agent_name = $2
+        AND ($4::TEXT = 'all' OR r.run_environment = $4)
         AND r.created_at >= NOW() - INTERVAL '30 days'
       GROUP BY tc.tool_name
       ORDER BY calls DESC, tc.tool_name ASC
       LIMIT $3`,
-    [workspaceId, agentName, limit],
+    [workspaceId, agentName, limit, environment],
   );
   return rows.map((r) => ({
     toolName: r.tool_name,
