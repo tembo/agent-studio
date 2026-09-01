@@ -30,6 +30,9 @@ vi.mock("@/lib/inbox-api", () => ({
   listUnconsumedSignalsForAgent: vi.fn(),
   markSignalsConsumed: vi.fn(),
 }));
+vi.mock("@/lib/improvements-api", () => ({
+  isAgentCreatePending: vi.fn(),
+}));
 vi.mock("@/lib/tool-reconcile", () => ({
   maybeReconcileToolCaches: vi.fn().mockResolvedValue(undefined),
 }));
@@ -42,6 +45,7 @@ import {
   pauseAutomationsWithMissingOwners,
   recordAutomationFailure,
 } from "@/lib/automation-events";
+import { isAgentCreatePending } from "@/lib/improvements-api";
 import { startScheduler, stopScheduler } from "@/lib/scheduler";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 
@@ -49,6 +53,7 @@ const mockListEnabled = vi.mocked(listEnabledAutomations);
 const mockPauseMissingOwners = vi.mocked(pauseAutomationsWithMissingOwners);
 const mockResolveDispatch = vi.mocked(resolveAgentForDispatch);
 const mockRecordFailure = vi.mocked(recordAutomationFailure);
+const mockIsAgentCreatePending = vi.mocked(isAgentCreatePending);
 
 const automation: Automation = {
   id: "automation-1",
@@ -76,6 +81,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockPauseMissingOwners.mockResolvedValue(0);
   mockListEnabled.mockResolvedValue([automation]);
+  mockIsAgentCreatePending.mockResolvedValue(false);
   vi.spyOn(console, "log").mockImplementation(() => undefined);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
@@ -128,6 +134,27 @@ describe("scheduler agent-source failures", () => {
       occurredAt: expect.any(Date),
       failure: expect.objectContaining({ code: "not-found" }),
     });
+  });
+
+  it("keeps the firing window due while the agent is being created", async () => {
+    mockResolveDispatch.mockResolvedValue({
+      ok: false,
+      error: {
+        kind: "not-found",
+        message: 'Agent "daily-report" is no longer in the connected repo.',
+      },
+    });
+    mockIsAgentCreatePending.mockResolvedValue(true);
+
+    startScheduler();
+
+    await vi.waitFor(() =>
+      expect(mockIsAgentCreatePending).toHaveBeenCalledWith(
+        automation.workspaceId,
+        automation.agentName,
+      ),
+    );
+    expect(mockRecordFailure).not.toHaveBeenCalled();
   });
 });
 

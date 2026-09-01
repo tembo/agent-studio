@@ -193,6 +193,27 @@ export async function listPendingCreatesForWorkspace(
   return res.rows.map(rowToImprovement);
 }
 
+export async function isAgentCreatePending(
+  workspaceId: string,
+  agentName: string,
+): Promise<boolean> {
+  const res = await db.query<{ pending: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1
+         FROM improvement
+        WHERE workspace_id = $1
+          AND agent_name = $2
+          AND kind = 'create'
+          AND (
+            status IN ('submitted', 'pr_opened')
+            OR (delivery = 'direct' AND status = 'committed' AND commit_url IS NULL)
+          )
+     ) AS pending`,
+    [workspaceId, agentName],
+  );
+  return res.rows[0]?.pending ?? false;
+}
+
 /**
  * Dismiss a pending agent-create from the inventory: mark the create
  * improvement `closed` so it drops out of listPendingCreatesForWorkspace.

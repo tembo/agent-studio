@@ -4,7 +4,10 @@ const { query } = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock("@/lib/db", () => ({ db: { query } }));
 
-import { listImprovementsForAgent } from "./improvements-api";
+import {
+  isAgentCreatePending,
+  listImprovementsForAgent,
+} from "./improvements-api";
 
 function row(id: string, createdAt: string) {
   return {
@@ -56,5 +59,22 @@ describe("listImprovementsForAgent", () => {
       "old",
       "new",
     ]);
+  });
+});
+
+describe("isAgentCreatePending", () => {
+  beforeEach(() => query.mockReset());
+
+  it("matches an in-flight create for the workspace agent", async () => {
+    query.mockResolvedValue({ rows: [{ pending: true }] });
+
+    await expect(
+      isAgentCreatePending("workspace", "daily-report"),
+    ).resolves.toBe(true);
+
+    expect(query.mock.calls[0]?.[0]).toMatch(
+      /kind = 'create'[\s\S]*status IN \('submitted', 'pr_opened'\)/,
+    );
+    expect(query.mock.calls[0]?.[1]).toEqual(["workspace", "daily-report"]);
   });
 });
