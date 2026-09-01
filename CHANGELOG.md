@@ -40,14 +40,28 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **New agents no longer start running on an inferred schedule.** Recurring
+  language in a new-agent description now produces guidance only. TAS creates
+  no automation until the user explicitly accepts the suggested schedule. The
+  new one-click action saves it disabled so it cannot run before testing.
 - **Google and other OAuth sign-ins work after the Better Auth 1.7 upgrade.**
   The account schema now includes and backfills Better Auth's required `issuer`
   identity field with each configured provider's stable namespace. Previously
   every OAuth callback failed its first account lookup with
   `internal_server_error`.
+- **Completed runs survive MCP session-cleanup failures.** If a remote MCP
+  server rejects or drops its session-termination request after the agent has
+  finished, Agent Studio now preserves the output and usage while recording an
+  operator warning. Session setup and in-run failures remain fatal.
 - **Top-level outputs no longer repeat the agent as its own orchestrator.**
   Output cards and provenance show orchestrator metadata only for sub-agent
   runs, using the current Orchestrator terminology throughout.
+- **Automation failures remain inspectable after edits and recovery.** Schedule,
+  event-trigger, and webhook dispatch failures now append durable history with
+  retry attempts and related runs. Editing no longer clears current health, and
+  a successful retry records recovery without deleting the original failure.
+  Every member sees a safe summary; only workspace admins can expand sanitized
+  technical diagnostics.
 - **Cargo AI provider keys no longer appear in process command lines.**
   Cargo AI runs now load credentials from an isolated, per-run profile. The
   key is supplied over standard input, the subprocess environment is cleared,

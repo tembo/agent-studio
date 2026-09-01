@@ -1,18 +1,24 @@
-// Best-effort natural-language → 5-field cron, used to auto-create a schedule
-// when someone describes a new agent that "runs every morning" etc. (see
+// Best-effort natural-language → 5-field cron, used to suggest a schedule when
+// someone describes a new agent that "runs every morning" etc. (see
 // agents/new/actions.ts). Deliberately CONSERVATIVE: it only returns a cron
 // when the text contains an unambiguous recurrence cue ("every <unit>",
 // "daily", a weekday name, …). Prose that merely mentions a time of day
 // ("reply within 9 hours", "the 9am report") must return null — a false
-// positive would silently schedule a real, enabled run.
+// positive would present a misleading suggestion.
 //
 // Cron is interpreted in UTC everywhere in this codebase (see cron.ts /
-// migration 0015), so the spoken hour is taken as a UTC hour. The caller
-// validates the result with validateCron() before trusting it.
+// migration 0015), so the spoken hour is taken as a UTC hour. The suggestion
+// helper validates the result with validateCron() before presenting it.
+
+import { validateCron } from "./cron";
 
 export type ParsedSchedule = {
   /** 5-field cron (minute hour day-of-month month day-of-week), UTC. */
   cron: string;
+};
+
+export type ScheduleSuggestion = ParsedSchedule & {
+  humanReadable: string;
 };
 
 // Named times of day → 24h hour. Used when a frequency is given without an
@@ -170,4 +176,23 @@ export function parseScheduleToCron(input: string): ParsedSchedule | null {
   }
 
   return null;
+}
+
+/**
+ * Turn recurring language into display-ready guidance without creating an
+ * automation. The user must test the agent and explicitly create the schedule.
+ */
+export function suggestScheduleFromDescription(
+  input: string,
+): ScheduleSuggestion | null {
+  const parsed = parseScheduleToCron(input);
+  if (!parsed) return null;
+
+  const validation = validateCron(parsed.cron);
+  if (!validation.ok) return null;
+
+  return {
+    cron: parsed.cron,
+    humanReadable: validation.humanReadable,
+  };
 }

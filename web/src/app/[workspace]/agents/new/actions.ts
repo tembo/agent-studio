@@ -1,25 +1,30 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 
 import { validateAgentName } from "@/lib/agent-format";
 import { FRAMEWORKS, type Framework } from "@/lib/agent-framework";
 import { suggestSlug } from "@/lib/slugify";
+import { writeAuditEvent } from "@/lib/audit-db";
 import {
   authorizeWorkspace,
   DENIED_MESSAGE,
 } from "@/lib/auth-server";
+import {
+  createAutomation,
+  listAutomationsForAgent,
+} from "@/lib/automations-api";
 import {
   buildCreateAgentPrompt,
   createTemboTask,
   type CapError,
 } from "@/lib/cap-api";
 import { buildPromptConnectionContext } from "@/lib/prompt-connections";
-import { createAutomation } from "@/lib/automations-api";
-import { validateCron } from "@/lib/cron";
-import { parseScheduleToCron } from "@/lib/schedule-parse";
+import { suggestScheduleFromDescription } from "@/lib/schedule-parse";
 import {
   createImprovement,
+  getImprovement,
   improvementMarker,
   setImprovementCommitted,
   setImprovementTask,
@@ -53,43 +58,20 @@ export type ChatCreateFormState = {
     status: string;
     agentName: string;
     agentPath: string;
-    /** Set when the description named a schedule and we auto-created an
-     *  enabled automation for the new agent. */
-    schedule?: { cron: string; humanReadable: string };
+    /** Set when the description names a schedule. This is guidance only; the
+     *  user must explicitly create an automation after testing the agent. */
+    suggestedSchedule?: { cron: string; humanReadable: string };
   };
 };
 
-// If the description names a recurring schedule, create an enabled automation
-// for the new agent so it starts running on its own. Best-effort: any failure
-// (bad cron, DB error) is swallowed so it never blocks agent creation. The
-// automation references the agent by name — in PR mode the agent file lands
-// later, and the scheduler simply records a skip until it exists.
-async function maybeScheduleNewAgent(args: {
-  workspaceId: string;
-  agentName: string;
-  displayName: string;
-  description: string;
-  userId: string;
-}): Promise<{ cron: string; humanReadable: string } | undefined> {
-  const parsed = parseScheduleToCron(args.description);
-  if (!parsed) return undefined;
-  const check = validateCron(parsed.cron);
-  if (!check.ok) return undefined;
-  try {
-    await createAutomation({
-      workspaceId: args.workspaceId,
-      name: `${args.displayName} schedule`,
-      agentName: args.agentName,
-      cron: parsed.cron,
-      inputMessage: "",
-      enabled: true,
-      userId: args.userId,
-    });
-    return { cron: parsed.cron, humanReadable: check.humanReadable };
-  } catch {
-    return undefined;
-  }
-}
+export type SuggestedAutomationFormState = {
+  error?: string;
+  automation?: {
+    id: string;
+    name: string;
+    alreadyExisted: boolean;
+  };
+};
 
 export async function createFromChatAction(
   _prev: ChatCreateFormState,
@@ -219,13 +201,7 @@ export async function createFromChatAction(
     });
   }
 
-  const schedule = await maybeScheduleNewAgent({
-    workspaceId: workspace.id,
-    agentName: agentSlug,
-    displayName,
-    description,
-    userId,
-  });
+  const suggestedSchedule = suggestScheduleFromDescription(description);
 
   return {
     success: {
@@ -235,7 +211,98 @@ export async function createFromChatAction(
       status: res.result.status,
       agentName: displayName,
       agentPath,
-      ...(schedule ? { schedule } : {}),
+      ...(suggestedSchedule ? { suggestedSchedule } : {}),
+    },
+  };
+}
+
+export async function createSuggestedAutomationAction(
+  _prev: SuggestedAutomationFormState,
+  formData: FormData,
+): Promise<SuggestedAutomationFormState> {
+  const slug = String(formData.get("workspace") ?? "");
+  const improvementId = String(formData.get("improvement_id") ?? "");
+
+  const auth = await authorizeWorkspace(slug, "operator");
+  if (!auth.ok) {
+    if (auth.reason === "denied") return { error: DENIED_MESSAGE };
+    notFound();
+  }
+  const { workspace, userId } = auth;
+
+  // Treat the form as an untrusted pointer only. The agent and cadence come
+  // from the persisted create request, so a caller cannot substitute an
+  // arbitrary agent or cron expression in the POST.
+  const improvement = improvementId
+    ? await getImprovement(improvementId)
+    : null;
+  if (
+    !improvement ||
+    improvement.workspaceId !== workspace.id ||
+    improvement.kind !== "create" ||
+    improvement.createdBy !== userId
+  ) {
+    return { error: "That schedule suggestion is no longer available." };
+  }
+
+  const schedule = suggestScheduleFromDescription(improvement.improvementText);
+  if (!schedule) {
+    return { error: "That schedule suggestion is no longer available." };
+  }
+
+  // Retrying the action (or double-clicking across tabs) should not create a
+  // second automation for the same agent and cadence.
+  const existing = (await listAutomationsForAgent(
+    workspace.id,
+    improvement.agentName,
+  )).find((automation) => automation.cron === schedule.cron);
+  if (existing) {
+    return {
+      automation: {
+        id: existing.id,
+        name: existing.name,
+        alreadyExisted: true,
+      },
+    };
+  }
+
+  const created = await createAutomation({
+    workspaceId: workspace.id,
+    name: `${improvement.agentName} schedule`,
+    agentName: improvement.agentName,
+    cron: schedule.cron,
+    inputMessage: "",
+    enabled: false,
+    userId,
+    ownerUserId: userId,
+  });
+
+  await writeAuditEvent({
+    workspaceId: workspace.id,
+    actorUserId: userId,
+    source: "human_action",
+    kind: "automation.created",
+    targetType: "automation",
+    targetId: created.id,
+    agentName: improvement.agentName,
+    payload: {
+      name: created.name,
+      cron: created.cron,
+      enabled: created.enabled,
+      ownerUserId: userId,
+    },
+  });
+
+  revalidatePath(`/${slug}/automations`);
+  revalidatePath(
+    `/${slug}/agents/${encodeURIComponent(improvement.agentName)}`,
+  );
+
+  return {
+    automation: {
+      id: created.id,
+      name: created.name,
+      alreadyExisted: false,
     },
   };
 }

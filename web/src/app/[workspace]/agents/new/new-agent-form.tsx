@@ -16,11 +16,14 @@ import { suggestSlug } from "@/lib/slugify";
 
 import {
   createFromChatAction,
+  createSuggestedAutomationAction,
   type ChatCreateFormState,
+  type SuggestedAutomationFormState,
 } from "./actions";
 
 const DEFAULT_FRAMEWORK: Framework = "pydantic-agentspec";
 const CHAT_INITIAL: ChatCreateFormState = {};
+const AUTOMATION_INITIAL: SuggestedAutomationFormState = {};
 
 export function NewAgentForm({
   workspaceSlug,
@@ -57,65 +60,80 @@ export function NewAgentForm({
   if (state.success) {
     const s = state.success;
     return (
-      <div className="border-sentiment-positive bg-[var(--color-sentiment-positive-subtle)] flex flex-col gap-2 rounded-lg border p-4 text-sm">
-        <span className="text-foreground font-semibold">
-          {direct ? "Building" : "PR requested for"} {s.agentName}
-        </span>
-        <p className="text-foreground-weak">
-          {direct ? (
-            <>
-              Tembo is committing the new agent directly to your default branch
-              at{" "}
-              <code className="bg-surface rounded px-1 py-0.5">
-                {s.agentPath}
-              </code>
-              . You can watch the Tembo session; it&apos;ll show on the
-              Improvements page and appear in your agents once the commit lands.
-            </>
-          ) : (
-            <>
-              Tembo is opening a pull request at{" "}
-              <code className="bg-surface rounded px-1 py-0.5">
-                {s.agentPath}
-              </code>
-              . You can watch the Tembo session, and the PR status will appear
-              on the Improvements page once it&apos;s open.
-            </>
-          )}
-        </p>
-        <p className="text-foreground-weak text-sm">Status: {s.status}</p>
-        {s.schedule && (
-          <p className="text-foreground-weak text-sm">
-            Scheduled to run{" "}
-            <span className="text-foreground font-medium">
-              {s.schedule.humanReadable.toLowerCase()}
-            </span>{" "}
-            (UTC). Adjust it on the{" "}
-            <a
-              href={`/${workspaceSlug}/automations`}
-              className="text-foreground font-medium hover:underline"
-            >
-              Automations
-            </a>{" "}
-            page.
+      <div className="flex flex-col gap-3">
+        <div className="border-sentiment-positive bg-[var(--color-sentiment-positive-subtle)] flex flex-col gap-2 rounded-lg border p-4 text-sm">
+          <span className="text-foreground font-semibold">
+            {direct ? "Building" : "PR requested for"} {s.agentName}
+          </span>
+          <p className="text-foreground-weak">
+            {direct ? (
+              <>
+                Tembo is committing the new agent directly to your default
+                branch at{" "}
+                <code className="bg-surface rounded px-1 py-0.5">
+                  {s.agentPath}
+                </code>
+                . You can watch the Tembo session; it&apos;ll show on the
+                Improvements page and appear in your agents once the commit
+                lands.
+              </>
+            ) : (
+              <>
+                Tembo is opening a pull request at{" "}
+                <code className="bg-surface rounded px-1 py-0.5">
+                  {s.agentPath}
+                </code>
+                . You can watch the Tembo session, and the PR status will appear
+                on the Improvements page once it&apos;s open.
+              </>
+            )}
           </p>
-        )}
-        <div className="flex flex-wrap gap-3 pt-1">
-          <a
-            href={s.htmlUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-foreground text-sm font-medium hover:underline"
-          >
-            View Tembo session ↗
-          </a>
-          <a
-            href={`/${workspaceSlug}/improvements`}
-            className="text-foreground-weak hover:text-foreground text-sm"
-          >
-            Open Improvements →
-          </a>
+          <p className="text-foreground-weak text-sm">Status: {s.status}</p>
+          <div className="flex flex-wrap gap-3 pt-1">
+            <a
+              href={s.htmlUrl}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-foreground text-sm font-medium hover:underline"
+            >
+              View Tembo session ↗
+            </a>
+            <a
+              href={`/${workspaceSlug}/improvements`}
+              className="text-foreground-weak hover:text-foreground text-sm"
+            >
+              Open Improvements →
+            </a>
+          </div>
         </div>
+        {s.suggestedSchedule && (
+          <section
+            aria-labelledby="suggested-automation-title"
+            className="bg-surface border-border flex flex-col gap-2 rounded-lg border p-4 text-sm"
+          >
+            <h2
+              id="suggested-automation-title"
+              className="text-foreground font-semibold"
+            >
+              Suggested automation
+            </h2>
+            <p>
+              <span className="text-foreground-weak">Schedule: </span>
+              <span className="text-foreground font-medium">
+                {s.suggestedSchedule.humanReadable.toLowerCase()}
+              </span>{" "}
+              <span className="text-foreground-weak">(UTC).</span>
+            </p>
+            <p className="text-foreground-weak">
+              Create it now if you want to save this schedule. It will stay
+              disabled until you test the agent and enable the automation.
+            </p>
+            <SuggestedAutomationForm
+              workspaceSlug={workspaceSlug}
+              improvementId={s.improvementId}
+            />
+          </section>
+        )}
       </div>
     );
   }
@@ -235,6 +253,50 @@ export function NewAgentForm({
       >
         {pending ? "Asking Tembo…" : "Create"}
       </Button>
+    </form>
+  );
+}
+
+function SuggestedAutomationForm({
+  workspaceSlug,
+  improvementId,
+}: {
+  workspaceSlug: string;
+  improvementId: string;
+}) {
+  const [state, action, pending] = useActionState(
+    createSuggestedAutomationAction,
+    AUTOMATION_INITIAL,
+  );
+
+  if (state.automation) {
+    return (
+      <p className="text-foreground pt-1" aria-live="polite">
+        {state.automation.alreadyExisted
+          ? "A matching automation already exists."
+          : "Automation created and disabled."}{" "}
+        <a
+          href={`/${workspaceSlug}/automations/${encodeURIComponent(state.automation.id)}`}
+          className="font-medium hover:underline"
+        >
+          Review and enable →
+        </a>
+      </p>
+    );
+  }
+
+  return (
+    <form action={action} className="flex flex-col items-start gap-1.5 pt-1">
+      <input type="hidden" name="workspace" value={workspaceSlug} />
+      <input type="hidden" name="improvement_id" value={improvementId} />
+      <Button type="submit" variant="primary" disabled={pending}>
+        {pending ? "Creating automation…" : "Create suggested automation"}
+      </Button>
+      {state.error && (
+        <p className="text-sentiment-negative text-sm" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }
