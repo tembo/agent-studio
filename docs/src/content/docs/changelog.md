@@ -50,6 +50,10 @@ they are no longer release versions. Phase scope now lives in
   identity field with each configured provider's stable namespace. Previously
   every OAuth callback failed its first account lookup with
   `internal_server_error`.
+- **Completed runs survive MCP session-cleanup failures.** If a remote MCP
+  server rejects or drops its session-termination request after the agent has
+  finished, Agent Studio now preserves the output and usage while recording an
+  operator warning. Session setup and in-run failures remain fatal.
 - **Top-level outputs no longer repeat the agent as its own orchestrator.**
   Output cards and provenance show orchestrator metadata only for sub-agent
   runs, using the current Orchestrator terminology throughout.

@@ -33,6 +33,11 @@ or the agent declared a provider/slot nobody has connected. Use the sidebar
 The connection's credential expired or was revoked (the connection is marked
 stale). Reconnect it under [Connections](/agent-studio/connections/).
 
+**An MCP server returns an error while closing a completed run.**
+Agent Studio preserves the completed output and records the session-cleanup
+error as an operator warning. An error while opening the session or while the
+agent is still working remains a run failure and appears in the run details.
+
 **The agent narrates instead of acting, or truncates.**
 A lower-tier model may hedge on tool use, or the response hit the token cap. Try
 a more capable model or raise `max_tokens` in `model_settings`. See
