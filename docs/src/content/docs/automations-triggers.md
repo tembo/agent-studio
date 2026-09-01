@@ -14,6 +14,11 @@ message, and an **owner** — the automation runs as that owner, so it uses the
 owner's [connection](/agent-studio/connections/) credentials. You can also choose
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
+Schedules always require explicit creation. When a new-agent description names
+a recurring cadence, TAS may suggest that cadence, but it does not create or
+enable an automation. Test the new agent first, then create the schedule from
+its **Automation** tab when it is ready to run unattended.
+
 The automations list shows a **Run as** column so you can see whose credentials
 each schedule uses. Open an automation to see its recent run history; every row
 shows the effective **Run as** identity captured for that run, so reassignment

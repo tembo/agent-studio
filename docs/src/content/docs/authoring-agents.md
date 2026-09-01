@@ -15,6 +15,11 @@ writes the agent file and opens a pull request against your repo. Review and
 merge it; the agent then shows up in the **Agents** list. (This requires a Tembo
 API key in **Settings**.)
 
+If the description names a recurring cadence, TAS shows it as a suggested
+schedule after submitting the agent. It does not create an automation. Wait for
+the agent to appear, test and verify it, then use its **Automation** tab to
+create and enable the schedule explicitly.
+
 Not sure what to ask for? [Example Agents](/agent-studio/example-agents/) has
 ready-to-use, copy-paste prompts (email triage, ticket roundups, …) that adapt
 to whatever you've connected.

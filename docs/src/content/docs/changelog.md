@@ -45,6 +45,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **New agents no longer start running on an inferred schedule.** Recurring
+  language in a new-agent description now produces guidance only. TAS creates
+  no automation until the user has tested the agent and explicitly creates the
+  schedule from its Automation tab.
 - **Google and other OAuth sign-ins work after the Better Auth 1.7 upgrade.**
   The account schema now includes and backfills Better Auth's required `issuer`
   identity field with each configured provider's stable namespace. Previously

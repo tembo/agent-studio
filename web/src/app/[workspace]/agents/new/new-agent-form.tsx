@@ -84,21 +84,20 @@ export function NewAgentForm({
           )}
         </p>
         <p className="text-foreground-weak text-sm">Status: {s.status}</p>
-        {s.schedule && (
-          <p className="text-foreground-weak text-sm">
-            Scheduled to run{" "}
-            <span className="text-foreground font-medium">
-              {s.schedule.humanReadable.toLowerCase()}
-            </span>{" "}
-            (UTC). Adjust it on the{" "}
-            <a
-              href={`/${workspaceSlug}/automations`}
-              className="text-foreground font-medium hover:underline"
-            >
-              Automations
-            </a>{" "}
-            page.
-          </p>
+        {s.suggestedSchedule && (
+          <div className="text-foreground-weak flex flex-col gap-1 text-sm">
+            <p>
+              Suggested schedule:{" "}
+              <span className="text-foreground font-medium">
+                {s.suggestedSchedule.humanReadable.toLowerCase()}
+              </span>{" "}
+              (UTC).
+            </p>
+            <p>
+              No automation was created. After the agent appears, test and
+              verify it, then create this schedule from its Automation tab.
+            </p>
+          </div>
         )}
         <div className="flex flex-wrap gap-3 pt-1">
           <a

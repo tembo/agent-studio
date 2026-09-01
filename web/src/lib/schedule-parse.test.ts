@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseScheduleToCron } from "./schedule-parse";
+import {
+  parseScheduleToCron,
+  suggestScheduleFromDescription,
+} from "./schedule-parse";
 import { validateCron } from "./cron";
 
 // Every cron the parser emits must be one the scheduler accepts.
@@ -98,4 +101,21 @@ describe("parseScheduleToCron — no false positives", () => {
       expect(parseScheduleToCron(text)).toBeNull();
     });
   }
+});
+
+describe("suggestScheduleFromDescription", () => {
+  it("returns display-ready guidance without creating an automation", () => {
+    expect(
+      suggestScheduleFromDescription("Check the queue every weekday at 9am"),
+    ).toEqual({
+      cron: "0 9 * * 1-5",
+      humanReadable: "At 09:00, Monday through Friday",
+    });
+  });
+
+  it("returns null when the description has no recurring schedule", () => {
+    expect(
+      suggestScheduleFromDescription("Summarize the 9am standup notes"),
+    ).toBeNull();
+  });
 });
