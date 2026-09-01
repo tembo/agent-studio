@@ -102,6 +102,7 @@ type OAuthUserInfo = {
 
 export type GenericOAuthProviderConfig = {
   providerId: string;
+  accountIssuer: string;
   discoveryUrl: string;
   clientId: string;
   clientSecret: string;
@@ -166,6 +167,9 @@ export function genericOAuthConfigs(): GenericOAuthProviderConfig[] {
   if (microsoftConfigured()) {
     configs.push({
       providerId: "microsoft",
+      // Keep account identity provider-scoped, as it was in Better Auth 1.6.
+      // Discovery still verifies the token's real issuer independently.
+      accountIssuer: "local:oauth:microsoft",
       discoveryUrl: microsoftDiscoveryUrl(),
       clientId: process.env.MICROSOFT_CLIENT_ID!,
       clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
@@ -180,6 +184,7 @@ export function genericOAuthConfigs(): GenericOAuthProviderConfig[] {
   if (oidcConfigured()) {
     configs.push({
       providerId: "oidc",
+      accountIssuer: "local:oauth:oidc",
       discoveryUrl: process.env.OIDC_DISCOVERY_URL!,
       clientId: process.env.OIDC_CLIENT_ID!,
       clientSecret: process.env.OIDC_CLIENT_SECRET!,
