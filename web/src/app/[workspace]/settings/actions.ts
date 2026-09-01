@@ -21,7 +21,6 @@ import {
 } from "@/lib/mcp-tools";
 import { type WorkspaceRole } from "@/lib/rbac";
 import {
-  refreshAllGuidanceFiles,
   restoreAgent,
   type RestoreAgentError,
 } from "@/lib/workspace-agents";
@@ -558,47 +557,6 @@ export async function renameComposioConnectionAction(
   revalidatePath(`/${slug}/settings`);
   revalidatePath(`/${slug}/connections`, "layout");
   return { message: "Renamed." };
-}
-
-export type SyncGuidanceFormState = {
-  message?: string;
-  error?: string;
-};
-
-// Manual trigger for refreshAllGuidanceFiles. Used by the "Sync
-// agent guidance" button in Settings so a workspace whose agents
-// were hand-committed (and therefore never went through the agent-
-// creation bootstrap) can get the guidance files written in one
-// click. Idempotent — safe to click repeatedly.
-export async function syncGuidanceAction(
-  _prev: SyncGuidanceFormState,
-  formData: FormData,
-): Promise<SyncGuidanceFormState> {
-  const slug = String(formData.get("workspace") ?? "");
-  const auth = await authorizeWorkspace(slug, "workspace_admin");
-  if (auth.denied) return { error: DENIED_MESSAGE };
-  const { workspace, userId } = auth;
-  const result = await refreshAllGuidanceFiles(workspace.id);
-  if (!result.ok) {
-    if (result.error === "no-repo") {
-      return { error: "Connect a Git repository first." };
-    }
-    return { error: result.error };
-  }
-  await writeAuditEvent({
-    workspaceId: workspace.id,
-    actorUserId: userId,
-    source: "human_action",
-    kind: "guidance.synced",
-    targetType: "workspace",
-    targetId: null,
-    agentName: null,
-    payload: {},
-  });
-  return {
-    message:
-      "Synced agents/AGENTS.md and the per-framework AGENT_GUIDE.md files. Check the repo for new commits.",
-  };
 }
 
 // ─────────────────────────────────────────────────────────────────────

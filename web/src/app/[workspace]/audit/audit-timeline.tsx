@@ -677,7 +677,16 @@ function EventSummary({ entry }: { entry: LoadedAuditEntry }) {
     case "guidance.synced":
       return (
         <span className="text-foreground-weak text-sm">
+          {p.trigger === "schedule"
+            ? `${String(p.cadence ?? "Scheduled")} refresh · `
+            : "Manual refresh · "}
           agents/AGENTS.md + per-framework guides
+        </span>
+      );
+    case "guidance.cadence_changed":
+      return (
+        <span className="text-foreground-weak text-sm">
+          {String(p.from ?? "off")} → {String(p.to ?? "off")}
         </span>
       );
     case "api_key.created":
@@ -855,6 +864,7 @@ function humanKind(kind: string): string {
     "workspace.renamed": "Workspace renamed",
     "workspace.commit_mode_changed": "Delivery mode changed",
     "guidance.synced": "Agent guidance synced",
+    "guidance.cadence_changed": "Guidance refresh changed",
     "skill.installed": "Skill installed",
     "skill.removed": "Skill removed",
     "slack_app.created": "Slack app created",
