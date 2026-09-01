@@ -16,11 +16,14 @@ import { suggestSlug } from "@/lib/slugify";
 
 import {
   createFromChatAction,
+  createSuggestedAutomationAction,
   type ChatCreateFormState,
+  type SuggestedAutomationFormState,
 } from "./actions";
 
 const DEFAULT_FRAMEWORK: Framework = "pydantic-agentspec";
 const CHAT_INITIAL: ChatCreateFormState = {};
+const AUTOMATION_INITIAL: SuggestedAutomationFormState = {};
 
 export function NewAgentForm({
   workspaceSlug,
@@ -94,9 +97,14 @@ export function NewAgentForm({
               (UTC).
             </p>
             <p>
-              No automation was created. After the agent appears, test and
-              verify it, then create this schedule from its Automation tab.
+              No automation was created automatically. After the agent appears,
+              test and verify it. When you&apos;re ready, create and enable the
+              suggested automation.
             </p>
+            <SuggestedAutomationForm
+              workspaceSlug={workspaceSlug}
+              improvementId={s.improvementId}
+            />
           </div>
         )}
         <div className="flex flex-wrap gap-3 pt-1">
@@ -234,6 +242,50 @@ export function NewAgentForm({
       >
         {pending ? "Asking Tembo…" : "Create"}
       </Button>
+    </form>
+  );
+}
+
+function SuggestedAutomationForm({
+  workspaceSlug,
+  improvementId,
+}: {
+  workspaceSlug: string;
+  improvementId: string;
+}) {
+  const [state, action, pending] = useActionState(
+    createSuggestedAutomationAction,
+    AUTOMATION_INITIAL,
+  );
+
+  if (state.automation) {
+    return (
+      <p className="text-foreground pt-1" aria-live="polite">
+        {state.automation.alreadyExisted
+          ? "A matching automation already exists."
+          : "Automation created and enabled."}{" "}
+        <a
+          href={`/${workspaceSlug}/automations/${encodeURIComponent(state.automation.id)}`}
+          className="font-medium hover:underline"
+        >
+          Review automation →
+        </a>
+      </p>
+    );
+  }
+
+  return (
+    <form action={action} className="flex flex-col items-start gap-1.5 pt-1">
+      <input type="hidden" name="workspace" value={workspaceSlug} />
+      <input type="hidden" name="improvement_id" value={improvementId} />
+      <Button type="submit" variant="primary" disabled={pending}>
+        {pending ? "Creating automation…" : "Create suggested automation"}
+      </Button>
+      {state.error && (
+        <p className="text-sentiment-negative text-sm" role="alert">
+          {state.error}
+        </p>
+      )}
     </form>
   );
 }

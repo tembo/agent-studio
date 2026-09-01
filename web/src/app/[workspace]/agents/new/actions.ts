@@ -1,14 +1,20 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 
 import { validateAgentName } from "@/lib/agent-format";
 import { FRAMEWORKS, type Framework } from "@/lib/agent-framework";
 import { suggestSlug } from "@/lib/slugify";
+import { writeAuditEvent } from "@/lib/audit-db";
 import {
   authorizeWorkspace,
   DENIED_MESSAGE,
 } from "@/lib/auth-server";
+import {
+  createAutomation,
+  listAutomationsForAgent,
+} from "@/lib/automations-api";
 import {
   buildCreateAgentPrompt,
   createTemboTask,
@@ -18,6 +24,7 @@ import { buildPromptConnectionContext } from "@/lib/prompt-connections";
 import { suggestScheduleFromDescription } from "@/lib/schedule-parse";
 import {
   createImprovement,
+  getImprovement,
   improvementMarker,
   setImprovementCommitted,
   setImprovementTask,
@@ -54,6 +61,15 @@ export type ChatCreateFormState = {
     /** Set when the description names a schedule. This is guidance only; the
      *  user must explicitly create an automation after testing the agent. */
     suggestedSchedule?: { cron: string; humanReadable: string };
+  };
+};
+
+export type SuggestedAutomationFormState = {
+  error?: string;
+  automation?: {
+    id: string;
+    name: string;
+    alreadyExisted: boolean;
   };
 };
 
@@ -196,6 +212,97 @@ export async function createFromChatAction(
       agentName: displayName,
       agentPath,
       ...(suggestedSchedule ? { suggestedSchedule } : {}),
+    },
+  };
+}
+
+export async function createSuggestedAutomationAction(
+  _prev: SuggestedAutomationFormState,
+  formData: FormData,
+): Promise<SuggestedAutomationFormState> {
+  const slug = String(formData.get("workspace") ?? "");
+  const improvementId = String(formData.get("improvement_id") ?? "");
+
+  const auth = await authorizeWorkspace(slug, "operator");
+  if (!auth.ok) {
+    if (auth.reason === "denied") return { error: DENIED_MESSAGE };
+    notFound();
+  }
+  const { workspace, userId } = auth;
+
+  // Treat the form as an untrusted pointer only. The agent and cadence come
+  // from the persisted create request, so a caller cannot substitute an
+  // arbitrary agent or cron expression in the POST.
+  const improvement = improvementId
+    ? await getImprovement(improvementId)
+    : null;
+  if (
+    !improvement ||
+    improvement.workspaceId !== workspace.id ||
+    improvement.kind !== "create" ||
+    improvement.createdBy !== userId
+  ) {
+    return { error: "That schedule suggestion is no longer available." };
+  }
+
+  const schedule = suggestScheduleFromDescription(improvement.improvementText);
+  if (!schedule) {
+    return { error: "That schedule suggestion is no longer available." };
+  }
+
+  // Retrying the action (or double-clicking across tabs) should not create a
+  // second automation for the same agent and cadence.
+  const existing = (await listAutomationsForAgent(
+    workspace.id,
+    improvement.agentName,
+  )).find((automation) => automation.cron === schedule.cron);
+  if (existing) {
+    return {
+      automation: {
+        id: existing.id,
+        name: existing.name,
+        alreadyExisted: true,
+      },
+    };
+  }
+
+  const created = await createAutomation({
+    workspaceId: workspace.id,
+    name: `${improvement.agentName} schedule`,
+    agentName: improvement.agentName,
+    cron: schedule.cron,
+    inputMessage: "",
+    enabled: true,
+    userId,
+    ownerUserId: userId,
+  });
+
+  await writeAuditEvent({
+    workspaceId: workspace.id,
+    actorUserId: userId,
+    source: "human_action",
+    kind: "automation.created",
+    targetType: "automation",
+    targetId: created.id,
+    agentName: improvement.agentName,
+    payload: {
+      name: created.name,
+      cron: created.cron,
+      enabled: created.enabled,
+      ownerUserId: userId,
+    },
+  });
+
+  revalidatePath(`/${slug}/automations`);
+  revalidatePath(
+    `/${slug}/agents/${encodeURIComponent(improvement.agentName)}`,
+  );
+
+  return {
+    automation: {
+      id: created.id,
+      name: created.name,
+      alreadyExisted: false,
     },
   };
 }
