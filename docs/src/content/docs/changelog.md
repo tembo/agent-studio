@@ -45,6 +45,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Concurrent orchestrators no longer bottleneck sub-agents behind one
+  reserved slot.** The run gate now reserves half of its capacity for
+  sub-agents by default, allowing two orchestrator/sub-agent pairs to progress
+  with the standard four-run limit. Compose deployments defer the reservation
+  calculation to the API so custom limits receive a proportional default.
 - **New agents no longer start running on an inferred schedule.** Recurring
   language in a new-agent description now produces guidance only. TAS creates
   no automation until the user explicitly accepts the suggested schedule. The

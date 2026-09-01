@@ -57,7 +57,7 @@ there's no manual migration step — just hand both services the URL.
 | `TAS_ENCRYPTION_KEY` | 32-byte base64. `openssl rand -base64 32`. **Must match the web service exactly** — web encrypts secrets, api decrypts them. Rotating it orphans every existing workspace secret. |
 | `INTERNAL_API_TOKEN` | Shared bearer the web service sends on `/internal/*`. `openssl rand -base64 32`. **Must match the web service exactly.** |
 | `API_MAX_CONCURRENT_RUNS` | Optional; maximum agents executing in this api service at once (default `4`). Extra runs stay queued. Lower this when Python runner processes approach the service's memory limit. |
-| `API_RESERVED_SUB_AGENT_RUNS` | Optional; slots reserved for sub-agents launched by an orchestrator (default `1`, must be lower than the maximum). Set `0` if the instance does not use orchestrators. |
+| `API_RESERVED_SUB_AGENT_RUNS` | Optional; slots reserved for sub-agents launched by an orchestrator (default: half of the maximum, so `2` when the maximum is `4`; must be lower than the maximum). Set `0` if the instance does not use orchestrators. |
 | `RUST_LOG` | `info,tas_api=debug` is a sensible start. |
 
 Put `TAS_ENCRYPTION_KEY` and `INTERNAL_API_TOKEN` in Railway **shared
@@ -161,7 +161,7 @@ Google redirect URI to match.
 
 | Symptom | Likely cause |
 | --- | --- |
-| A run stays queued while other runs are active. | The concurrency cap is full; it starts when a slot opens. Tune `API_MAX_CONCURRENT_RUNS` against service memory. |
+| A run stays queued while other runs are active. | The concurrency cap is full; it starts when a slot opens. Tune `API_MAX_CONCURRENT_RUNS` against service memory. If sub-agents queue behind simultaneous orchestrators, reserve more capacity with `API_RESERVED_SUB_AGENT_RUNS`. |
 | Run dispatch fails and no run is created. | web may not reach api. On images older than `2026.5.31`, set `API_BIND_ADDR=[::]:8080` on the api service (IPv6 private network). Otherwise check `API_INTERNAL_URL` = `http://<api-service>.railway.internal:8080`. |
 | `/internal/runs` returns 401 in api logs. | `INTERNAL_API_TOKEN` differs between web and api. |
 | `failed to decrypt secret` in api logs. | `TAS_ENCRYPTION_KEY` mismatch — web encrypted with a different key than api holds. |
