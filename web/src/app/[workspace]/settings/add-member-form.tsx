@@ -32,6 +32,16 @@ export function AddMemberForm({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <form action={formAction} className="flex flex-col gap-3">
       <input type="hidden" name="workspace" value={workspaceSlug} />
+      <div
+        role="note"
+        className="border-sentiment-caution bg-[var(--color-sentiment-caution-subtle)] flex flex-col gap-1 rounded-lg border p-3 text-sm"
+      >
+        <p className="text-foreground font-medium">No email will be sent.</p>
+        <p className="text-foreground-muted">
+          After adding this person, you must copy the invitation message and
+          send it to them yourself.
+        </p>
+      </div>
       <div className="grid gap-1.5">
         <Label htmlFor="add-member-email" className="text-sm">
           Email
@@ -47,8 +57,7 @@ export function AddMemberForm({ workspaceSlug }: { workspaceSlug: string }) {
           onChange={(e) => setEmail(e.target.value)}
         />
         <p className="text-foreground-muted text-sm">
-          We don&apos;t send email yet — after inviting, copy the message and
-          send it. They join automatically when they sign in with this email.
+          They join automatically when they sign in with this email.
         </p>
       </div>
 
@@ -80,7 +89,7 @@ export function AddMemberForm({ workspaceSlug }: { workspaceSlug: string }) {
 
       <div>
         <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Inviting…" : "Send invite"}
+          {pending ? "Adding…" : "Add member"}
         </Button>
       </div>
 
@@ -88,7 +97,7 @@ export function AddMemberForm({ workspaceSlug }: { workspaceSlug: string }) {
         <div className="border-border bg-surface flex flex-col gap-2 rounded-lg border p-3">
           <div className="flex items-center justify-between">
             <span className="text-foreground text-sm font-medium">
-              Copy this to {state.invitedEmail}
+              Send this invitation to {state.invitedEmail}
             </span>
             <Button
               type="button"
@@ -99,6 +108,9 @@ export function AddMemberForm({ workspaceSlug }: { workspaceSlug: string }) {
               {copied ? "Copied" : "Copy"}
             </Button>
           </div>
+          <p className="text-foreground-muted text-sm">
+            TAS did not email them. Copy this message and send it yourself.
+          </p>
           <textarea
             readOnly
             value={state.template}

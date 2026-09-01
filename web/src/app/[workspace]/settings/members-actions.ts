@@ -106,7 +106,10 @@ export async function inviteMemberAction(
       payload: { email, role, via: "admin_added_existing" },
     });
     revalidatePath(`/${slug}/settings`);
-    return { message: `Added ${email} to the workspace.`, invitedEmail: email };
+    return {
+      message: `Added ${email}. TAS did not email them, so let them know they were added.`,
+      invitedEmail: email,
+    };
   }
 
   await writeAuditEvent({
@@ -134,7 +137,7 @@ export async function inviteMemberAction(
 
   revalidatePath(`/${slug}/settings`);
   return {
-    message: `Invited ${email}.`,
+    message: `Invitation created for ${email}. TAS did not email them, so send the message below.`,
     template,
     invitedEmail: email,
   };
