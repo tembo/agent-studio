@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { dependencyStatusLabel } from "./dependency-status.mjs";
+
 const token = process.env.GH_TOKEN;
 if (!token) throw new Error("GH_TOKEN is required");
 
@@ -246,6 +248,10 @@ function labelNames(issue) {
   return issue.labels.nodes.map((label) => label.name);
 }
 
+function currentStatusLabel(issue) {
+  return labelNames(issue).find((name) => name.startsWith("status: ")) ?? null;
+}
+
 function desiredPriority(issue) {
   const label = labelNames(issue).find((name) => name.startsWith("priority: "));
   if (!label) return null;
@@ -365,6 +371,15 @@ const openPrIssues = await getOpenPullRequestIssueNumbers();
 for (const issue of openIssues) {
   if (openPrIssues.has(issue.number) && desiredStatus(issue) !== "In Progress") {
     await replaceStatusLabel(issue, "status: in progress");
+    continue;
+  }
+  const currentStatus = currentStatusLabel(issue);
+  const dependencyStatus = dependencyStatusLabel(
+    currentStatus,
+    issue.blockedBy.nodes,
+  );
+  if (dependencyStatus && dependencyStatus !== currentStatus) {
+    await replaceStatusLabel(issue, dependencyStatus);
   }
 }
 

@@ -24,6 +24,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Test backlog status policy
+        run: node --test .agents/skills/reprioritize-backlog/scripts/dependency-status.test.mjs
+
       - name: Sync taxonomy labels
         if: github.event_name == 'issues'
         uses: actions/github-script@v7

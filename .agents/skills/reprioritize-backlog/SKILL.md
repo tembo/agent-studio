@@ -126,13 +126,17 @@ reliably from metadata. Run it when:
 
 The backlog-taxonomy workflow applies safe defaults: new/reopened issues enter
 triage, unlabeled priority defaults to P2, `user request` promotes to P1 unless the
-issue is already P0, and closing clears the active status label. It adds all open
-issues to Project 1, mirrors Priority and Status, preserves an assigned Initiative,
-and fills an unassigned Initiative from `user request` or a maintained milestone.
-It recomputes Order deterministically from priority, status, user-request evidence,
-the existing sequence, and `blockedBy` dependencies. Closing sets Project Status
-to Done and clears Order. Strategic priority and initiative decisions remain
-manual; routine synchronization does not require an LLM.
+issue is already P0, and closing clears the active status label. Formal `blockedBy`
+relationships move non-active work to Blocked while any dependency is open and
+return Blocked work to Ready after every dependency closes. A Blocked issue with no
+formal dependency remains untouched because it may be waiting on an external
+capability. The workflow adds all open issues to Project 1, mirrors Priority and
+Status, preserves an assigned Initiative, and fills an unassigned Initiative from
+`user request` or a maintained milestone. It recomputes Order deterministically
+from priority, status, user-request evidence, the existing sequence, and
+`blockedBy` dependencies. Closing sets Project Status to Done and clears Order.
+Strategic priority and initiative decisions remain manual; routine synchronization
+does not require an LLM.
 
 ## GitHub Project contract
 
