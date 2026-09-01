@@ -272,7 +272,7 @@ export async function createSuggestedAutomationAction(
     agentName: improvement.agentName,
     cron: schedule.cron,
     inputMessage: "",
-    enabled: true,
+    enabled: false,
     userId,
     ownerUserId: userId,
   });

@@ -18,8 +18,8 @@ API key in **Settings**.)
 If the description names a recurring cadence, TAS shows it as a suggested
 schedule after submitting the agent. It does not create an automation. Wait for
 the agent to appear, test and verify it, then use **Create suggested
-automation** or its **Automation** tab to create and enable the schedule
-explicitly.
+automation** to save the schedule in a disabled state. Enable it from the
+agent's **Automation** tab only when the agent is ready to run unattended.
 
 Not sure what to ask for? [Example Agents](/agent-studio/example-agents/) has
 ready-to-use, copy-paste prompts (email triage, ticket roundups, …) that adapt

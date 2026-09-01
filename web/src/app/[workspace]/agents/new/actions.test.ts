@@ -115,7 +115,7 @@ const automation = {
   agentName: improvement.agentName,
   cron: "0 9 * * 1-5",
   inputMessage: "",
-  enabled: true,
+  enabled: false,
   lastFiredAt: null,
   lastFireError: null,
   lastFireEventId: null,
@@ -154,7 +154,7 @@ beforeEach(() => {
 });
 
 describe("createSuggestedAutomationAction", () => {
-  it("creates and enables the persisted suggested schedule", async () => {
+  it("creates the persisted suggested schedule disabled", async () => {
     const result = await createSuggestedAutomationAction(
       {},
       suggestedAutomationForm(),
@@ -166,7 +166,7 @@ describe("createSuggestedAutomationAction", () => {
       agentName: "daily-pipeline-digest",
       cron: "0 9 * * 1-5",
       inputMessage: "",
-      enabled: true,
+      enabled: false,
       userId: "creator",
       ownerUserId: "creator",
     });
