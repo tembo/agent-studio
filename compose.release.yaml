@@ -53,7 +53,8 @@ services:
       TAS_ENCRYPTION_KEY: ${TAS_ENCRYPTION_KEY:?TAS_ENCRYPTION_KEY must be set in .env}
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?INTERNAL_API_TOKEN must be set in .env}
       API_MAX_CONCURRENT_RUNS: ${API_MAX_CONCURRENT_RUNS:-4}
-      API_RESERVED_SUB_AGENT_RUNS: ${API_RESERVED_SUB_AGENT_RUNS:-1}
+      # Empty delegates to the api's max-aware default (half of total slots).
+      API_RESERVED_SUB_AGENT_RUNS: ${API_RESERVED_SUB_AGENT_RUNS:-}
       RUST_LOG: ${RUST_LOG:-info,tas_api=debug}
     ports:
       - "${API_PORT:-8080}:8080"

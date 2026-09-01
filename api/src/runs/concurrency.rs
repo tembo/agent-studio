@@ -28,9 +28,11 @@ impl RunConcurrency {
     pub fn from_env() -> anyhow::Result<Self> {
         let max =
             parse_env_usize("API_MAX_CONCURRENT_RUNS")?.unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS);
-        // A one-slot deployment cannot reserve its only slot. For every larger
-        // deployment, reserve one sub-agent slot unless the operator opts out.
-        let default_reserved = usize::from(max > 1);
+        // Balance the default lanes so concurrent orchestrators can each make
+        // progress. Reserving only one slot made every sub-agent serialize
+        // during bursts where top-level orchestrators occupied the other
+        // permits. A one-slot deployment still cannot reserve its only slot.
+        let default_reserved = default_reserved_sub_agent_runs(max);
         let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?.unwrap_or(default_reserved);
         Self::new(max, reserved)
     }
@@ -114,10 +116,18 @@ fn parse_env_usize(name: &str) -> anyhow::Result<Option<usize>> {
     let raw = raw
         .into_string()
         .map_err(|_| anyhow::anyhow!("{name} must be valid UTF-8"))?;
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(None);
+    }
     let value = raw
         .parse::<usize>()
         .with_context(|| format!("{name} must be a non-negative integer"))?;
     Ok(Some(value))
+}
+
+fn default_reserved_sub_agent_runs(max_concurrent_runs: usize) -> usize {
+    max_concurrent_runs / 2
 }
 
 #[cfg(test)]
@@ -130,6 +140,14 @@ mod tests {
         assert!(RunConcurrency::new(0, 0).is_err());
         assert!(RunConcurrency::new(4, 4).is_err());
         assert!(RunConcurrency::new(4, 5).is_err());
+    }
+
+    #[test]
+    fn defaults_to_balanced_top_level_and_sub_agent_capacity() {
+        assert_eq!(default_reserved_sub_agent_runs(1), 0);
+        assert_eq!(default_reserved_sub_agent_runs(2), 1);
+        assert_eq!(default_reserved_sub_agent_runs(4), 2);
+        assert_eq!(default_reserved_sub_agent_runs(6), 3);
     }
 
     #[tokio::test]
@@ -160,6 +178,36 @@ mod tests {
 
         drop(sub_agent);
         drop(top_level_runs);
+        assert_eq!(gate.active_runs(), 0);
+    }
+
+    #[tokio::test]
+    async fn balanced_reservation_keeps_two_orchestrators_moving() {
+        let gate = RunConcurrency::new(4, 2).unwrap();
+        let cancel = CancellationToken::new();
+
+        let orchestrators = [
+            gate.acquire(false, &cancel).await.unwrap(),
+            gate.acquire(false, &cancel).await.unwrap(),
+        ];
+        assert_eq!(gate.active_runs(), 2);
+
+        // A third top-level run queues instead of consuming capacity that the
+        // two active orchestrators need for their sub-agents.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), gate.acquire(false, &cancel),)
+                .await
+                .is_err()
+        );
+
+        let sub_agents = [
+            gate.acquire(true, &cancel).await.unwrap(),
+            gate.acquire(true, &cancel).await.unwrap(),
+        ];
+        assert_eq!(gate.active_runs(), 4);
+
+        drop(sub_agents);
+        drop(orchestrators);
         assert_eq!(gate.active_runs(), 0);
     }
 
