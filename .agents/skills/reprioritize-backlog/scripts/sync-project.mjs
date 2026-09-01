@@ -258,7 +258,7 @@ function desiredStatus(issue) {
   if (issue.state === "CLOSED") return "Done";
   const label = labelNames(issue).find((name) => name.startsWith("status: "));
   return new Map([
-    ["status: triage", "Triage"],
+    ["status: backlog", "Backlog"],
     ["status: ready", "Ready"],
     ["status: in progress", "In Progress"],
     ["status: blocked", "Blocked"],
@@ -279,14 +279,16 @@ function rank(item) {
   const status = item.status;
   if (priority === "P0") return 0;
   if (status === "In Progress") return item.type === "epic" ? 3 : 1;
+  if (status === "Backlog") {
+    return { P1: 8, P2: 9, P3: 10, Parked: 11 }[priority] ?? 10;
+  }
   const scores = {
-    P1: { Ready: 2, Triage: 3, Blocked: 4 },
-    P2: { Ready: 4, Triage: 5, Blocked: 8 },
-    P3: { Ready: 6, Triage: 7, Blocked: 9 },
-    Parked: { Ready: 10, Triage: 10, Blocked: 10 },
+    P1: { Ready: 2, Blocked: 4 },
+    P2: { Ready: 4, Blocked: 6 },
+    P3: { Ready: 6, Blocked: 7 },
+    Parked: { Ready: 11, Blocked: 11 },
   };
-  const base = scores[priority]?.[status] ?? 11;
-  return status === "Triage" && item.userRequest ? base - 1 : base;
+  return scores[priority]?.[status] ?? 12;
 }
 
 function compareItems(left, right) {

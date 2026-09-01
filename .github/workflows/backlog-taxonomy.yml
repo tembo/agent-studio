@@ -71,7 +71,7 @@ jobs:
             }
 
             if ((action === "opened" || action === "reopened") && statuses.length === 0) {
-              await add("status: triage");
+              await add("status: backlog");
             }
 
             const userRequestAdded =

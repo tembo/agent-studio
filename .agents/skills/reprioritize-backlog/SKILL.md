@@ -20,7 +20,7 @@ the Project's Priority and Status fields:
 - Type: `bug`, `enhancement`, `task`, or `epic`.
 - Priority: `priority: p0`, `priority: p1`, `priority: p2`, `priority: p3`, or
   `priority: parked`.
-- Status: `status: triage`, `status: ready`, `status: in progress`, or
+- Status: `status: backlog`, `status: ready`, `status: in progress`, or
   `status: blocked`.
 
 Other labels are additive evidence or routing, including `user request`, `security`,
@@ -43,7 +43,7 @@ queue.
 
 Status meanings (Project option in parentheses):
 
-- **Triage** (`Triage`): needs an owner, product decision, or scope refinement.
+- **Backlog** (`Backlog`): needs an owner, product decision, or scope refinement.
 - **Ready** (`Ready`): scoped enough to begin when capacity is available.
 - **In progress** (`In Progress`): actively owned; do not duplicate it.
 - **Blocked** (`Blocked`): waiting on a hard dependency or external capability.
@@ -100,8 +100,10 @@ sort. Apply these signals in combination:
 1. Finish genuinely active work and review/merge linked work before starting
    another item, unless it is abandoned or a P0 interrupts it.
 2. Put P0 safety, authorization, data-integrity, and incident work first.
-3. Prefer executable Ready work over equally important Triage or Blocked work.
-   A concrete unblock or product-decision action may itself rank early.
+3. Put Backlog work behind In Progress, Ready, and Blocked work across the P1–P3
+   bands. Backlog is a readiness state and does not rewrite the separate Priority
+   field. P0 safety work remains the exception, and a concrete unblock or
+   product-decision action may itself rank early once moved out of Backlog.
 4. Within comparable work, prefer validated user outcomes, work that
    unlocks several other items, and small changes that complete an active
    initiative.
@@ -125,7 +127,7 @@ reliably from metadata. Run it when:
 - planning the next release or clearing stale backlog.
 
 The backlog-taxonomy workflow applies safe defaults: new/reopened issues enter
-triage, unlabeled priority defaults to P2, `user request` promotes to P1 unless the
+Backlog, unlabeled priority defaults to P2, `user request` promotes to P1 unless the
 issue is already P0, and closing clears the active status label. It adds all open
 issues to Project 1, mirrors Priority and Status, preserves an assigned Initiative,
 and fills an unassigned Initiative from `user request` or a maintained milestone.
@@ -140,7 +142,7 @@ The organization Project is
 [Agent Studio Backlog](https://github.com/orgs/tembo/projects/1):
 
 - Priority: P0, P1, P2, P3, Parked.
-- Status: Triage, Ready, In Progress, Blocked, Done.
+- Status: Backlog, Ready, In Progress, Blocked, Done.
 - Initiative: Runtime safety, User requests, Outputs, Instance
   administration, Adaptive intelligence, Shared learning, Integrations,
   Mycelium, Maintenance, or Unassigned.

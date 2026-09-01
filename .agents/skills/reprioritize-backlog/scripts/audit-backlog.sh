@@ -112,7 +112,7 @@ repo_slug="$repo" jq -n -r \
     else prefixed($issue; "status: ")
       | sub("^status: "; "")
       | if . == "in progress" then "In Progress"
-        elif . == "triage" then "Triage"
+        elif . == "backlog" then "Backlog"
         elif . == "ready" then "Ready"
         elif . == "blocked" then "Blocked"
         else ""
