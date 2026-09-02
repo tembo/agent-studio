@@ -2,6 +2,12 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { getInstanceNameFromEnv } from "@/lib/config";
+import {
+  isSignupPolicy,
+  parseAllowedDomains,
+  type SignupPolicy,
+  type SignupPolicyConfig,
+} from "@/lib/signup-policy";
 
 // Deployment-level settings, backed by the single-row `instance_settings`
 // table (migration 0031). Reads fall back to env so an env-configured
@@ -100,5 +106,75 @@ export async function setInstanceName(
         SET instance_name = $1, updated_at = now(), updated_by = $2
       WHERE id = TRUE`,
     [trimmed || null, updatedBy],
+  );
+}
+
+/** Env fallback for the sign-up policy. Hyphens are accepted (`invite-only`)
+ *  and folded to the stored snake_case. Unknown / unset → invite_only. */
+export function getSignupPolicyFromEnv(): SignupPolicyConfig {
+  const raw = process.env.TAS_SIGNUP_POLICY?.trim().toLowerCase().replace(
+    /-/g,
+    "_",
+  );
+  return {
+    policy: isSignupPolicy(raw) ? raw : "invite_only",
+    allowedDomains: parseAllowedDomains(
+      process.env.TAS_SIGNUP_ALLOWED_DOMAINS,
+    ),
+  };
+}
+
+/** Raw stored policy (null if unset) — for the settings form. */
+export async function getStoredSignupPolicy(): Promise<{
+  policy: SignupPolicy | null;
+  allowedDomains: string[];
+}> {
+  try {
+    const { rows } = await db.query<{
+      signup_policy: string | null;
+      signup_allowed_domains: string[] | null;
+    }>(
+      `SELECT signup_policy, signup_allowed_domains
+         FROM instance_settings WHERE id = TRUE LIMIT 1`,
+    );
+    const row = rows[0];
+    return {
+      policy: isSignupPolicy(row?.signup_policy) ? row.signup_policy : null,
+      allowedDomains: parseAllowedDomains(row?.signup_allowed_domains),
+    };
+  } catch {
+    return { policy: null, allowedDomains: [] };
+  }
+}
+
+/** Resolved policy: DB value if an admin has set one, else env, else
+ *  invite-only. Fail closed (invite-only) on a missing table / no DB so a
+ *  pre-migration window never opens the instance. */
+export async function getSignupPolicy(): Promise<SignupPolicyConfig> {
+  const stored = await getStoredSignupPolicy();
+  if (stored.policy) {
+    return {
+      policy: stored.policy,
+      allowedDomains: stored.allowedDomains,
+    };
+  }
+  return getSignupPolicyFromEnv();
+}
+
+/** Persist the sign-up policy. `allowedDomains` is stored even when the
+ *  policy isn't domain_allowlist so toggling back keeps the list. */
+export async function setSignupPolicy(
+  policy: SignupPolicy,
+  allowedDomains: string[],
+  updatedBy: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE instance_settings
+        SET signup_policy = $1,
+            signup_allowed_domains = $2,
+            updated_at = now(),
+            updated_by = $3
+      WHERE id = TRUE`,
+    [policy, allowedDomains, updatedBy],
   );
 }

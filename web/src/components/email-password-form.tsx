@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 // Email + password sign-in / sign-up, shown only when no OAuth provider is
-// configured (the zero-config quickstart). Sign-up is still gated server-side to
-// instance-admin / invited emails, so this doesn't open the instance up. On
-// success better-auth sets the session cookie; we navigate to `callbackURL`
-// ourselves (the email flow returns no redirect URL like OAuth does).
+// configured (the zero-config quickstart). Sign-up is still gated server-side
+// by the instance sign-up policy (invite-only by default). On success
+// better-auth sets the session cookie; we navigate to `callbackURL` ourselves
+// (the email flow returns no redirect URL like OAuth does).
 export function EmailPasswordForm({
   callbackURL = "/",
   initialMode = "signin",

@@ -73,7 +73,9 @@ openssl rand -base64 32
 
 Set `INSTANCE_ADMIN_EMAILS` to one or more comma-separated emails. These users
 can create the first workspace and reach instance-level settings. Without this
-value, the instance is invite-only and nobody can bootstrap administration.
+value, the instance is invite-only by default and nobody can bootstrap
+administration. Sign-up policy (invite-only / domain allowlist / open) is
+configurable later under Instance settings.
 
 By default, when no OAuth provider is configured, the login screen offers
 email/password sign-in. This is useful for local development and sandbox

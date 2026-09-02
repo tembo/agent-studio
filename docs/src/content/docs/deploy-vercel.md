@@ -114,8 +114,9 @@ environments (Production, Preview, Development) unless noted.
 | `GOOGLE_CLIENT_SECRET` | Same. |
 | `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` / `MICROSOFT_TENANT_ID` | Optional — Microsoft Entra ID. Redirect URI `${BETTER_AUTH_URL}/api/auth/oauth2/callback/microsoft`. Tenant defaults to `common`. |
 | `OIDC_DISCOVERY_URL` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` / `OIDC_PROVIDER_NAME` | Optional — any OIDC IdP (Okta/Auth0/Keycloak/…). Redirect URI `${BETTER_AUTH_URL}/api/auth/oauth2/callback/oidc`. |
-| `INSTANCE_ADMIN_EMAILS` | **Required to bootstrap.** Comma-separated instance-admin emails. The instance is invite-only — only these admins can sign in to a fresh deployment and create workspaces / invite others. |
+| `INSTANCE_ADMIN_EMAILS` | **Required to bootstrap.** Comma-separated instance-admin emails. Sign-up is invite-only by default — only these admins can sign in to a fresh deployment and create workspaces / invite others. |
 | `TAS_INSTANCE_NAME` | Optional brand label shown on the login screen. |
+| `TAS_SIGNUP_POLICY` / `TAS_SIGNUP_ALLOWED_DOMAINS` | Optional. Default invite-only. See [Instance administration](/agent-studio/instance-admin/#sign-up-policy). |
 | `TEMBO_API_URL` | Defaults to `https://api.tembo.io`. Override for staging. |
 
 For the Google OAuth client, set the authorized redirect URI to:

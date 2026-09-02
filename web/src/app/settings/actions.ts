@@ -7,7 +7,15 @@ import {
   addInstanceAdmin,
   removeInstanceAdmin,
 } from "@/lib/instance-admins";
-import { isFirstRun, setInstanceName } from "@/lib/instance-settings";
+import {
+  isFirstRun,
+  setInstanceName,
+  setSignupPolicy,
+} from "@/lib/instance-settings";
+import {
+  isSignupPolicy,
+  parseAllowedDomains,
+} from "@/lib/signup-policy";
 
 export type InstanceSettingsState = {
   ok: boolean;
@@ -66,6 +74,39 @@ export async function setupInstanceNameAction(
 
   await setInstanceName(name, null);
   revalidatePath("/", "layout");
+  return { ok: true, saved: true };
+}
+
+export async function updateSignupPolicyAction(
+  _prev: InstanceSettingsState,
+  formData: FormData,
+): Promise<InstanceSettingsState> {
+  const auth = await authorizeInstance();
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "You don't have permission to change instance settings.",
+    };
+  }
+
+  const policyRaw = String(formData.get("signupPolicy") ?? "").trim();
+  if (!isSignupPolicy(policyRaw)) {
+    return { ok: false, error: "Pick a sign-up policy." };
+  }
+
+  const allowedDomains = parseAllowedDomains(
+    String(formData.get("allowedDomains") ?? ""),
+  );
+  if (policyRaw === "domain_allowlist" && allowedDomains.length === 0) {
+    return {
+      ok: false,
+      error: "Enter at least one valid domain (e.g. acme.com).",
+    };
+  }
+
+  await setSignupPolicy(policyRaw, allowedDomains, auth.userId);
+  revalidatePath("/settings");
+  revalidatePath("/");
   return { ok: true, saved: true };
 }
 

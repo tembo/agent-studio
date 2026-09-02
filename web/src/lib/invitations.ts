@@ -5,10 +5,10 @@ import { emailPasswordEnabled } from "@/lib/auth-providers";
 import { db } from "@/lib/db";
 import { isWorkspaceRole, type WorkspaceRole } from "@/lib/rbac";
 
-// Workspace invitations for the invite-only instance. A workspace admin
-// creates a pending invite (email + role); the invitee joins on their
-// first sign-in, matched by email. The closed-instance account gate
-// (lib/auth.ts) uses hasPendingInvite to decide who may sign up at all.
+// Workspace invitations. A workspace admin creates a pending invite
+// (email + role); the invitee joins on their first sign-in, matched by
+// email. The sign-up gate (lib/auth.ts) uses hasPendingInvite so an
+// invited email may create an account even when the policy is invite-only.
 
 export type PendingInvitation = {
   id: string;
@@ -143,7 +143,7 @@ export async function revokeInvitation(
   return row ? { email: row.email, role: row.role as WorkspaceRole } : null;
 }
 
-/** Closed-instance gate input: does any pending invite match this email? */
+/** Sign-up gate input: does any pending invite match this email? */
 export async function hasPendingInvite(
   email: string | null | undefined,
 ): Promise<boolean> {
@@ -167,10 +167,9 @@ export async function hasPendingInvite(
  *
  * On an email/password instance (no OAuth provider configured — see
  * emailPasswordEnabled) there is no IdP and `emailVerified` is always false,
- * so requiring it would strand every invitee: the closed-instance gate lets
- * them sign up, but the invite would never become a membership. There the
- * sign-up gate itself is the authorization — only an invited (or instance
- * admin) email may create an account at all — so resolve invites regardless.
+ * so requiring it would strand every invitee: the sign-up gate lets them
+ * sign up, but the invite would never become a membership. There the
+ * sign-up gate itself is the authorization — so resolve invites regardless.
  * The IdP-permissiveness attack doesn't apply: no third-party assertion is
  * involved, and configuring any OAuth provider turns email/password off and
  * restores the strict check.

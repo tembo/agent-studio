@@ -8,8 +8,8 @@ import { getServerSession } from "@/lib/session";
 // see lib/instance-admins). `isInstanceAdmin` checks the union.
 //
 // The pure env checks live in lib/config and the DB-aware ones in
-// lib/instance-admins (no session deps) so the closed-instance account
-// gate in lib/auth can use them without a cycle. Re-exported here so
+// lib/instance-admins (no session deps) so the sign-up gate in lib/auth
+// can use them without a cycle. Re-exported here so
 // callers have one import for instance-admin logic. `authorizeInstance`
 // adds the session-aware gate, mirroring lib/auth-server.ts
 // `authorizeWorkspace`.

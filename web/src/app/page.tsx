@@ -16,10 +16,15 @@ import {
 } from "@/lib/config";
 import {
   getInstanceName,
+  getSignupPolicy,
   getStoredInstanceName,
   isFirstRun,
 } from "@/lib/instance-settings";
 import { resolvePendingInvitesForUserId } from "@/lib/invitations";
+import {
+  signupRejectionMessage,
+  type SignupPolicy,
+} from "@/lib/signup-policy";
 import { getServerSession } from "@/lib/session";
 import { listWorkspacesForUser } from "@/lib/workspace";
 
@@ -27,24 +32,25 @@ export const dynamic = "force-dynamic";
 
 // Sign-in lands back here with `?error=<code>` when an OAuth callback
 // fails. The codes come from better-auth (e.g. `email_is_missing`), our
-// invite-only gate, or the identity provider itself — all opaque to a
+// sign-up gate, or the identity provider itself — all opaque to a
 // first-time admin. Translate the common ones to actionable copy and
 // always surface the raw code for support.
-function describeAuthError(raw: string): string {
+function describeAuthError(raw: string, policy: SignupPolicy): string {
   const code = raw.toLowerCase();
-  if (code.includes("invite")) {
-    return "This instance is invite-only. Ask an admin to invite your email address, then try again.";
-  }
   if (code.includes("email_is_missing") || code.includes("email_not_found")) {
     return "Your sign-in provider didn't share an email address. For Microsoft Entra, make sure the account has an email or UPN set, then try again.";
   }
   if (code.includes("oauth_code_verification_failed")) {
     return "Couldn't complete sign-in with your provider (token exchange failed). Check the provider's client secret and that the redirect URI matches this site.";
   }
-  if (code.includes("unable_to_create_user")) {
-    return "Your account couldn't be created. If this instance is invite-only, ask an admin to invite your email first.";
+  if (
+    code.includes("invite") ||
+    code.includes("unable_to_create_user") ||
+    code.includes("allowed email domain")
+  ) {
+    return signupRejectionMessage(policy);
   }
-  return `Sign-in failed (${raw}). If this instance is invite-only, ask an admin to invite your email.`;
+  return `Sign-in failed (${raw}). ${signupRejectionMessage(policy)}`;
 }
 
 // `next` carries the path a signed-out visitor was originally headed to (set
@@ -94,6 +100,7 @@ export default async function Home({
   const emailPw = emailPasswordEnabled();
   const firstRun = await isFirstRun();
   const version = getAppVersion();
+  const { policy: signupPolicy } = await getSignupPolicy();
   const callbackURL = dest ? `/?next=${encodeURIComponent(dest)}` : "/";
 
   const signInCard =
@@ -138,7 +145,7 @@ export default async function Home({
             role="alert"
             className="border-sentiment-negative/30 bg-sentiment-negative/10 text-foreground w-full max-w-md rounded-lg border px-3 py-2 text-sm"
           >
-            {describeAuthError(errorCode)}
+            {describeAuthError(errorCode, signupPolicy)}
           </div>
         )}
 

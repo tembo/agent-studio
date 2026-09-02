@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { isInstanceAdmin } from "@/lib/instance";
-import { getInstanceName } from "@/lib/instance-settings";
+import { getInstanceName, getSignupPolicy } from "@/lib/instance-settings";
 import { getServerSession } from "@/lib/session";
 import { listWorkspacesForUser } from "@/lib/workspace";
 
@@ -20,11 +20,12 @@ export default async function OnboardingPage() {
   const isAdmin = await isInstanceAdmin(session.user.email);
   const workspaces = await listWorkspacesForUser(session.user.id);
   const instanceName = await getInstanceName();
+  const { policy } = await getSignupPolicy();
 
   // Only instance admins create workspaces. A non-admin who already
-  // belongs somewhere goes there; one who doesn't hits the invite-only
-  // dead-end (in practice they wouldn't have an account without an
-  // invite, which would have placed them in a workspace already).
+  // belongs somewhere goes there; one who doesn't waits to be added
+  // (invite-only sign-up usually means they already landed in a
+  // workspace; open / domain-allowlist self-join can reach this page).
   if (!isAdmin) {
     if (workspaces.length > 0) {
       redirect(`/${workspaces[0].slug}`);
@@ -40,7 +41,9 @@ export default async function OnboardingPage() {
               You&apos;re not in a workspace yet
             </h1>
             <p className="text-foreground-weak text-base">
-              This instance is invite-only. Ask an admin to invite{" "}
+              {policy === "invite_only"
+                ? "This instance is invite-only. Ask an admin to invite "
+                : "Ask an admin to add "}
               <span className="text-foreground font-medium">
                 {session.user.email}
               </span>{" "}
