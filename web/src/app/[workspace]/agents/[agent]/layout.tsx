@@ -255,11 +255,6 @@ export default async function AgentLayout({
           agentName={canonicalName}
           locked={locked}
           pendingPromotion={pendingDraft !== null}
-          hasCode={
-            agent.ok &&
-            agent.spec.framework === "pydantic-agentspec" &&
-            Boolean(agent.spec.toolsModule)
-          }
         />
         <div className="flex min-w-0 flex-1 flex-col gap-8">{children}</div>
       </div>

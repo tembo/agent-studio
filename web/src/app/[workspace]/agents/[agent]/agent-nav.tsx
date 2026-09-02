@@ -15,9 +15,6 @@ const ITEMS: Item[] = [
   { slug: "outputs", label: "Outputs" },
   { slug: "automation", label: "Automation" },
   { slug: "versions", label: "Versions" },
-  { slug: "definition", label: "Definition" },
-  { slug: "eval", label: "Eval" },
-  { slug: "code", label: "Code" },
   { slug: "activity", label: "Activity" },
   { slug: "learning", label: "Learning" },
   { slug: "settings", label: "Settings" },
@@ -31,21 +28,17 @@ export function AgentNav({
   agentName,
   locked,
   pendingPromotion,
-  hasCode,
 }: {
   workspaceSlug: string;
   agentName: string;
   locked: boolean;
   pendingPromotion: boolean;
-  hasCode: boolean;
 }) {
   const pathname = usePathname();
   const base = `/${workspaceSlug}/agents/${encodeURIComponent(agentName)}`;
-  const items = ITEMS.filter((i) => {
-    if (locked && LOCKED_HIDDEN.has(i.slug)) return false;
-    if (i.slug === "code" && !hasCode) return false;
-    return true;
-  });
+  const items = locked
+    ? ITEMS.filter((i) => !LOCKED_HIDDEN.has(i.slug))
+    : ITEMS;
 
   return (
     <nav
