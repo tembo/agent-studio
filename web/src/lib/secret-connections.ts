@@ -188,7 +188,7 @@ export async function deleteSharedSecretConnection(
 }
 
 /** Shared-only plaintext lookup for workspace integrations such as LinkedIn. */
-export async function getSecretConnectionValue(
+export async function getSharedSecretConnectionValue(
   workspaceId: string,
   slug: string,
 ): Promise<string | null> {

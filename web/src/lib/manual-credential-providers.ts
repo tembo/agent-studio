@@ -2,7 +2,7 @@
 // MCP, connected by pasting a few values (e.g. a session cookie) with setup
 // instructions. Each field is stored as a workspace secret under field.key — so
 // the runtime (sidecar tools via tas_tools.secret, server executors via
-// getSecretConnectionValue) reads them exactly as before; this only adds a
+// getSharedSecretConnectionValue) reads them exactly as before; this only adds a
 // grouped, instructions-driven connect UX on top of the existing secret store.
 //
 // Not server-only: the (non-secret) catalog — labels, fields, instructions — is

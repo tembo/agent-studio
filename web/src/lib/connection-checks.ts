@@ -17,7 +17,8 @@ import { listSecretConnections } from "@/lib/secret-connections";
 //
 //   - composio / native-mcp: per-(user, slot) — the acting user must have an
 //     ACTIVE connection for `${toolkit}:${name}`.
-//   - secret: workspace-level — a secret with that slug must exist.
+//   - secret: the acting user's personal secret or a workspace-shared fallback
+//     with that slug must exist.
 
 export type MissingConnection = {
   toolkit: string;
