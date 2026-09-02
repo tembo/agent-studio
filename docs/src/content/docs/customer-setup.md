@@ -17,7 +17,9 @@ full env reference lives in
 TAS is single-tenant: one instance is one organization on your own server.
 Agents run on **your** LLM provider keys (Anthropic/OpenAI) — Tembo is only
 involved in the optional chat-to-PR *authoring* flow. The instance is
-**invite-only by default**, bootstrapped by `INSTANCE_ADMIN_EMAILS`.
+**invite-only by default**, bootstrapped by `INSTANCE_ADMIN_EMAILS`. An instance
+admin can later open sign-up (domain allowlist or fully open) under Instance
+settings — see [Instance administration](/agent-studio/instance-admin/#sign-up-policy).
 :::
 
 ## Phase 1 — Procure (accounts & keys)
@@ -90,8 +92,8 @@ Generate each with `openssl rand -base64 32`:
     `MICROSOFT_TENANT_ID`, or the `OIDC_*` set — and email/password turns off
     automatically.
   - **`INSTANCE_ADMIN_EMAILS`** — comma-separated email(s) that bootstrap the
-    instance admin. **This is what lets the first person in**; the instance is
-    invite-only otherwise (it gates email/password sign-up too).
+    instance admin. **This is what lets the first person in**; sign-up is
+    invite-only by default (it gates email/password sign-up too).
   - `TEMBO_API_URL` — leave the default `https://api.tembo.io` unless targeting a
     staging environment.
 - [ ] **Set the OAuth provider's redirect URI** to match your origin *(skip if

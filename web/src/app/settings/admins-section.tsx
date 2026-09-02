@@ -119,9 +119,8 @@ export function AdminsSection({
           </p>
         )}
         <p className="text-foreground-muted text-sm">
-          Instance admins can sign in to this invite-only instance, create
-          workspaces, and manage instance settings — everything needed to
-          finish setup.
+          Instance admins can sign in, create workspaces, and manage instance
+          settings — everything needed to finish setup.
         </p>
       </form>
     </div>

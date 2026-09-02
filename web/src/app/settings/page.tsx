@@ -8,13 +8,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { isAnyAuthConfigured } from "@/lib/auth-providers";
 import { getInstanceNameFromEnv, getPublicOrigin } from "@/lib/config";
 import { authorizeInstance } from "@/lib/instance";
 import { listInstanceAdmins } from "@/lib/instance-admins";
-import { getStoredInstanceName } from "@/lib/instance-settings";
+import {
+  getSignupPolicy,
+  getStoredInstanceName,
+} from "@/lib/instance-settings";
+import { formatAllowedDomains } from "@/lib/signup-policy";
 
 import { AdminsSection } from "./admins-section";
 import { InstanceNameForm } from "./instance-name-form";
+import { SignupPolicyForm } from "./signup-policy-form";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +35,9 @@ export default async function InstanceSettingsPage() {
 
   const storedName = await getStoredInstanceName();
   const envFallback = getInstanceNameFromEnv();
+  const signup = await getSignupPolicy();
   const admins = await listInstanceAdmins();
+  const oauthConfigured = isAnyAuthConfigured();
 
   return (
     <main className="bg-surface min-h-screen px-6 py-10">
@@ -64,6 +72,25 @@ export default async function InstanceSettingsPage() {
             <InstanceNameForm
               initialName={storedName ?? ""}
               envFallback={envFallback}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="w-full p-3">
+          <CardHeader className="flex-col items-start gap-1 px-1 pb-3 pt-1">
+            <CardTitle className="text-foreground-title text-base">
+              Sign-up policy
+            </CardTitle>
+            <CardDescription>
+              Who may create an account on this instance. Workspace membership
+              is still by invitation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-1 pb-1">
+            <SignupPolicyForm
+              initialPolicy={signup.policy}
+              initialDomains={formatAllowedDomains(signup.allowedDomains)}
+              oauthConfigured={oauthConfigured}
             />
           </CardContent>
         </Card>

@@ -42,7 +42,7 @@ describe("inviteResolutionAllowed", () => {
 
   it("resolves invites for unverified emails on an email/password instance", () => {
     // No OAuth provider → email/password sign-in, where emailVerified is
-    // always false and the closed-instance sign-up gate is the authorization.
+    // always false and the sign-up gate is the authorization.
     setOAuthConfigured(false);
     expect(inviteResolutionAllowed(false)).toBe(true);
     expect(inviteResolutionAllowed(true)).toBe(true);

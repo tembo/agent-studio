@@ -68,6 +68,8 @@ services:
       NEXT_PUBLIC_BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       TAS_INSTANCE_NAME: ${TAS_INSTANCE_NAME:-Tembo Agent Studio}
       INSTANCE_ADMIN_EMAILS: ${INSTANCE_ADMIN_EMAILS:-}
+      TAS_SIGNUP_POLICY: ${TAS_SIGNUP_POLICY:-}
+      TAS_SIGNUP_ALLOWED_DOMAINS: ${TAS_SIGNUP_ALLOWED_DOMAINS:-}
       # Dev: when a workspace has no connected GitHub repo, load agents from the
       # mounted samples dir (repo-shaped: contains agents/<framework>/…). Unset
       # this (or connect a repo) to use GitHub instead.

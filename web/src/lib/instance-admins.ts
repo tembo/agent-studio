@@ -7,8 +7,8 @@ import { db } from "@/lib/db";
 // allowlist (lib/config). The env list bootstraps the first admin on a
 // fresh deployment; the `instance_admin` table (migration 0069) lets that
 // admin hand the instance to others in-app (Instance settings) without
-// touching deploy env. Kept session-free so the closed-instance account
-// gate in lib/auth can call isInstanceAdmin without a cycle through
+// touching deploy env. Kept session-free so the sign-up gate in lib/auth
+// can call isInstanceAdmin without a cycle through
 // lib/session → lib/auth.
 
 export type InstanceAdmin = {

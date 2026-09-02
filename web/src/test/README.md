@@ -46,7 +46,7 @@ whole point of recording, so we keep the safety on.
 
 Most of the Microsoft Entra ID and generic OIDC sign-in contract is
 testable without a live IdP: provider discovery/client config, redirect
-URI construction, profile email/name mapping, and the invite-only
+URI construction, profile email/name mapping, and the sign-up-policy
 `user.create.before` / invite-resolution hooks are covered by Vitest
 with mocked better-auth boundaries.
 

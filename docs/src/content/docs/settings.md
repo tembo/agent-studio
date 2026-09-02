@@ -111,10 +111,12 @@ type-to-confirm.
 ## Instance settings
 
 Above the workspace settings rail, instance-level configuration (instance name
-and branding) lives at the top-level **Settings** page, available to
+and branding, sign-up policy, instance admins) lives at the top-level
+**Settings** page, available to
 [instance admins](/agent-studio/audit-and-roles/#instance-admins). For standing
 up and operating the instance itself, see
-[Deploying & operating](/agent-studio/admin-introduction/).
+[Deploying & operating](/agent-studio/admin-introduction/) and
+[Instance administration](/agent-studio/instance-admin/).
 
 ## Secrets handling
 

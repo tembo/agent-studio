@@ -55,7 +55,7 @@ done
 echo " up"
 
 # 4. seed the admin account via better-auth email/password sign-up. The
-#    closed-instance gate only allows INSTANCE_ADMIN_EMAILS / invited emails, so
+#    sign-up gate defaults to invite-only (INSTANCE_ADMIN_EMAILS / invited emails), so
 #    this works for the admin above and nobody else.
 echo "→ seeding admin account $ADMIN_EMAIL"
 code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$ORIGIN/api/auth/sign-up/email" \
