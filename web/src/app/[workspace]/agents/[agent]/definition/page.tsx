@@ -18,8 +18,8 @@ import {
 export const dynamic = "force-dynamic";
 
 // Definition tab — the agent spec (the live draft plus every stable version's
-// snapshot, switchable) and (when declared) its sidecar Python tools module,
-// read-only. Edits go through Git / Chat-to-edit.
+// snapshot, switchable), read-only. Sidecar Python lives on the Code tab.
+// Edits go through Git / Chat-to-edit.
 
 export default async function AgentDefinitionPage({
   params,
@@ -27,7 +27,7 @@ export default async function AgentDefinitionPage({
   params: Promise<{ workspace: string; agent: string }>;
 }) {
   const { workspace: slug, agent: agentName } = await params;
-  const { workspace, canonicalName, repo, agent, raw, toolsModuleContent } =
+  const { workspace, canonicalName, repo, agent, raw } =
     await loadAgentContext(slug, agentName);
 
   const [versions, stable] = await Promise.all([
@@ -54,10 +54,6 @@ export default async function AgentDefinitionPage({
     }
   }
 
-  const toolsModule =
-    agent.ok && agent.spec.framework === "pydantic-agentspec"
-      ? agent.spec.toolsModule
-      : undefined;
   const specLanguage = detectAgentSpecLanguage(
     raw,
     agent.ok ? agent.spec.framework : undefined,
@@ -131,27 +127,6 @@ export default async function AgentDefinitionPage({
       >
         <SpecVersionViewer items={specItems} />
       </Section>
-
-      {toolsModule && (
-        <Section
-          title="Tools module"
-          description={`Deterministic Python functions the model calls as tools, from ${toolsModule}${toolsModuleContent ? ` · ${countLines(toolsModuleContent)} lines` : ""}. Runs in the agent's process with no token cost.`}
-          collapsible
-        >
-          {toolsModuleContent ? (
-            <pre className="bg-surface border-border text-foreground overflow-x-auto rounded-lg border p-4 font-mono text-sm leading-5">
-              {toolsModuleContent}
-            </pre>
-          ) : (
-            <p className="text-sentiment-negative text-sm">
-              The spec references{" "}
-              <code className="font-mono">{toolsModule}</code> but it
-              couldn&apos;t be read from the repo. Runs will fail until the file
-              is added next to the agent.
-            </p>
-          )}
-        </Section>
-      )}
     </>
   );
 }

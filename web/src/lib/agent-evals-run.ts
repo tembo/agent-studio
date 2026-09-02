@@ -226,8 +226,8 @@ export async function readEvalSuite(
   workspaceId: string,
   agentPath: string,
 ): Promise<
-  | { ok: true; suite: EvalSuite; path: string }
-  | { ok: false; error: string; detail: string }
+  | { ok: true; suite: EvalSuite; path: string; content: string }
+  | { ok: false; error: string; detail: string; path: string; content: string }
   | null
 > {
   const reader = await resolveAgentReader(workspaceId);
@@ -237,9 +237,15 @@ export async function readEvalSuite(
     if (!read.ok) continue;
     const parsed = parseEvalFile(path, read.content);
     if (!parsed.ok) {
-      return { ok: false, error: parsed.error, detail: parsed.detail };
+      return {
+        ok: false,
+        error: parsed.error,
+        detail: parsed.detail,
+        path,
+        content: read.content,
+      };
     }
-    return { ok: true, suite: parsed.suite, path };
+    return { ok: true, suite: parsed.suite, path, content: read.content };
   }
   return null;
 }

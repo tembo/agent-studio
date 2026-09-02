@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
 
 import { Section } from "@/components/section";
-import { evalSidecarCandidates } from "@/lib/agent-evals";
-import { getLatestEvalRun } from "@/lib/agent-evals-db";
-import { readEvalSuite } from "@/lib/agent-evals-run";
 import {
   getAgentOwner,
   getStableVersion,
@@ -13,7 +10,6 @@ import { meetsMinRole } from "@/lib/rbac";
 import { getWorkspaceRole, listWorkspaceMembers } from "@/lib/workspace";
 
 import { loadAgentContext } from "../agent-page-context";
-import { EvalsSection } from "../evals-section";
 import { PromoteButton } from "../promote-button";
 import { VersionsSection } from "../versions-section";
 
@@ -30,23 +26,17 @@ export default async function AgentVersionsPage({
   const { workspace: slug, agent: agentName } = await params;
   const { session, workspace, agent, raw, canonicalName, locked } =
     await loadAgentContext(slug, agentName);
-  // Locked agents hide their history tabs (#12) — block the direct URL too.
   if (locked) {
     redirect(`/${slug}/agents/${encodeURIComponent(canonicalName)}`);
   }
 
-  const agentPath = agent.ok ? agent.path : null;
-  const [versions, stable, owner, allMembers, currentUserRole, latestEval, evalSuite] =
+  const [versions, stable, owner, allMembers, currentUserRole] =
     await Promise.all([
       listAgentVersions(workspace.id, canonicalName),
       getStableVersion(workspace.id, canonicalName),
       getAgentOwner(workspace.id, canonicalName),
       listWorkspaceMembers(workspace.id),
       getWorkspaceRole(workspace.id, session.user.id),
-      getLatestEvalRun(workspace.id, canonicalName),
-      agentPath
-        ? readEvalSuite(workspace.id, agentPath)
-        : Promise.resolve(null),
     ]);
 
   const canEdit = meetsMinRole(currentUserRole, "operator");
@@ -89,23 +79,6 @@ export default async function AgentVersionsPage({
           />
         </Section>
       )}
-
-      <EvalsSection
-        latest={latestEval}
-        hasEvalFile={evalSuite !== null}
-        evalPath={
-          evalSuite && evalSuite.ok
-            ? evalSuite.path
-            : agentPath
-              ? evalSidecarCandidates(agentPath)[0]
-              : null
-        }
-        parseError={evalSuite && !evalSuite.ok ? evalSuite.detail : null}
-        canRun={canEdit && !(evalSuite && !evalSuite.ok)}
-        hasStable={Boolean(stable)}
-        workspaceSlug={workspace.slug}
-        agentName={canonicalName}
-      />
 
       <VersionsSection
         versions={versions}
