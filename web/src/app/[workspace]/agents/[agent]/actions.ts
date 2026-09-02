@@ -264,6 +264,11 @@ export async function promoteAgentAction(
   }
 
   const evalSuite = await readEvalSuite(workspace.id, found.agent.path);
+  if (evalSuite && !evalSuite.ok) {
+    return {
+      error: `Eval file is invalid: ${evalSuite.detail} Fix it before promoting.`,
+    };
+  }
   if (evalSuite) {
     const latestEval = await getLatestEvalRun(workspace.id, agentName);
     const blocked = draftEvalBlocksPromote({

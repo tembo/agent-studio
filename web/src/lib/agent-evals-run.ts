@@ -133,10 +133,7 @@ async function prepareEval(
       parsed.spec.name,
       { preferDraft: true },
     );
-    const model =
-      parsed.spec.framework === "cargo-ai"
-        ? parsed.spec.model
-        : parsed.spec.model;
+    const model = parsed.spec.model;
     if (!model) {
       return { ok: false, status: 400, error: "Spec has no model declared." };
     }
@@ -276,7 +273,9 @@ async function executeEvalRun(args: {
       failedCount,
       caseResults: results,
     });
-    await postEvalGithubStatus(args.workspaceId, args.evalRunId);
+    await postEvalGithubStatus(args.workspaceId, args.evalRunId).catch(
+      () => undefined,
+    );
   } catch (err) {
     await finishEvalRun({
       id: args.evalRunId,
@@ -286,7 +285,9 @@ async function executeEvalRun(args: {
       errorMessage: err instanceof Error ? err.message : "Eval runner failed.",
       caseResults: results,
     });
-    await postEvalGithubStatus(args.workspaceId, args.evalRunId);
+    await postEvalGithubStatus(args.workspaceId, args.evalRunId).catch(
+      () => undefined,
+    );
   }
 }
 

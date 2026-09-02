@@ -30,7 +30,9 @@ export async function schedulePrEvals(
     (i) => i.status === "pr_opened" && i.prNumber !== null,
   );
   if (open.length === 0) return;
-  await Promise.all(open.map((imp) => maybeEvalImprovement(workspaceId, imp)));
+  await Promise.allSettled(
+    open.map((imp) => maybeEvalImprovement(workspaceId, imp)),
+  );
 }
 
 async function maybeEvalImprovement(

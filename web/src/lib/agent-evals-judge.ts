@@ -39,6 +39,7 @@ export async function scoreJudge(
         "anthropic-version": "2023-06-01",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
       body: JSON.stringify({
         model: JUDGE_MODEL,
         max_tokens: 200,

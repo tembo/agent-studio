@@ -56,7 +56,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const filters: RunListFilters = {
     ...(statuses.length ? { statuses } : {}),
-    ...(triggerParam !== null ? { triggers } : {}),
+    ...(triggers.length ? { triggers } : {}),
     ...(environments.length ? { environments } : {}),
     ...(agentName ? { agentName } : {}),
   };
