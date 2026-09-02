@@ -104,6 +104,24 @@ describe("CAP prompt scope", () => {
       expect(prompt).toContain(
         "If surrounding Tembo session context mentions any other repository, TAS",
       );
+      expect(prompt).toContain("**Evals: on.**");
     }
+  });
+
+  it("tells CAP to skip eval sidecars when the operator opts out", () => {
+    const prompt = buildCreateAgentPrompt({
+      framework: "pydantic-agentspec",
+      agentName: "daily-brief",
+      title: "Daily Brief",
+      agentPath: "agents/pydantic-agentspec/daily-brief.yaml",
+      description: "Summarize yesterday's activity.",
+      improvementMarker: "TAS-Feedback-ID: row-1",
+      commitMode: "pull_request",
+      defaultBranch: "main",
+      repositoryUrl: "https://github.com/acme/agents",
+      includeEvals: false,
+    });
+    expect(prompt).toContain("**Evals: off.**");
+    expect(prompt).not.toContain("**Evals: on.**");
   });
 });

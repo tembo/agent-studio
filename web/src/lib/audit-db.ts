@@ -278,7 +278,7 @@ async function fetchRunEvents(
     triggerWhere.push(`trigger NOT IN ('schedule', 'event')`);
 
   const params: unknown[] = [workspaceId];
-  const where: string[] = [`workspace_id = $1`];
+  const where: string[] = [`workspace_id = $1`, `trigger <> 'eval'`];
   if (filters.agentName) {
     params.push(`%${filters.agentName}%`);
     where.push(`agent_name ILIKE $${params.length}`);

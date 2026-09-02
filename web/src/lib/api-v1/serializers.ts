@@ -9,6 +9,7 @@ import type { WorkspaceComposioConnection } from "@/lib/composio-connections";
 import type { WorkspaceConnection } from "@/lib/connections";
 import type { SlackApp } from "@/lib/slack-apps";
 import type { InboxItem } from "@/lib/inbox-api";
+import type { AgentEvalRun } from "@/lib/agent-evals-db";
 
 // Pure mappers from internal service-layer types to the public JSON shapes
 // emitted by BOTH the REST API (/api/v1) and the MCP server (/mcp). Keeping
@@ -337,5 +338,37 @@ export function serializeInboxItem(i: InboxItem): SerializedInboxItem {
     resolvedAt: i.resolvedAt ? i.resolvedAt.toISOString() : null,
     externalTs: i.externalTs,
     snoozedUntil: i.snoozedUntil ? i.snoozedUntil.toISOString() : null,
+  };
+}
+
+export type SerializedEvalRun = {
+  id: string;
+  agentName: string;
+  versionLabel: string;
+  source: AgentEvalRun["source"];
+  commitSha: string | null;
+  status: AgentEvalRun["status"];
+  passedCount: number;
+  failedCount: number;
+  errorMessage: string | null;
+  cases: AgentEvalRun["caseResults"];
+  createdAt: string;
+  finishedAt: string | null;
+};
+
+export function serializeEvalRun(r: AgentEvalRun): SerializedEvalRun {
+  return {
+    id: r.id,
+    agentName: r.agentName,
+    versionLabel: r.agentVersionLabel,
+    source: r.source,
+    commitSha: r.commitSha,
+    status: r.status,
+    passedCount: r.passedCount,
+    failedCount: r.failedCount,
+    errorMessage: r.errorMessage,
+    cases: r.caseResults,
+    createdAt: r.createdAt.toISOString(),
+    finishedAt: r.finishedAt ? r.finishedAt.toISOString() : null,
   };
 }

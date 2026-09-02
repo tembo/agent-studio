@@ -230,6 +230,43 @@ function buildScopeBlock(args: {
 // default branch with the marker in the commit message, so /improvements can
 // still correlate the landed change back to the improvement row. Returns the
 // prompt-line array; callers spread it in.
+export function evalSidecarPath(agentPath: string): string {
+  return agentPath.replace(/\.(ya?ml|json)$/i, "") + ".eval.yaml";
+}
+
+/** Operator opt-in for a colocated eval sidecar. Default on. */
+export function evalsDirective(includeEvals: boolean, agentPath: string): string[] {
+  const sidecar = evalSidecarPath(agentPath);
+  if (!includeEvals) {
+    return [
+      "**Evals: off.** The operator declined regression evals. Do not create, edit, or delete an eval sidecar (`*.eval.yaml`). Agents without one stay ungated.",
+      "",
+    ];
+  }
+  return [
+    `**Evals: on.** The operator opted in. Write or update a colocated eval sidecar at \`${sidecar}\` — same stem as the agent file; it is not itself an agent. Read the eval sidecar section in the framework AGENT_GUIDE.`,
+    "",
+    "Shape:",
+    "```yaml",
+    "cases:",
+    "  - name: greets",
+    "    input: Hello",
+    "    assert:",
+    "      contains: hello",
+    "  - name: tone",
+    "    input: Hey",
+    "    judge:",
+    "      rubric: Friendly greeting.",
+    "```",
+    "",
+    "- 2–5 cases covering the agent's main job.",
+    "- Prefer `assert` (`contains`, `not_contains`, `regex`, `equals`, `max_chars`) — those gate Promote and authoring PRs.",
+    "- `judge.rubric` is optional and informational; it does not fail the gate.",
+    "- If a sidecar already exists, keep it in sync with this change. Do not put evals inside the agent spec.",
+    "",
+  ];
+}
+
 function deliveryDirective(
   commitMode: CommitMode,
   defaultBranch: string,
@@ -298,6 +335,8 @@ export function buildCreateAgentPrompt(args: {
   nativeToolsBaseUrl?: string;
   /** Signed token CAP appends as `?key=` when fetching the reference. */
   nativeToolsKey?: string;
+  /** Operator opted into a colocated eval sidecar. Default on. */
+  includeEvals?: boolean;
 }): string {
   const frameworkGuide =
     args.framework === "cargo-ai" ? GUIDANCE_CARGO_AI_PATH : GUIDANCE_PYDANTIC_PATH;
@@ -317,6 +356,7 @@ export function buildCreateAgentPrompt(args: {
     "",
     `The agent's \`name:\` field must be exactly \`${args.agentName}\` (it matches the filename). Also set a \`title:\` field to the human display name "${args.title}" (free text — this is what the UI shows). Don't put the file anywhere other than \`${args.agentPath}\`.`,
     "",
+    ...evalsDirective(args.includeEvals !== false, args.agentPath),
     ...renderAvailableSlots(args.availableSlots),
     ...renderNativeSlots(
       args.nativeSlots,
@@ -508,6 +548,7 @@ export function buildChatEditPrompt(args: {
   nativeToolsBaseUrl?: string;
   /** Signed token CAP sends as `Authorization: Bearer` to the reference. */
   nativeToolsKey?: string;
+  includeEvals?: boolean;
 }): string {
   const framework = frameworkFromAgentPath(args.agentPath);
   return [
@@ -519,6 +560,7 @@ export function buildChatEditPrompt(args: {
     "",
     buildGuidancePointerBlock(framework),
     "",
+    ...evalsDirective(args.includeEvals !== false, args.agentPath),
     "**Step 2 — Delivery**",
     "",
     ...deliveryDirective(
@@ -563,6 +605,7 @@ export function buildImprovePrompt(args: {
   defaultBranch: string;
   /** Connected workspace repo URL CAP must edit, e.g. https://github.com/owner/name. */
   repositoryUrl: string;
+  includeEvals?: boolean;
 }): string {
   const framework = frameworkFromAgentPath(args.agentPath);
   const trimmedOutput = args.output.length > 4000
@@ -585,6 +628,7 @@ export function buildImprovePrompt(args: {
       args.improvementMarker,
     ),
     "",
+    ...evalsDirective(args.includeEvals !== false, args.agentPath),
     // Keep the file target next to the user's request (TAS fills the path in
     // from the run's agent, not the user's words).
     "## Improvement requested by the user",

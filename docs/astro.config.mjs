@@ -48,6 +48,7 @@ export default defineConfig({
             { label: "Agent library", slug: "agent-library" },
             { label: "Example Agents", slug: "example-agents" },
             { label: "Agent lifecycle", slug: "agent-lifecycle" },
+            { label: "Agent evals", slug: "agent-evals" },
             { label: "Sidecar Python tools", slug: "sidecar-python-tools" },
           ],
         },

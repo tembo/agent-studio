@@ -10,7 +10,7 @@ import type {
 // runs, marking them succeeded/failed); the web layer reads for list +
 // detail pages. Both surfaces hit the same Postgres so this is safe.
 
-export type RunTrigger = "manual" | "schedule" | "event";
+export type RunTrigger = "manual" | "schedule" | "event" | "eval";
 
 export type RunSummary = {
   id: string;
@@ -79,6 +79,7 @@ export async function listAgentSummaries30d(
            FROM run
           WHERE workspace_id = $1 AND agent_name = ANY($2::text[])
             AND run_environment = 'production'
+            AND trigger <> 'eval'
             AND NOT is_dry_run
           GROUP BY agent_name
      ),
@@ -86,6 +87,7 @@ export async function listAgentSummaries30d(
         SELECT DISTINCT ON (agent_name) agent_name, status, created_at
           FROM run
          WHERE workspace_id = $1 AND agent_name = ANY($2::text[])
+           AND trigger <> 'eval'
          ORDER BY agent_name, created_at DESC
      )
      SELECT

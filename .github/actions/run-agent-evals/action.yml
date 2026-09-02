@@ -1,0 +1,29 @@
+name: Run agent evals
+description: Run Tembo Agent Studio eval suites for agents changed on a PR and fail on regression.
+inputs:
+  tas-url:
+    description: Base URL of the TAS instance (no trailing /api/v1)
+    required: true
+  tas-token:
+    description: Operator API key (tas_…)
+    required: true
+  version:
+    description: draft or stable
+    required: false
+    default: draft
+  base-sha:
+    description: Git SHA to diff against. Defaults to the pull_request base SHA.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Run evals
+      shell: bash
+      env:
+        TAS_URL: ${{ inputs.tas-url }}
+        TAS_API_TOKEN: ${{ inputs.tas-token }}
+        TAS_EVAL_VERSION: ${{ inputs.version }}
+        EVAL_BASE_SHA: ${{ inputs.base-sha }}
+        GITHUB_SHA: ${{ github.sha }}
+      run: bash "${{ github.action_path }}/run.sh"

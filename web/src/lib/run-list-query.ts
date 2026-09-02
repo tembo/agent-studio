@@ -9,7 +9,7 @@ export type RunListStatus =
   | "succeeded"
   | "failed"
   | "cancelled";
-export type RunListTrigger = "manual" | "schedule" | "event";
+export type RunListTrigger = "manual" | "schedule" | "event" | "eval";
 
 export const RUN_LIST_STATUSES: RunListStatus[] = [
   "queued",
@@ -22,6 +22,7 @@ export const RUN_LIST_TRIGGERS: RunListTrigger[] = [
   "manual",
   "schedule",
   "event",
+  "eval",
 ];
 
 type SearchParams = Record<string, string | string[] | undefined>;

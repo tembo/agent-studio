@@ -500,6 +500,10 @@ function SourceCell({ run }: { run: LoadedRun }) {
           <Badge variant="purple" size="small">
             Event
           </Badge>
+        ) : run.trigger === "eval" ? (
+          <Badge variant="gray" size="small">
+            Eval
+          </Badge>
         ) : (
           <span className="text-foreground-weak text-sm">Manual</span>
         )}
@@ -589,6 +593,7 @@ const TRIGGER_LABELS: Record<RunListTrigger, string> = {
   manual: "Manual",
   schedule: "Scheduled",
   event: "Event",
+  eval: "Eval",
 };
 
 const STATUS_BADGE: Record<

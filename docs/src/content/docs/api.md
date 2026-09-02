@@ -61,7 +61,10 @@ triggers a run, writes an automation, or kicks off the coding agent needs
 | `GET /slack-apps` · `GET /slack-apps/{id}` | List / read Slack bots (secret-safe). | viewer |
 | `POST /slack-apps` | Create a Slack bot (returns it in `configuring` state). | workspace_admin |
 | `PATCH·DELETE /slack-apps/{id}` | Update (name/labels/owner/secrets) / delete. | workspace_admin |
-| `POST /agent-changes` | Hand an authoring request to the Tembo Coding Agent. | operator |
+| `POST /agent-changes` | Hand an authoring request to the Tembo Coding Agent (`includeEvals` defaults true). | operator |
+| `GET /evals?agent=` | List eval suite runs for an agent (`?latest=true` for the newest). | viewer |
+| `POST /evals` | Queue an eval suite → `202 { eval_id }`. Body: `{ agent, version?, spec?, eval?, commitSha?, source? }`. | operator |
+| `GET /evals/{id}` | One eval suite incl. per-case pass/fail. Poll until `passed` / `failed` / `error`. | viewer |
 
 Creating a Slack bot via the API writes metadata only — it comes up in a
 `configuring` state and isn't live until an admin finishes the one-time browser
@@ -123,10 +126,28 @@ curl -s -X POST https://your-tas-host/api/v1/agent-changes \
 To edit an existing agent instead, pass `agent` (its name) and a `description`
 of the change.
 
+Run an agent's eval suite (see [Agent evals](/agent-studio/agent-evals/)):
+
+```bash
+curl -s -X POST https://your-tas-host/api/v1/evals \
+  -H "Authorization: Bearer tas_..." \
+  -H "Content-Type: application/json" \
+  -d '{"agent":"hello-world","version":"draft"}'
+# → 202 { "eval_id": "..." }
+
+curl -s https://your-tas-host/api/v1/evals/<eval_id> \
+  -H "Authorization: Bearer tas_..."
+# → { "eval": { "status": "passed", "passedCount": 2, "cases": [ ... ] } }
+```
+
 ## Notes
 
 - **Runs are asynchronous.** `POST /runs` returns `202` with a `run_id`
   immediately; poll `GET /runs/{id}` until `status` is `succeeded` or `failed`.
+  Eval suites are the same shape (`POST /evals` → poll `GET /evals/{id}`).
+  `passed` is the assertion gate; `cases[].judgePassed` is informational.
+  Per-case agent runs use `trigger=eval` and are omitted from `GET /runs`
+  unless you pass `?trigger=eval`.
 - **Run responses include `runEnvironment`.** Filter `GET /runs` with
   `?environment=production`, `development`, or both as a comma-separated list.
   Draft runs are Development; promoted/versioned runs are Production.

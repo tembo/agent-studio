@@ -20,6 +20,7 @@ import { after } from "next/server";
 //        yet → search commit messages for the marker to attach the landed
 //        commit (sha + html url).
 
+import { schedulePrEvals } from "@/lib/agent-evals-pr";
 import {
   setImprovementCommit,
   setImprovementPr,
@@ -289,7 +290,9 @@ export async function scanImprovementsForPRs(
   await Promise.all([scanKnownPrs(), discoverPrs(), attachCommits()]);
 
   // Return improvements with updated rows folded in.
-  return improvements.map((i) => updates.get(i.id) ?? i);
+  const next = improvements.map((i) => updates.get(i.id) ?? i);
+  await schedulePrEvals(workspaceId, next).catch(() => undefined);
+  return next;
 }
 
 async function fetchPull(

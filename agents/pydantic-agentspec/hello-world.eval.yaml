@@ -1,0 +1,14 @@
+# Sample eval suite colocated with hello-world.yaml.
+# TAS runs each case against the agent and fails the suite if any case fails.
+cases:
+  - name: greets-the-user
+    input: Hello
+    assert:
+      contains: hello
+      max_chars: 800
+  - name: friendly-tone
+    input: Hey there
+    judge:
+      rubric: |
+        Pass if the reply is a warm, brief greeting.
+        Fail if it is rude, ignores the user, or launches into an unrelated topic.
