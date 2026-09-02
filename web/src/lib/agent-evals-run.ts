@@ -9,11 +9,13 @@ import {
   parseEvalContent,
   parseEvalFile,
   scoreAssert,
+  specHash,
   type EvalCase,
   type EvalSuite,
 } from "@/lib/agent-evals";
 import {
   finishEvalRun,
+  getEvalRun,
   insertEvalRun,
   markEvalRunning,
   type EvalCaseResult,
@@ -22,11 +24,14 @@ import {
 } from "@/lib/agent-evals-db";
 import { scoreJudge } from "@/lib/agent-evals-judge";
 import { resolveAgentReader } from "@/lib/agent-source";
+import { getPublicOrigin } from "@/lib/config";
+import { postCommitStatus } from "@/lib/github";
 import {
   findMissingConnections,
   missingConnectionsMessage,
 } from "@/lib/connection-checks";
 import { createRun, getRun } from "@/lib/runs-api";
+import { getWorkspaceById, getWorkspaceRepo, getWorkspaceSecretPlaintext } from "@/lib/workspace";
 import {
   resolveAgentForDispatch,
   type ResolvedDispatch,
@@ -65,6 +70,7 @@ export async function startEvalRun(
     agentVersionLabel: prepared.dispatch.versionLabel,
     source: input.source,
     commitSha: input.commitSha ?? null,
+    specHash: specHash(prepared.dispatch.specContent),
     createdBy: input.userId,
   });
 
@@ -95,6 +101,9 @@ export function scheduleEvalRun(args: {
       errorMessage: err instanceof Error ? err.message : "Eval runner failed.",
       caseResults: [],
     }).catch(() => undefined);
+    await postEvalGithubStatus(args.workspaceId, args.evalRunId).catch(
+      () => undefined,
+    );
   });
 }
 
@@ -267,6 +276,7 @@ async function executeEvalRun(args: {
       failedCount,
       caseResults: results,
     });
+    await postEvalGithubStatus(args.workspaceId, args.evalRunId);
   } catch (err) {
     await finishEvalRun({
       id: args.evalRunId,
@@ -276,7 +286,43 @@ async function executeEvalRun(args: {
       errorMessage: err instanceof Error ? err.message : "Eval runner failed.",
       caseResults: results,
     });
+    await postEvalGithubStatus(args.workspaceId, args.evalRunId);
   }
+}
+
+async function postEvalGithubStatus(
+  workspaceId: string,
+  evalRunId: string,
+): Promise<void> {
+  const evalRun = await getEvalRun(workspaceId, evalRunId);
+  if (!evalRun?.commitSha) return;
+  const repo = await getWorkspaceRepo(workspaceId);
+  const token = await getWorkspaceSecretPlaintext(workspaceId, "github_pat");
+  if (!repo || !token) return;
+  const workspace = await getWorkspaceById(workspaceId);
+  const state =
+    evalRun.status === "passed"
+      ? "success"
+      : evalRun.status === "failed"
+        ? "failure"
+        : "error";
+  const description =
+    evalRun.status === "passed"
+      ? `${evalRun.passedCount} assertion${evalRun.passedCount === 1 ? "" : "s"} passed`
+      : evalRun.status === "failed"
+        ? `${evalRun.failedCount} assertion${evalRun.failedCount === 1 ? "" : "s"} failed`
+        : (evalRun.errorMessage ?? "Eval error").slice(0, 140);
+  await postCommitStatus(token, {
+    owner: repo.owner,
+    name: repo.name,
+    sha: evalRun.commitSha,
+    state,
+    context: "tas/evals",
+    description,
+    targetUrl: workspace
+      ? `${getPublicOrigin()}/${workspace.slug}/agents/${encodeURIComponent(evalRun.agentName)}/versions`
+      : undefined,
+  });
 }
 
 async function runCase(args: {
@@ -320,33 +366,30 @@ async function runCase(args: {
     }
     const output = run.output ?? "";
     const reasons: string[] = [];
-    let passed = true;
+    let assertPassed: boolean | null = null;
+    let gateFailed = false;
     if (evalCase.assert) {
       const scored = scoreAssert(output, evalCase.assert);
-      if (!scored.passed) {
-        passed = false;
-        reasons.push(scored.reason);
-      } else {
-        reasons.push(scored.reason);
-      }
+      assertPassed = scored.passed;
+      if (!scored.passed) gateFailed = true;
+      reasons.push(scored.reason);
     }
+    let judgePassed: boolean | null = null;
     if (evalCase.judge) {
       const judged = await scoreJudge(
         args.workspaceId,
         output,
         evalCase.judge.rubric,
       );
-      if (!judged.passed) {
-        passed = false;
-        reasons.push(`judge: ${judged.reason}`);
-      } else {
-        reasons.push(`judge: ${judged.reason}`);
-      }
+      judgePassed = judged.passed;
+      reasons.push(`judge: ${judged.reason}`);
     }
     return {
       name: evalCase.name,
       input: evalCase.input,
-      passed,
+      passed: !gateFailed,
+      assertPassed,
+      judgePassed,
       reason: reasons.join(" · "),
       output,
       runId,
@@ -370,6 +413,8 @@ function fail(
     name: evalCase.name,
     input: evalCase.input,
     passed: false,
+    assertPassed: false,
+    judgePassed: null,
     reason,
     output,
     runId,

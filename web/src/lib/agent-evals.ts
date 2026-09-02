@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import YAML from "yaml";
 
 // Sidecar eval suites live next to the agent spec as `<name>.eval.yaml`.
@@ -334,6 +335,39 @@ function stringList(raw: unknown): string[] | undefined | false {
     return values.length ? values : false;
   }
   return false;
+}
+
+export function specHash(content: string): string {
+  return createHash("sha256").update(content).digest("hex").slice(0, 16);
+}
+
+export type EvalGateLatest = {
+  status: "queued" | "running" | "passed" | "failed" | "error";
+  specHash: string | null;
+  agentVersionLabel: string;
+};
+
+/** Error copy if promote should be blocked; null if the draft may go stable. */
+export function draftEvalBlocksPromote(input: {
+  hasEvalFile: boolean;
+  latest: EvalGateLatest | null;
+  draftSpecHash: string;
+}): string | null {
+  if (!input.hasEvalFile) return null;
+  if (
+    !input.latest ||
+    input.latest.agentVersionLabel !== "draft" ||
+    input.latest.specHash !== input.draftSpecHash
+  ) {
+    return "Run evals on this draft before promoting. Assertions must pass.";
+  }
+  if (input.latest.status === "queued" || input.latest.status === "running") {
+    return "Draft evals are still running.";
+  }
+  if (input.latest.status !== "passed") {
+    return "Draft assertions failed. Fix the agent or the eval file before promoting.";
+  }
+  return null;
 }
 
 export function scoreAssert(

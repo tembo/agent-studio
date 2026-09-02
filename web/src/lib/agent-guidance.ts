@@ -376,8 +376,9 @@ roll up into the orchestrator's declaration.
 Colocate \`<name>.eval.yaml\` next to the spec (same stem). TAS does
 **not** treat eval files as agents. Each case has \`input\` plus
 \`assert\` (contains / not_contains / regex / equals / max_chars)
-and/or \`judge.rubric\` (LLM pass/fail). Authoring PRs that touch
-an agent with an eval file fail CI on regression.
+and/or \`judge.rubric\` (LLM pass/fail). TAS runs the suite on
+authoring PRs and blocks Promote until **assertions** pass.
+\`judge\` is informational and does not fail the gate.
 
 \`\`\`yaml
 cases:

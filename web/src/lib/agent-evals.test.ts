@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  draftEvalBlocksPromote,
   evalSidecarCandidates,
   isEvalSidecarFilename,
   parseEvalContent,
@@ -133,5 +134,71 @@ describe("scoreAssert", () => {
       true,
     );
     expect(scoreAssert("nope", { regex: "status:\\s+ok" }).passed).toBe(false);
+  });
+});
+
+describe("draftEvalBlocksPromote", () => {
+  const hash = "abc123";
+
+  it("does not block agents without an eval file", () => {
+    expect(
+      draftEvalBlocksPromote({
+        hasEvalFile: false,
+        latest: null,
+        draftSpecHash: hash,
+      }),
+    ).toBeNull();
+  });
+
+  it("blocks when the draft has not been eval'd", () => {
+    expect(
+      draftEvalBlocksPromote({
+        hasEvalFile: true,
+        latest: null,
+        draftSpecHash: hash,
+      }),
+    ).toMatch(/Run evals on this draft/);
+  });
+
+  it("blocks a stale passing eval after the draft changes", () => {
+    expect(
+      draftEvalBlocksPromote({
+        hasEvalFile: true,
+        latest: {
+          status: "passed",
+          specHash: "old",
+          agentVersionLabel: "draft",
+        },
+        draftSpecHash: hash,
+      }),
+    ).toMatch(/Run evals on this draft/);
+  });
+
+  it("blocks assertion failures", () => {
+    expect(
+      draftEvalBlocksPromote({
+        hasEvalFile: true,
+        latest: {
+          status: "failed",
+          specHash: hash,
+          agentVersionLabel: "draft",
+        },
+        draftSpecHash: hash,
+      }),
+    ).toMatch(/assertions failed/);
+  });
+
+  it("allows promote when draft assertions passed", () => {
+    expect(
+      draftEvalBlocksPromote({
+        hasEvalFile: true,
+        latest: {
+          status: "passed",
+          specHash: hash,
+          agentVersionLabel: "draft",
+        },
+        draftSpecHash: hash,
+      }),
+    ).toBeNull();
   });
 });

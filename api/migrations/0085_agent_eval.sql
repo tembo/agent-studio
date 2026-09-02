@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS agent_eval_run (
     agent_version_id     UUID        REFERENCES agent_version(id) ON DELETE SET NULL,
     agent_version_label  TEXT        NOT NULL,
     source               TEXT        NOT NULL DEFAULT 'api'
-                         CHECK (source IN ('ci', 'manual', 'api')),
+                         CHECK (source IN ('ci', 'manual', 'api', 'pr')),
     commit_sha           TEXT,
+    spec_hash            TEXT,
     status               TEXT        NOT NULL DEFAULT 'queued'
                          CHECK (status IN ('queued', 'running', 'passed', 'failed', 'error')),
     passed_count         INTEGER     NOT NULL DEFAULT 0,

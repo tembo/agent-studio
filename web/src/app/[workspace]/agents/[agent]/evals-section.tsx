@@ -33,7 +33,7 @@ export function EvalsSection({
   return (
     <Section
       title="Evals"
-      description="Regression checks from a colocated eval file. CI runs them on authoring PRs; you can also run the draft or current stable here."
+      description="Regression checks from a colocated eval file. TAS runs assertions on authoring PRs and blocks Promote until they pass. The LLM judge is informational."
       actions={
         canRun && hasEvalFile ? (
           <div className="flex flex-wrap gap-2">
@@ -66,7 +66,7 @@ export function EvalsSection({
           <code className="text-foreground-muted">
             {evalPath ?? "<name>.eval.yaml"}
           </code>
-          ) to gate authoring PRs.
+          ) to gate Promote and authoring PRs.
         </p>
       ) : parseError ? (
         <p className="text-sentiment-negative text-sm" role="alert">
@@ -81,7 +81,7 @@ export function EvalsSection({
               at <code className="text-foreground-muted">{evalPath}</code>
             </>
           ) : null}
-          . Run it against the draft or wait for CI on the next authoring PR.
+          . Run it against the draft, or TAS will run it when the next authoring PR opens.
         </p>
       ) : (
         <EvalResult latest={latest} workspaceSlug={workspaceSlug} agentName={agentName} />
@@ -108,7 +108,7 @@ function EvalResult({
         </Badge>
         <span className="text-foreground-muted text-sm">
           {latest.agentVersionLabel}
-          {latest.source === "ci" ? " · CI" : latest.source === "manual" ? " · manual" : " · API"}
+          {sourceLabel(latest.source)}
           {" · "}
           <LocalTime iso={latest.createdAt.toISOString()} style="relative" />
         </span>
@@ -131,6 +131,11 @@ function EvalResult({
                   <Badge variant={c.passed ? "green" : "red"} size="small">
                     {c.passed ? "Pass" : "Fail"}
                   </Badge>
+                  {c.judgePassed === false && c.passed ? (
+                    <Badge variant="yellow" size="small">
+                      Judge
+                    </Badge>
+                  ) : null}
                 </div>
                 <p className="text-foreground-weak line-clamp-2 text-sm">{c.reason}</p>
               </div>
@@ -148,6 +153,19 @@ function EvalResult({
       )}
     </div>
   );
+}
+
+function sourceLabel(source: AgentEvalRun["source"]): string {
+  switch (source) {
+    case "pr":
+      return " · PR";
+    case "manual":
+      return " · manual";
+    case "ci":
+      return " · CI";
+    default:
+      return " · API";
+  }
 }
 
 function statusBadge(status: AgentEvalRun["status"]): {

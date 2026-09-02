@@ -51,7 +51,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
   const version = body.version === "stable" ? "stable" : "draft";
   const source =
-    body.source === "ci" || body.source === "manual" || body.source === "api"
+    body.source === "ci" ||
+    body.source === "manual" ||
+    body.source === "api" ||
+    body.source === "pr"
       ? body.source
       : "api";
   const specFormat =

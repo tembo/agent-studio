@@ -513,6 +513,41 @@ export async function deleteFile(
   return { ok: true, commitSha: body.commit.sha };
 }
 
+export async function postCommitStatus(
+  token: string,
+  args: {
+    owner: string;
+    name: string;
+    sha: string;
+    state: "pending" | "success" | "failure" | "error";
+    context: string;
+    description?: string;
+    targetUrl?: string;
+  },
+): Promise<void> {
+  try {
+    await fetch(
+      `https://api.github.com/repos/${args.owner}/${args.name}/statuses/${encodeURIComponent(args.sha)}`,
+      {
+        method: "POST",
+        headers: {
+          ...GITHUB_HEADERS(token),
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+        body: JSON.stringify({
+          state: args.state,
+          context: args.context,
+          description: args.description?.slice(0, 140),
+          target_url: args.targetUrl,
+        }),
+      },
+    );
+  } catch {
+    // Best-effort: a missing repo:status scope must not fail the eval.
+  }
+}
+
 function encodePath(p: string): string {
   return p
     .split("/")

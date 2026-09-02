@@ -8,12 +8,15 @@ export type EvalRunStatus =
   | "passed"
   | "failed"
   | "error";
-export type EvalRunSource = "ci" | "manual" | "api";
+export type EvalRunSource = "ci" | "manual" | "api" | "pr";
 
 export type EvalCaseResult = {
   name: string;
   input: string;
+  /** Gate bit: run succeeded and assertions passed. Judge is not included. */
   passed: boolean;
+  assertPassed: boolean | null;
+  judgePassed: boolean | null;
   reason: string;
   output: string | null;
   runId: string | null;
@@ -27,6 +30,7 @@ export type AgentEvalRun = {
   agentVersionLabel: string;
   source: EvalRunSource;
   commitSha: string | null;
+  specHash: string | null;
   status: EvalRunStatus;
   passedCount: number;
   failedCount: number;
@@ -45,6 +49,7 @@ type Row = {
   agent_version_label: string;
   source: EvalRunSource;
   commit_sha: string | null;
+  spec_hash: string | null;
   status: EvalRunStatus;
   passed_count: number;
   failed_count: number;
@@ -63,6 +68,7 @@ const COLUMNS = [
   "agent_version_label",
   "source",
   "commit_sha",
+  "spec_hash",
   "status",
   "passed_count",
   "failed_count",
@@ -87,6 +93,7 @@ function rowToEvalRun(r: Row): AgentEvalRun {
     agentVersionLabel: r.agent_version_label,
     source: r.source,
     commitSha: r.commit_sha,
+    specHash: r.spec_hash,
     status: r.status,
     passedCount: r.passed_count,
     failedCount: r.failed_count,
@@ -105,13 +112,14 @@ export async function insertEvalRun(input: {
   agentVersionLabel: string;
   source: EvalRunSource;
   commitSha: string | null;
+  specHash: string | null;
   createdBy: string;
 }): Promise<AgentEvalRun> {
   const { rows } = await db.query<Row>(
     `INSERT INTO agent_eval_run (
        workspace_id, agent_name, agent_version_id, agent_version_label,
-       source, commit_sha, created_by
-     ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+       source, commit_sha, spec_hash, created_by
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${SELECT}`,
     [
       input.workspaceId,
@@ -120,6 +128,7 @@ export async function insertEvalRun(input: {
       input.agentVersionLabel,
       input.source,
       input.commitSha,
+      input.specHash,
       input.createdBy,
     ],
   );
@@ -151,6 +160,21 @@ export async function listEvalRuns(
     [workspaceId, agentName, Math.min(Math.max(1, limit), 50)],
   );
   return rows.map(rowToEvalRun);
+}
+
+export async function getEvalRunByCommitSha(
+  workspaceId: string,
+  agentName: string,
+  commitSha: string,
+): Promise<AgentEvalRun | null> {
+  const { rows } = await db.query<Row>(
+    `SELECT ${SELECT} FROM agent_eval_run
+      WHERE workspace_id = $1 AND agent_name = $2 AND commit_sha = $3
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [workspaceId, agentName, commitSha],
+  );
+  return rows[0] ? rowToEvalRun(rows[0]) : null;
 }
 
 export async function getLatestEvalRun(

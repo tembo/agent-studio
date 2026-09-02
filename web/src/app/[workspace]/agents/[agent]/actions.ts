@@ -25,6 +25,9 @@ import {
   promoteToStable,
   setAgentOwner,
 } from "@/lib/agent-versions";
+import { draftEvalBlocksPromote, specHash } from "@/lib/agent-evals";
+import { getLatestEvalRun } from "@/lib/agent-evals-db";
+import { readEvalSuite } from "@/lib/agent-evals-run";
 import { summarizeSpecDiff } from "@/lib/agent-version-summary";
 import { isAgentLocked, setAgentLock } from "@/lib/agent-lock";
 import {
@@ -258,6 +261,23 @@ export async function promoteAgentAction(
   const previous = await getStableVersion(workspace.id, agentName);
   if (previous && previous.specContent === found.raw) {
     return { error: "No changes since the current stable version." };
+  }
+
+  const evalSuite = await readEvalSuite(workspace.id, found.agent.path);
+  if (evalSuite) {
+    const latestEval = await getLatestEvalRun(workspace.id, agentName);
+    const blocked = draftEvalBlocksPromote({
+      hasEvalFile: true,
+      latest: latestEval
+        ? {
+            status: latestEval.status,
+            specHash: latestEval.specHash,
+            agentVersionLabel: latestEval.agentVersionLabel,
+          }
+        : null,
+      draftSpecHash: specHash(found.raw),
+    });
+    if (blocked) return { error: blocked };
   }
 
   const changeSummary = await summarizeSpecDiff({

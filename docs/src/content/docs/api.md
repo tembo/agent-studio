@@ -145,6 +145,7 @@ curl -s https://your-tas-host/api/v1/evals/<eval_id> \
 - **Runs are asynchronous.** `POST /runs` returns `202` with a `run_id`
   immediately; poll `GET /runs/{id}` until `status` is `succeeded` or `failed`.
   Eval suites are the same shape (`POST /evals` → poll `GET /evals/{id}`).
+  `passed` is the assertion gate; `cases[].judgePassed` is informational.
   Per-case agent runs use `trigger=eval` and are omitted from `GET /runs`
   unless you pass `?trigger=eval`.
 - **Run responses include `runEnvironment`.** Filter `GET /runs` with
