@@ -44,10 +44,36 @@ admins alone can:
   env.
 - **Set the instance name and branding.** A dedicated **Instance settings** page
   lives at the top level (`/settings`, outside any workspace) and is visible only
-  to instance admins. The instance name shows up in the app shell and sign-in;
-  it falls back to the `TAS_INSTANCE_NAME` environment variable until you set one.
+  to instance admins. Open it from **Instance settings** in the sidebar, or from
+  the user menu at the bottom of the sidebar. The instance name shows up in the
+  app shell and sign-in; it falls back to the `TAS_INSTANCE_NAME` environment
+  variable until you set one.
 - **Set the sign-up policy.** Invite-only (default), an email-domain allowlist,
   or open. See [Sign-up policy](#sign-up-policy).
+- **Tune the run queue.** How many agents execute at once, and how many
+  sub-agents one orchestrator may run concurrently. See [Run queue](#run-queue).
+
+## Run queue
+
+The API runs a limited number of agents at once so a burst of schedules cannot
+spawn unbounded Python processes. Instance admins set the limits under
+**Instance settings → Run queue**. Until an admin saves a value, TAS reads
+`API_MAX_CONCURRENT_RUNS` and `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR`
+from the environment (defaults: 10 concurrent runs, 3 sub-agents per
+orchestrator).
+
+Queued **sub-agents start before new orchestrator runs**, so an in-flight
+orchestrator can finish its children instead of waiting behind a newly queued
+top-level job. Extra children of one orchestrator still wait on that parent's
+own cap.
+
+Env values, if you prefer not to use the UI:
+
+- `API_MAX_CONCURRENT_RUNS` — maximum agents executing at once (default `10`).
+- `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR` — concurrent children per
+  orchestrator (default `3`).
+- `API_RESERVED_SUB_AGENT_RUNS` — slots reserved for sub-agents (default: half
+  of the maximum). Advanced; not shown in the UI.
 
 ## Sign-up policy
 
@@ -85,7 +111,7 @@ It's worth keeping the two scopes straight:
 |---|---|---|
 | **Scope** | The whole deployment | One workspace |
 | **Set up by** | `INSTANCE_ADMIN_EMAILS` env var, or added in Instance settings | Invited + assigned the `workspace_admin` role |
-| **Manages** | Instance name/branding, sign-up policy, creating workspaces, hosting | Members & roles, repository, provider keys, connections, Slack apps |
+| **Manages** | Instance name/branding, sign-up policy, run queue, creating workspaces, hosting | Members & roles, repository, provider keys, connections, Slack apps |
 | **Settings home** | `/settings` (top level) | `/<workspace>/settings` |
 
 For the workspace side, see [Settings](/agent-studio/settings/) and

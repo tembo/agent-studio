@@ -72,9 +72,9 @@ sit in plaintext task JSON):
 | `DATABASE_URL` | from Secrets Manager |
 | `TAS_ENCRYPTION_KEY` | from Secrets Manager |
 | `INTERNAL_API_TOKEN` | from Secrets Manager |
-| `API_MAX_CONCURRENT_RUNS` | Maximum simultaneous agent executions per task (default `10`); tune against the task's memory limit. |
-| `API_RESERVED_SUB_AGENT_RUNS` | Slots reserved for sub-agents (default: half of the maximum, so `5` when the maximum is `10`; set `0` if orchestration is unused). |
-| `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR` | Concurrent sub-agent runs allowed for one orchestrator (default `3`). Extra children of that parent stay queued. |
+| `API_MAX_CONCURRENT_RUNS` | Fallback maximum simultaneous agent executions per task (default `10`) until an instance admin saves **Instance settings → Run queue**. Tune against the task's memory limit. |
+| `API_RESERVED_SUB_AGENT_RUNS` | Slots reserved for sub-agents (default: half of the maximum, so `5` when the maximum is `10`; set `0` if orchestration is unused). Not shown in the UI. |
+| `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR` | Fallback concurrent sub-agent runs allowed for one orchestrator (default `3`) until saved in Instance settings. |
 | `RUST_LOG` | `info,tas_api=debug` |
 
 (AWS VPC networking is IPv4, so the default bind is reachable — no

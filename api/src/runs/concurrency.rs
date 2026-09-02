@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context};
-use tokio::sync::{OwnedSemaphorePermit, Semaphore};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -11,42 +11,68 @@ const DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR: usize = 3;
 
 /// Process-local admission control for agent runs.
 ///
-/// Top-level runs acquire from both pools. Sub-agent runs only acquire from the
-/// global pool, leaving `reserved_sub_agent_runs` slots available when an
-/// orchestrator stays alive while it waits for a sub-agent. Each orchestrator
-/// is also limited to `max_sub_agents_per_orchestrator` concurrent children so
-/// one fan-out cannot occupy the whole queue.
+/// Top-level runs leave `reserved_sub_agent_runs` slots free so an orchestrator
+/// waiting on a child cannot fill the pool. Sub-agent waiters are granted
+/// before queued orchestrators when a slot opens. Each orchestrator is also
+/// limited to `max_sub_agents_per_orchestrator` concurrent children.
 #[derive(Clone)]
 pub struct RunConcurrency {
-    total: Arc<Semaphore>,
-    top_level: Arc<Semaphore>,
-    per_orchestrator: Arc<Mutex<HashMap<Uuid, Arc<Semaphore>>>>,
+    inner: Arc<Mutex<State>>,
+}
+
+struct State {
     max_concurrent_runs: usize,
     reserved_sub_agent_runs: usize,
     max_sub_agents_per_orchestrator: usize,
+    active: usize,
+    active_top: usize,
+    per_orch: HashMap<Uuid, usize>,
+    sub_waiters: VecDeque<Waiter>,
+    top_waiters: VecDeque<Waiter>,
+    closed: bool,
+}
+
+struct Waiter {
+    orchestrator_run_id: Option<Uuid>,
+    tx: oneshot::Sender<RunPermit>,
 }
 
 pub struct RunPermit {
-    _total: OwnedSemaphorePermit,
-    _top_level: Option<OwnedSemaphorePermit>,
-    _per_orchestrator: Option<OwnedSemaphorePermit>,
+    gate: Option<RunConcurrency>,
+    orchestrator_run_id: Option<Uuid>,
+}
+
+impl RunPermit {
+    fn disarm(&mut self) {
+        self.gate = None;
+    }
+}
+
+impl Drop for RunPermit {
+    fn drop(&mut self) {
+        if let Some(gate) = self.gate.take() {
+            gate.release(self.orchestrator_run_id);
+        }
+    }
 }
 
 impl RunConcurrency {
     pub fn from_env() -> anyhow::Result<Self> {
-        let max =
-            parse_env_usize("API_MAX_CONCURRENT_RUNS")?.unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS);
-        // Balance the default lanes so concurrent orchestrators can each make
-        // progress. Reserving only one slot made every sub-agent serialize
-        // during bursts where top-level orchestrators occupied the other
-        // permits. A one-slot deployment still cannot reserve its only slot.
-        let default_reserved = default_reserved_sub_agent_runs(max);
-        let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?.unwrap_or(default_reserved);
-        let default_per_orchestrator =
-            DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR.min(max.max(1));
-        let per_orchestrator = parse_env_usize("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR")?
-            .unwrap_or(default_per_orchestrator);
-        Self::new(max, reserved, per_orchestrator)
+        let limits = limits_from_env()?;
+        Self::new(
+            limits.max_concurrent_runs,
+            limits.reserved_sub_agent_runs,
+            limits.max_sub_agents_per_orchestrator,
+        )
+    }
+
+    pub async fn from_db(pool: &sqlx::PgPool) -> anyhow::Result<Self> {
+        let limits = load_limits(pool).await?;
+        Self::new(
+            limits.max_concurrent_runs,
+            limits.reserved_sub_agent_runs,
+            limits.max_sub_agents_per_orchestrator,
+        )
     }
 
     pub fn new(
@@ -54,110 +80,302 @@ impl RunConcurrency {
         reserved_sub_agent_runs: usize,
         max_sub_agents_per_orchestrator: usize,
     ) -> anyhow::Result<Self> {
-        if max_concurrent_runs == 0 {
-            bail!("API_MAX_CONCURRENT_RUNS must be at least 1");
-        }
-        if reserved_sub_agent_runs >= max_concurrent_runs {
-            bail!(
-                "API_RESERVED_SUB_AGENT_RUNS ({reserved_sub_agent_runs}) must be less than \
-                 API_MAX_CONCURRENT_RUNS ({max_concurrent_runs})"
-            );
-        }
-        if max_sub_agents_per_orchestrator == 0 {
-            bail!("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR must be at least 1");
-        }
-
-        Ok(Self {
-            total: Arc::new(Semaphore::new(max_concurrent_runs)),
-            top_level: Arc::new(Semaphore::new(
-                max_concurrent_runs - reserved_sub_agent_runs,
-            )),
-            per_orchestrator: Arc::new(Mutex::new(HashMap::new())),
+        validate_limits(
             max_concurrent_runs,
             reserved_sub_agent_runs,
             max_sub_agents_per_orchestrator,
+        )?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(State {
+                max_concurrent_runs,
+                reserved_sub_agent_runs,
+                max_sub_agents_per_orchestrator,
+                active: 0,
+                active_top: 0,
+                per_orch: HashMap::new(),
+                sub_waiters: VecDeque::new(),
+                top_waiters: VecDeque::new(),
+                closed: false,
+            })),
         })
     }
 
+    /// Replace live limits. Running work is left alone; the next grants use
+    /// the new caps. Returns whether anything changed.
+    pub fn set_limits(
+        &self,
+        max_concurrent_runs: usize,
+        reserved_sub_agent_runs: usize,
+        max_sub_agents_per_orchestrator: usize,
+    ) -> anyhow::Result<bool> {
+        validate_limits(
+            max_concurrent_runs,
+            reserved_sub_agent_runs,
+            max_sub_agents_per_orchestrator,
+        )?;
+        let mut st = self.lock();
+        let changed = st.max_concurrent_runs != max_concurrent_runs
+            || st.reserved_sub_agent_runs != reserved_sub_agent_runs
+            || st.max_sub_agents_per_orchestrator != max_sub_agents_per_orchestrator;
+        if !changed {
+            return Ok(false);
+        }
+        st.max_concurrent_runs = max_concurrent_runs;
+        st.reserved_sub_agent_runs = reserved_sub_agent_runs;
+        st.max_sub_agents_per_orchestrator = max_sub_agents_per_orchestrator;
+        drop(st);
+        self.pump();
+        Ok(true)
+    }
+
     /// Wait for execution capacity, returning `None` when the run is cancelled
-    /// while still queued. The returned permits release automatically.
+    /// while still queued. The returned permit releases automatically.
     pub async fn acquire(
         &self,
         orchestrator_run_id: Option<Uuid>,
         cancel: &CancellationToken,
     ) -> Option<RunPermit> {
-        let per_orchestrator = if let Some(orchestrator_run_id) = orchestrator_run_id {
-            // Take the per-parent slot first so a fourth child waits here
-            // instead of occupying a global slot.
-            Some(acquire_or_cancel(self.orchestrator_semaphore(orchestrator_run_id), cancel).await?)
-        } else {
-            None
-        };
-        let top_level = if orchestrator_run_id.is_some() {
-            None
-        } else {
-            Some(acquire_or_cancel(self.top_level.clone(), cancel).await?)
-        };
-        let total = acquire_or_cancel(self.total.clone(), cancel).await?;
-        Some(RunPermit {
-            _total: total,
-            _top_level: top_level,
-            _per_orchestrator: per_orchestrator,
-        })
+        let (tx, rx) = oneshot::channel();
+        {
+            let mut st = self.lock();
+            if st.closed {
+                return None;
+            }
+            if st.try_grant(orchestrator_run_id) {
+                return Some(RunPermit {
+                    gate: Some(self.clone()),
+                    orchestrator_run_id,
+                });
+            }
+            let waiter = Waiter {
+                orchestrator_run_id,
+                tx,
+            };
+            if orchestrator_run_id.is_some() {
+                st.sub_waiters.push_back(waiter);
+            } else {
+                st.top_waiters.push_back(waiter);
+            }
+        }
+
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => None,
+            result = rx => result.ok(),
+        }
     }
 
     pub fn max_concurrent_runs(&self) -> usize {
-        self.max_concurrent_runs
+        self.lock().max_concurrent_runs
     }
 
     pub fn reserved_sub_agent_runs(&self) -> usize {
-        self.reserved_sub_agent_runs
+        self.lock().reserved_sub_agent_runs
     }
 
     pub fn max_sub_agents_per_orchestrator(&self) -> usize {
-        self.max_sub_agents_per_orchestrator
+        self.lock().max_sub_agents_per_orchestrator
     }
 
     pub fn active_runs(&self) -> usize {
-        self.max_concurrent_runs - self.total.available_permits()
+        self.lock().active
     }
 
     /// Wake queued acquirers during shutdown without disturbing permits held by
     /// runs that are already executing. Their database rows remain queued and
     /// the boot reconciler will resubmit them on the next process.
     pub fn close(&self) {
-        self.top_level.close();
-        self.total.close();
-        let gates = self
-            .per_orchestrator
-            .lock()
-            .expect("per_orchestrator mutex poisoned");
-        for semaphore in gates.values() {
-            semaphore.close();
+        let mut st = self.lock();
+        st.closed = true;
+        st.sub_waiters.clear();
+        st.top_waiters.clear();
+    }
+
+    fn release(&self, orchestrator_run_id: Option<Uuid>) {
+        let mut st = self.lock();
+        st.release_slot(orchestrator_run_id);
+        drop(st);
+        self.pump();
+    }
+
+    fn pump(&self) {
+        let mut st = self.lock();
+        let mut i = 0;
+        while i < st.sub_waiters.len() {
+            if !st.can_start(st.sub_waiters[i].orchestrator_run_id) {
+                i += 1;
+                continue;
+            }
+            let waiter = st.sub_waiters.remove(i).expect("index in range");
+            st.take_slot(waiter.orchestrator_run_id);
+            let permit = RunPermit {
+                gate: Some(self.clone()),
+                orchestrator_run_id: waiter.orchestrator_run_id,
+            };
+            if let Err(mut permit) = waiter.tx.send(permit) {
+                permit.disarm();
+                st.release_slot(waiter.orchestrator_run_id);
+                continue;
+            }
+        }
+        while st.can_start(None) {
+            let Some(waiter) = st.top_waiters.pop_front() else {
+                return;
+            };
+            st.take_slot(None);
+            let permit = RunPermit {
+                gate: Some(self.clone()),
+                orchestrator_run_id: None,
+            };
+            if let Err(mut permit) = waiter.tx.send(permit) {
+                permit.disarm();
+                st.release_slot(None);
+                continue;
+            }
         }
     }
 
-    fn orchestrator_semaphore(&self, orchestrator_run_id: Uuid) -> Arc<Semaphore> {
-        let mut gates = self
-            .per_orchestrator
-            .lock()
-            .expect("per_orchestrator mutex poisoned");
-        gates
-            .entry(orchestrator_run_id)
-            .or_insert_with(|| Arc::new(Semaphore::new(self.max_sub_agents_per_orchestrator)))
-            .clone()
+    fn lock(&self) -> std::sync::MutexGuard<'_, State> {
+        self.inner.lock().expect("run concurrency mutex poisoned")
     }
 }
 
-async fn acquire_or_cancel(
-    semaphore: Arc<Semaphore>,
-    cancel: &CancellationToken,
-) -> Option<OwnedSemaphorePermit> {
-    tokio::select! {
-        biased;
-        _ = cancel.cancelled() => None,
-        permit = semaphore.acquire_owned() => permit.ok(),
+impl State {
+    fn try_grant(&mut self, orchestrator_run_id: Option<Uuid>) -> bool {
+        if !self.can_start(orchestrator_run_id) {
+            return false;
+        }
+        self.take_slot(orchestrator_run_id);
+        true
     }
+
+    fn can_start(&self, orchestrator_run_id: Option<Uuid>) -> bool {
+        if self.closed || self.active >= self.max_concurrent_runs {
+            return false;
+        }
+        match orchestrator_run_id {
+            Some(id) => {
+                self.per_orch.get(&id).copied().unwrap_or(0) < self.max_sub_agents_per_orchestrator
+            }
+            None => self.active_top < self.top_level_capacity(),
+        }
+    }
+
+    fn top_level_capacity(&self) -> usize {
+        self.max_concurrent_runs - self.reserved_sub_agent_runs
+    }
+
+    fn take_slot(&mut self, orchestrator_run_id: Option<Uuid>) {
+        self.active += 1;
+        if let Some(id) = orchestrator_run_id {
+            *self.per_orch.entry(id).or_insert(0) += 1;
+        } else {
+            self.active_top += 1;
+        }
+    }
+
+    fn release_slot(&mut self, orchestrator_run_id: Option<Uuid>) {
+        self.active = self.active.saturating_sub(1);
+        if let Some(id) = orchestrator_run_id {
+            if let Some(n) = self.per_orch.get_mut(&id) {
+                *n = n.saturating_sub(1);
+                if *n == 0 {
+                    self.per_orch.remove(&id);
+                }
+            }
+        } else {
+            self.active_top = self.active_top.saturating_sub(1);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunConcurrencyLimits {
+    pub max_concurrent_runs: usize,
+    pub reserved_sub_agent_runs: usize,
+    pub max_sub_agents_per_orchestrator: usize,
+}
+
+pub async fn load_limits(pool: &sqlx::PgPool) -> anyhow::Result<RunConcurrencyLimits> {
+    #[derive(sqlx::FromRow)]
+    struct Row {
+        max_concurrent_runs: Option<i32>,
+        max_sub_agents_per_orchestrator: Option<i32>,
+    }
+
+    let row = sqlx::query_as::<_, Row>(
+        "SELECT max_concurrent_runs, max_sub_agents_per_orchestrator \
+         FROM instance_settings WHERE id = TRUE",
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    let (db_max, db_per) = match row {
+        Some(r) => (
+            positive_usize(r.max_concurrent_runs),
+            positive_usize(r.max_sub_agents_per_orchestrator),
+        ),
+        None => (None, None),
+    };
+
+    let max = db_max
+        .or(parse_env_usize("API_MAX_CONCURRENT_RUNS")?)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS);
+    let default_per = DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR.min(max.max(1));
+    let per = db_per
+        .or(parse_env_usize(
+            "API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR",
+        )?)
+        .unwrap_or(default_per);
+    let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?
+        .unwrap_or(default_reserved_sub_agent_runs(max));
+    validate_limits(max, reserved, per)?;
+    Ok(RunConcurrencyLimits {
+        max_concurrent_runs: max,
+        reserved_sub_agent_runs: reserved,
+        max_sub_agents_per_orchestrator: per,
+    })
+}
+
+fn limits_from_env() -> anyhow::Result<RunConcurrencyLimits> {
+    let max = parse_env_usize("API_MAX_CONCURRENT_RUNS")?.unwrap_or(DEFAULT_MAX_CONCURRENT_RUNS);
+    let default_per = DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR.min(max.max(1));
+    let per =
+        parse_env_usize("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR")?.unwrap_or(default_per);
+    let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?
+        .unwrap_or(default_reserved_sub_agent_runs(max));
+    validate_limits(max, reserved, per)?;
+    Ok(RunConcurrencyLimits {
+        max_concurrent_runs: max,
+        reserved_sub_agent_runs: reserved,
+        max_sub_agents_per_orchestrator: per,
+    })
+}
+
+fn validate_limits(
+    max_concurrent_runs: usize,
+    reserved_sub_agent_runs: usize,
+    max_sub_agents_per_orchestrator: usize,
+) -> anyhow::Result<()> {
+    if max_concurrent_runs == 0 {
+        bail!("API_MAX_CONCURRENT_RUNS must be at least 1");
+    }
+    if reserved_sub_agent_runs >= max_concurrent_runs {
+        bail!(
+            "API_RESERVED_SUB_AGENT_RUNS ({reserved_sub_agent_runs}) must be less than \
+             API_MAX_CONCURRENT_RUNS ({max_concurrent_runs})"
+        );
+    }
+    if max_sub_agents_per_orchestrator == 0 {
+        bail!("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR must be at least 1");
+    }
+    Ok(())
+}
+
+fn positive_usize(value: Option<i32>) -> Option<usize> {
+    value.filter(|&n| n > 0).map(|n| n as usize)
 }
 
 fn parse_env_usize(name: &str) -> anyhow::Result<Option<usize>> {
@@ -246,8 +464,6 @@ mod tests {
         ];
         assert_eq!(gate.active_runs(), 2);
 
-        // A third top-level run queues instead of consuming capacity that the
-        // two active orchestrators need for their sub-agents.
         assert!(
             tokio::time::timeout(Duration::from_millis(20), gate.acquire(None, &cancel),)
                 .await
@@ -296,6 +512,44 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn queued_sub_agents_start_before_new_orchestrators() {
+        let gate = RunConcurrency::new(1, 0, 1).unwrap();
+        let cancel = CancellationToken::new();
+        let running = gate.acquire(None, &cancel).await.unwrap();
+
+        let top_waiter = {
+            let gate = gate.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move { gate.acquire(None, &cancel).await })
+        };
+        tokio::task::yield_now().await;
+
+        let sub_waiter = {
+            let gate = gate.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move { gate.acquire(Some(Uuid::new_v4()), &cancel).await })
+        };
+        tokio::time::sleep(Duration::from_millis(10)).await;
+
+        drop(running);
+
+        let sub = tokio::time::timeout(Duration::from_millis(100), sub_waiter)
+            .await
+            .expect("sub-agent should be granted first")
+            .expect("sub-agent task")
+            .expect("sub-agent permit");
+        assert_eq!(gate.active_runs(), 1);
+
+        assert!(
+            tokio::time::timeout(Duration::from_millis(20), top_waiter)
+                .await
+                .is_err(),
+            "new orchestrator should stay queued behind the sub-agent"
+        );
+        drop(sub);
+    }
+
+    #[tokio::test]
     async fn cancellation_interrupts_a_queued_run() {
         let gate = RunConcurrency::new(1, 0, 1).unwrap();
         let running_cancel = CancellationToken::new();
@@ -330,5 +584,28 @@ mod tests {
 
         assert!(waiter.await.unwrap().is_none());
         assert_eq!(gate.active_runs(), 1);
+    }
+
+    #[tokio::test]
+    async fn raising_limits_unblocks_queued_work() {
+        let gate = RunConcurrency::new(1, 0, 1).unwrap();
+        let cancel = CancellationToken::new();
+        let _running = gate.acquire(None, &cancel).await.unwrap();
+
+        let waiter = {
+            let gate = gate.clone();
+            let cancel = cancel.clone();
+            tokio::spawn(async move { gate.acquire(None, &cancel).await })
+        };
+        tokio::task::yield_now().await;
+
+        gate.set_limits(2, 0, 1).unwrap();
+        let permit = tokio::time::timeout(Duration::from_millis(100), waiter)
+            .await
+            .expect("queued run should start after the cap is raised")
+            .expect("task")
+            .expect("permit");
+        assert_eq!(gate.active_runs(), 2);
+        drop(permit);
     }
 }

@@ -429,6 +429,47 @@ pub async fn cancel_run(
     }))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateRunConcurrencyRequest {
+    pub max_concurrent_runs: usize,
+    pub max_sub_agents_per_orchestrator: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateRunConcurrencyResponse {
+    pub max_concurrent_runs: usize,
+    pub reserved_sub_agent_runs: usize,
+    pub max_sub_agents_per_orchestrator: usize,
+}
+
+/// Apply live run-queue limits from instance settings. Reserved sub-agent
+/// slots stay half of the maximum so orchestrators cannot fill the pool.
+pub async fn update_run_concurrency(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateRunConcurrencyRequest>,
+) -> Result<Json<UpdateRunConcurrencyResponse>, (StatusCode, String)> {
+    let reserved = req.max_concurrent_runs / 2;
+    state
+        .run_concurrency
+        .set_limits(
+            req.max_concurrent_runs,
+            reserved,
+            req.max_sub_agents_per_orchestrator,
+        )
+        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+    tracing::info!(
+        max_concurrent_runs = req.max_concurrent_runs,
+        reserved_sub_agent_runs = reserved,
+        max_sub_agents_per_orchestrator = req.max_sub_agents_per_orchestrator,
+        "run concurrency updated from instance settings"
+    );
+    Ok(Json(UpdateRunConcurrencyResponse {
+        max_concurrent_runs: state.run_concurrency.max_concurrent_runs(),
+        reserved_sub_agent_runs: state.run_concurrency.reserved_sub_agent_runs(),
+        max_sub_agents_per_orchestrator: state.run_concurrency.max_sub_agents_per_orchestrator(),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::{dry_run_error, run_environment_for_version_label};
