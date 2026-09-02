@@ -52,8 +52,9 @@ export async function listRecentRunsForAgent(
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
-      WHERE r.workspace_id = $1 AND r.agent_name = $2
-        AND ($3::TEXT = 'all' OR r.run_environment = $3)
+       WHERE r.workspace_id = $1 AND r.agent_name = $2
+         AND r.trigger <> 'eval'
+         AND ($3::TEXT = 'all' OR r.run_environment = $3)
       ORDER BY r.created_at DESC
       LIMIT $4`,
     [workspaceId, agentName, environment, limit],

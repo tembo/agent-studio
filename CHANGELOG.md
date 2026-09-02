@@ -16,6 +16,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Agent evals + CI gate.** Colocate `<name>.eval.yaml` next to an agent spec
+  (assertion and/or LLM-judge cases). `POST /api/v1/evals` runs the suite
+  against draft or stable (or an inline PR spec), a runner command / GitHub
+  Action fails authoring PRs on regression, and the agent's Versions tab shows
+  the latest pass/fail.
 - **Scheduled agent-guidance refresh.** Workspace admins can keep TAS-managed
   `AGENTS.md` and per-framework authoring guides current automatically on a
   daily or weekly cadence from Repository settings; automatic checks are off by

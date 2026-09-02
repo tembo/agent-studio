@@ -70,6 +70,8 @@ export async function listRunsForWorkspace(
   if (filters.triggers && filters.triggers.length > 0) {
     params.push(filters.triggers);
     where.push(`r.trigger = ANY($${params.length}::text[])`);
+  } else {
+    where.push(`r.trigger <> 'eval'`);
   }
   if (filters.environments && filters.environments.length > 0) {
     params.push(filters.environments);

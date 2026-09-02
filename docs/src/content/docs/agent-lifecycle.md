@@ -46,7 +46,8 @@ the draft, or after you revert the live file so its content matches stable.
   (or no stable exists yet). A broken draft (parse errors) can't be promoted.
 - **What it records** — who promoted, when, and the version number. The
   **Versions** section lists every stable snapshot; compare them to see what
-  changed when behavior shifted.
+  changed when behavior shifted. The same tab shows the latest [eval](/agent-studio/agent-evals/)
+  result for the agent (CI or a manual run against draft or stable).
 
 Schedules can opt into running the **draft** instead of stable — useful for
 dogfooding before promotion.

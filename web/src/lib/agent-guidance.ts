@@ -371,6 +371,28 @@ delegates delivery to a sub-agent, put \`delivery\` on the sub-agent that create
 the inbox item or calls the delivery tool. Evidence from a sub-agent does not
 roll up into the orchestrator's declaration.
 
+### eval sidecar (TAS — regression checks)
+
+Colocate \`<name>.eval.yaml\` next to the spec (same stem). TAS does
+**not** treat eval files as agents. Each case has \`input\` plus
+\`assert\` (contains / not_contains / regex / equals / max_chars)
+and/or \`judge.rubric\` (LLM pass/fail). Authoring PRs that touch
+an agent with an eval file fail CI on regression.
+
+\`\`\`yaml
+cases:
+  - name: greets
+    input: Hello
+    assert:
+      contains: hello
+  - name: tone
+    input: Hey
+    judge:
+      rubric: Friendly greeting.
+\`\`\`
+
+Do not put evals inside the agent spec.
+
 ### deps_schema
 
 JSON Schema for *runtime dependencies* the agent expects to be
@@ -1007,6 +1029,7 @@ agents/
 ├── pydantic-agentspec/
 │   ├── AGENT_GUIDE.md                     ← read before editing .yaml/.json here
 │   ├── hello-world.yaml
+│   ├── hello-world.eval.yaml              ← optional eval sidecar (not an agent)
 │   └── …
 └── cargo-ai/
     ├── AGENT_GUIDE.md                     ← read before editing .json here

@@ -29,7 +29,7 @@ const STATUSES = [
   "cancelled",
 ] as const;
 type RunStatus = (typeof STATUSES)[number];
-const TRIGGERS: RunTrigger[] = ["manual", "schedule", "event"];
+const TRIGGERS: RunTrigger[] = ["manual", "schedule", "event", "eval"];
 
 function csv(value: string | null): string[] {
   return value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
@@ -44,7 +44,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const statuses = csv(sp.get("status")).filter((s): s is RunStatus =>
     (STATUSES as readonly string[]).includes(s),
   );
-  const triggers = csv(sp.get("trigger")).filter((t): t is RunTrigger =>
+  const triggerParam = sp.get("trigger");
+  const triggers = csv(triggerParam).filter((t): t is RunTrigger =>
     (TRIGGERS as string[]).includes(t),
   );
   const agentName = sp.get("agent") ?? undefined;
@@ -55,7 +56,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const filters: RunListFilters = {
     ...(statuses.length ? { statuses } : {}),
-    ...(triggers.length ? { triggers } : {}),
+    ...(triggerParam !== null ? { triggers } : {}),
     ...(environments.length ? { environments } : {}),
     ...(agentName ? { agentName } : {}),
   };

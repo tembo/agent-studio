@@ -31,8 +31,9 @@ export async function listChatRunsForAgent(
   }>(
     `SELECT id, agent_name, status, user_message, output, failure_summary, created_at, completed_at
        FROM run
-      WHERE workspace_id = $1 AND agent_name = $2
-        AND user_message IS NOT NULL AND user_message <> ''
+       WHERE workspace_id = $1 AND agent_name = $2
+         AND trigger <> 'eval'
+         AND user_message IS NOT NULL AND user_message <> ''
       ORDER BY created_at DESC
       LIMIT $3`,
     [workspaceId, agentName, limit],

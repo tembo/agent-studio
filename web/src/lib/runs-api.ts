@@ -61,7 +61,7 @@ export type CreateRunInput = {
 
 export type CreateRunResponse = { runId: string };
 
-export type RunTrigger = "manual" | "schedule" | "event";
+export type RunTrigger = "manual" | "schedule" | "event" | "eval";
 
 export type RunRecord = {
   id: string;
