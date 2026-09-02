@@ -76,6 +76,8 @@ pub struct RunContext {
     /// Orchestrator run that launched this execution. Sub-agent runs may use
     /// capacity reserved for orchestration progress.
     pub orchestrator_run_id: Option<Uuid>,
+    /// Manual dry-run: declared delivery tools are stubbed at runtime.
+    pub is_dry_run: bool,
 }
 
 struct RunOutcome {
@@ -237,6 +239,7 @@ struct OrphanedRun {
     message_history: Option<serde_json::Value>,
     started_at: Option<DateTime<Utc>>,
     orchestrator_run_id: Option<Uuid>,
+    is_dry_run: bool,
 }
 
 /// Reconstruct Pydantic runs whose in-memory task disappeared with the prior
@@ -247,7 +250,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
         "SELECT id, workspace_id, created_by, model, user_message, \
                 execution_framework, execution_spec_content, execution_spec_format, \
                 execution_tools_module_content, execution_skills_content, \
-                message_history, started_at, orchestrator_run_id \
+                message_history, started_at, orchestrator_run_id, is_dry_run \
            FROM run WHERE status IN ('queued', 'running') ORDER BY created_at",
     )
     .fetch_all(&state.db)
@@ -327,6 +330,7 @@ pub async fn recover_orphaned_runs(state: &AppState) {
                     message_history: row.message_history,
                     started_at: row.started_at,
                     orchestrator_run_id: row.orchestrator_run_id,
+                    is_dry_run: row.is_dry_run,
                 },
                 cancel,
             )
@@ -825,6 +829,7 @@ async fn run_pydantic(
         run_id: ctx.run_id,
         db: &state.db,
         cancel,
+        is_dry_run: ctx.is_dry_run,
     })
     .await;
 

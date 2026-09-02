@@ -12,6 +12,8 @@ export type RunListFilters = {
   search?: string;
   /** Acting user (run.created_by) — used by the member-detail view. */
   createdBy?: string;
+  /** When true, only dry-run rows. Absent/false shows every run. */
+  dryRun?: boolean;
 };
 
 export type RunListItem = {
@@ -36,6 +38,7 @@ export type RunListItem = {
   } | null;
   agentVersionLabel: string | null;
   runEnvironment: RunEnvironment;
+  isDryRun: boolean;
 };
 
 const LIST_RUNS_MAX_PAGE = 50;
@@ -74,6 +77,9 @@ export async function listRunsForWorkspace(
   if (filters.environments && filters.environments.length > 0) {
     params.push(filters.environments);
     where.push(`r.run_environment = ANY($${params.length}::text[])`);
+  }
+  if (filters.dryRun) {
+    where.push(`r.is_dry_run`);
   }
   if (filters.createdBy && filters.createdBy.trim()) {
     params.push(filters.createdBy.trim());
@@ -126,11 +132,12 @@ export async function listRunsForWorkspace(
     slack_channel: string | null;
     agent_version_label: string | null;
     run_environment: RunEnvironment;
+    is_dry_run: boolean;
   }>(
     `SELECT r.id, r.agent_name, r.status, r.trigger, r.automation_id,
             r.created_at, r.started_at, r.completed_at, r.user_message,
             r.failure_summary, r.cost_usd, r.agent_version_label,
-            r.run_environment,
+            r.run_environment, r.is_dry_run,
             u.name AS created_by_name, u.email AS created_by_email,
             sa.name AS slack_app_name, sd.slack_user_id,
             sd.permalink AS slack_permalink, sd.channel AS slack_channel
@@ -171,6 +178,7 @@ export async function listRunsForWorkspace(
       : null,
     agentVersionLabel: row.agent_version_label,
     runEnvironment: row.run_environment,
+    isDryRun: row.is_dry_run,
   }));
 }
 

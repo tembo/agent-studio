@@ -33,8 +33,9 @@ export default async function AgentRunsPage({
     environments: filters.environments.length
       ? filters.environments
       : undefined,
-    search: filters.search || undefined,
-  });
+      search: filters.search || undefined,
+      dryRun: filters.dryRun || undefined,
+    });
 
   return (
     <Section title="Runs" description="This agent's run history.">
@@ -49,6 +50,7 @@ export default async function AgentRunsPage({
           environments: filters.environments,
           agentName: canonicalName,
           search: filters.search,
+          dryRun: filters.dryRun,
         }}
         lockedAgent={canonicalName}
       />

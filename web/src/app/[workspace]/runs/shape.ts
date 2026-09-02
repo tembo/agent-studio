@@ -33,5 +33,6 @@ export function toLoaded(r: RunListItem): LoadedRun {
     slack: r.slack,
     agentVersionLabel: r.agentVersionLabel,
     runEnvironment: r.runEnvironment,
+    isDryRun: r.isDryRun,
   };
 }

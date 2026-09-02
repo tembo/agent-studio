@@ -51,6 +51,7 @@ type Props = {
     environments?: RunEnvironment[];
     agentName?: string;
     search?: string;
+    dryRun?: boolean;
   };
   /**
    * When set, the list is scoped to a single agent: the Agent filter and the
@@ -76,6 +77,7 @@ export function RunsList({
   const environments = initialFilters?.environments ?? NO_ENVIRONMENTS;
   const agentName = lockedAgent ?? initialFilters?.agentName ?? "";
   const activeSearch = initialFilters?.search ?? "";
+  const dryRun = initialFilters?.dryRun ?? false;
   const [search, setSearch] = useState(activeSearch);
 
   const [rows, setRows] = useState<LoadedRun[]>(initial);
@@ -86,7 +88,7 @@ export function RunsList({
     (
       updates: Partial<
         Record<
-          "status" | "trigger" | "environment" | "agent" | "q",
+          "status" | "trigger" | "environment" | "agent" | "q" | "dryRun",
           string | null
         >
       >,
@@ -118,6 +120,7 @@ export function RunsList({
           environments: environments.length ? environments : undefined,
           agentName: agentName || undefined,
           search: activeSearch || undefined,
+          dryRun: dryRun || undefined,
         },
         beforeIso: last.createdAt,
       });
@@ -132,6 +135,7 @@ export function RunsList({
     environments,
     agentName,
     activeSearch,
+    dryRun,
   ]);
 
   const hasFilters =
@@ -139,7 +143,8 @@ export function RunsList({
     triggers.length > 0 ||
     environments.length > 0 ||
     (!agentScoped && agentName !== "") ||
-    activeSearch !== "";
+    activeSearch !== "" ||
+    dryRun;
 
   // Longest completed duration in the current row set — used to scale
   // the bar-chart background on the Duration cell. Memoised so a tall
@@ -345,6 +350,19 @@ export function RunsList({
 
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
+            Mode
+          </span>
+          <FilterChip
+            active={dryRun}
+            onClick={() => {
+              navigateWithFilters({ dryRun: dryRun ? null : "1" });
+            }}
+            label="Dry run"
+          />
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-foreground-weak w-20 shrink-0 text-sm uppercase tracking-wide">
             Trigger
           </span>
           {RUN_LIST_TRIGGERS.map((trigger) => (
@@ -519,6 +537,11 @@ function SourceCell({ run }: { run: LoadedRun }) {
       >
         {runEnvironmentLabel(run.runEnvironment)}
       </Badge>
+      {run.isDryRun && (
+        <Badge variant="orange" size="small">
+          Dry run
+        </Badge>
+      )}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import YAML from "yaml";
 
 import { writeAuditEvent } from "@/lib/audit-db";
 import {
@@ -18,6 +19,7 @@ import {
   findMissingConnections,
   missingConnectionsMessage,
 } from "@/lib/connection-checks";
+import { dryRunUnavailableReason } from "@/lib/dry-run";
 import { createRun } from "@/lib/runs-api";
 import {
   getAgentOwner,
@@ -128,6 +130,7 @@ export async function runNowAction(
   // The manual-run dialog submits its explicit selection. Missing or invalid
   // values stay on stable as the defensive server-side fallback.
   const preferDraft = String(formData.get("run_version") ?? "") === "draft";
+  const dryRun = String(formData.get("dry_run") ?? "") === "1";
 
   const auth = await authorizeWorkspace(slug, "operator");
   if (!auth.ok) {
@@ -160,6 +163,14 @@ export async function runNowAction(
     return { error: dispatch.error.message };
   }
   const r = dispatch.resolved;
+  if (dryRun) {
+    const reason = dryRunUnavailableReason({
+      framework: r.framework,
+      delivery: r.delivery,
+      connections: connectionsFromSpec(r.specContent, r.specFormat),
+    });
+    if (reason) return { error: reason };
+  }
 
   // Pre-flight: don't start a run the acting user can't complete. Without an
   // active connection for each declared service the wrapper fails mid-run with
@@ -192,6 +203,7 @@ export async function runNowAction(
       agentVersionId: r.versionId,
       agentVersionLabel: r.versionLabel,
       delivery: r.delivery,
+      isDryRun: dryRun,
     });
     runId = res.runId;
   } catch (err) {
@@ -204,6 +216,15 @@ export async function runNowAction(
   redirect(
     `/${slug}/agents/${encodeURIComponent(r.agentName)}/runs/${encodeURIComponent(runId)}`,
   );
+}
+
+function connectionsFromSpec(content: string, format: string): unknown {
+  try {
+    const obj = format === "json" ? JSON.parse(content) : YAML.parse(content);
+    return obj && typeof obj === "object" ? obj.connections : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────

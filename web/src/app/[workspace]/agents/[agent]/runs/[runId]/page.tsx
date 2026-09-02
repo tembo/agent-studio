@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { LocalTime } from "@/components/local-time";
 import { Section } from "@/components/section";
+import { Badge } from "@/components/ui/badge";
 import { isAgentLocked } from "@/lib/agent-lock";
 import { scanImprovementsForPRs } from "@/lib/improvement-scan";
 import { listImprovementsForRun } from "@/lib/improvements-api";
@@ -274,8 +275,13 @@ export default async function RunDetailPage({
             <dt className="text-foreground-weak w-24 shrink-0 font-medium">
               Environment
             </dt>
-            <dd className="text-foreground">
+            <dd className="text-foreground flex items-center gap-2">
               {runEnvironmentLabel(run.runEnvironment)}
+              {run.isDryRun && (
+                <Badge variant="orange" size="small">
+                  Dry run
+                </Badge>
+              )}
             </dd>
           </div>
           <div className="flex gap-3">

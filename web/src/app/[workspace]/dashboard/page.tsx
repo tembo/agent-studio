@@ -233,6 +233,11 @@ export default async function DashboardPage({
                         {r.agentName}
                       </Link>
                       <RunStatusBadge status={r.status} />
+                      {r.isDryRun && (
+                        <Badge variant="orange" size="small">
+                          Dry run
+                        </Badge>
+                      )}
                     </div>
                     {preview && (
                       <p className="text-foreground-weak line-clamp-2 text-sm leading-5">

@@ -28,6 +28,7 @@ const runRow = {
   slack_channel: null,
   agent_version_label: "v3",
   run_environment: "production",
+  is_dry_run: false,
 };
 
 describe("listRunsForWorkspace", () => {
@@ -46,6 +47,7 @@ describe("listRunsForWorkspace", () => {
         costUsd: 0.0125,
         createdByName: "Ada Lovelace",
         runEnvironment: "production",
+        isDryRun: false,
       },
     ]);
 
@@ -112,6 +114,15 @@ describe("listRunsForWorkspace", () => {
       runRow.id,
       50,
     ]);
+  });
+
+  it("filters to dry-run rows when requested", async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await listRunsForWorkspace("workspace-1", { dryRun: true });
+
+    expect(query.mock.calls[0]?.[0]).toContain("r.is_dry_run");
+    expect(query.mock.calls[0]?.[1]).toEqual(["workspace-1", 50]);
   });
 
   it("escapes LIKE wildcards for identity and run-text searches", async () => {

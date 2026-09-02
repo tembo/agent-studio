@@ -76,6 +76,11 @@ from pydantic_scaledown import (  # noqa: E402
     _scaledown_payload,
     _scaledown_settings,
 )
+from pydantic_dry_run import (  # noqa: E402
+    DRY_RUN_NOTICE,
+    is_dry_run,
+    prepare_dry_run,
+)
 
 # Sidecar Python tools: the agent's `tools_module:` sibling source, read
 # from the repo by the web layer and handed to us via env. We exec it and
@@ -389,6 +394,8 @@ def build_agent(
         + "\n\n"
         + TOOL_USE_DISCIPLINE
     )
+    if is_dry_run():
+        kwargs["instructions"] = DRY_RUN_NOTICE + "\n\n" + kwargs["instructions"]
     name = spec.get("name")
     if isinstance(name, str) and name.strip():
         kwargs["name"] = name
@@ -616,6 +623,11 @@ async def run(spec: dict, user_message: str, message_history=None) -> None:
             f"[tas] loaded {len(direct_tools_fns)} sidecar tool function(s) "
             f"from tools_module: "
             f"{[getattr(f, '__name__', '?') for f in direct_tools_fns]}\n"
+        )
+
+    if is_dry_run():
+        toolsets, direct_tools_fns, _blocked = prepare_dry_run(
+            spec, connections, toolsets, direct_tools_fns
         )
 
     agent = build_agent(

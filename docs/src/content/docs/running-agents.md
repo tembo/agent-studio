@@ -22,6 +22,16 @@ classification is recorded with the run, so later promotions do not rewrite
 historical metrics. A sub-run inherits its orchestrator's environment even if
 the child agent uses a different version.
 
+**Dry run** is a separate checkbox, not a third version. It runs the same
+selected draft or stable spec, but TAS stubs the agent's declared `delivery:`
+tools at runtime — email, Slack, inbox items, and any named tool-call
+destination are not executed. Other tools may still make real changes. TAS
+refuses a dry run when it cannot identify those delivery tools (no `delivery:`
+block, Cargo AI, or a Composio tool-router session where a delivery tool-call
+cannot be intercepted). Dry runs stay on the original agent's history with a
+**Dry run** badge, remain filterable on the Runs page, and are excluded from
+dashboard success-rate and delivery metrics.
+
 The API limits how many agents execute simultaneously. When all execution slots
 are occupied, newly accepted runs stay **queued** and start automatically as
 capacity becomes available. Instance operators configure the cap with
@@ -48,7 +58,7 @@ Each run records and displays:
 - **Timing & trigger** — when it ran and what triggered it (manual, schedule, or
   event).
 - **Environment** — Production or Development, based on the lifecycle rule in
-  effect when the run was created.
+  effect when the run was created. Dry runs also show a **Dry run** badge.
 
 Pydantic runs checkpoint their message history after each model/tool node. If
 the API or host restarts mid-run, TAS reconstructs the run from its last

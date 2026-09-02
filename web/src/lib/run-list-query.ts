@@ -32,6 +32,7 @@ export type RunListQuery = {
   environments: RunEnvironment[];
   agentName: string;
   search: string;
+  dryRun: boolean;
 };
 
 export function parseRunListQuery(searchParams: SearchParams): RunListQuery {
@@ -44,6 +45,7 @@ export function parseRunListQuery(searchParams: SearchParams): RunListQuery {
     ),
     agentName: parseSingleParam(searchParams.agent),
     search: parseSingleParam(searchParams.q).slice(0, 200),
+    dryRun: parseSingleParam(searchParams.dryRun) === "1",
   };
 }
 

@@ -19,6 +19,12 @@ use crate::runs::delivery::DeliveryDeclaration;
 use crate::runs::runner;
 use crate::AppState;
 
+#[derive(sqlx::FromRow)]
+struct OrchestratorMeta {
+    run_environment: String,
+    is_dry_run: bool,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateRunRequest {
     pub workspace_id: Uuid,
@@ -84,6 +90,9 @@ pub struct CreateRunRequest {
     /// Stored as an immutable snapshot so later spec edits do not rewrite history.
     #[serde(default)]
     pub output_delivery: Option<DeliveryDeclaration>,
+    /// Manual dry-run: gather and answer, but stub declared delivery tools.
+    #[serde(default)]
+    pub is_dry_run: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -158,9 +167,10 @@ pub async fn create_run(
         .map(|delivery| serde_json::json!(delivery));
     let lifecycle_environment =
         run_environment_for_version_label(req.agent_version_label.as_deref());
+    let mut is_dry_run = req.is_dry_run.unwrap_or(false);
     let run_environment = if let Some(orchestrator_run_id) = req.orchestrator_run_id {
-        sqlx::query_scalar::<_, String>(
-            "SELECT run_environment FROM run WHERE id = $1 AND workspace_id = $2",
+        let parent: OrchestratorMeta = sqlx::query_as(
+            "SELECT run_environment, is_dry_run FROM run WHERE id = $1 AND workspace_id = $2",
         )
         .bind(orchestrator_run_id)
         .bind(req.workspace_id)
@@ -177,10 +187,15 @@ pub async fn create_run(
                 StatusCode::BAD_REQUEST,
                 "orchestrator run was not found in this workspace".to_string(),
             )
-        })?
+        })?;
+        is_dry_run = is_dry_run || parent.is_dry_run;
+        parent.run_environment
     } else {
         lifecycle_environment.to_string()
     };
+    if let Some(message) = dry_run_error(framework, is_dry_run, req.output_delivery.as_ref()) {
+        return Err((StatusCode::BAD_REQUEST, message));
+    }
 
     sqlx::query(
         r#"INSERT INTO run
@@ -191,10 +206,10 @@ pub async fn create_run(
              orchestrator_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
-             execution_skills_content, output_delivery)
+             execution_skills_content, output_delivery, is_dry_run)
             VALUES ($1, $2, $3, $4, $5, 'queued', NULL, NULL, NULL,
                     $6, $7, $8, $9, $10, $11, $12, $13,
-                    $14, $15, $16, $17, $18, $19)"#,
+                    $14, $15, $16, $17, $18, $19, $20)"#,
     )
     .bind(run_id)
     .bind(req.workspace_id)
@@ -215,6 +230,7 @@ pub async fn create_run(
     .bind(req.tools_module_content.as_deref())
     .bind(skills_json)
     .bind(output_delivery)
+    .bind(is_dry_run)
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("db insert: {e}")))?;
@@ -250,6 +266,7 @@ pub async fn create_run(
                 message_history: None,
                 started_at: None,
                 orchestrator_run_id: req.orchestrator_run_id,
+                is_dry_run,
             },
             cancel,
         )
@@ -274,6 +291,25 @@ fn run_environment_for_version_label(version_label: Option<&str>) -> &'static st
         "development"
     } else {
         "production"
+    }
+}
+
+fn dry_run_error(
+    framework: runner::Framework,
+    is_dry_run: bool,
+    delivery: Option<&DeliveryDeclaration>,
+) -> Option<String> {
+    if !is_dry_run {
+        return None;
+    }
+    if matches!(framework, runner::Framework::CargoAi) {
+        return Some("Dry run is not available for Cargo AI agents yet.".into());
+    }
+    match delivery {
+        Some(declaration) if !declaration.destinations.is_empty() => None,
+        _ => Some(
+            "Dry run requires a delivery: declaration so TAS can tell which tools to block.".into(),
+        ),
     }
 }
 
@@ -312,6 +348,7 @@ pub struct RunRecord {
     /// Number of times this run was reconstructed after an API restart.
     pub resume_count: i32,
     pub resumed_at: Option<DateTime<Utc>>,
+    pub is_dry_run: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -330,8 +367,8 @@ pub async fn get_run(
                   failure_summary, failure_recommendation, created_by, created_at,
                   started_at, completed_at, tokens_input, tokens_output,
                   scaledown_original_tokens, scaledown_compressed_tokens,
-                  trigger, automation_id, agent_version_id, agent_version_label,
-                  run_environment, resume_count, resumed_at
+                   trigger, automation_id, agent_version_id, agent_version_label,
+                   run_environment, resume_count, resumed_at, is_dry_run
              FROM run
              WHERE id = $1 AND workspace_id = $2"#,
     )
@@ -393,7 +430,9 @@ pub async fn cancel_run(
 
 #[cfg(test)]
 mod tests {
-    use super::run_environment_for_version_label;
+    use super::{dry_run_error, run_environment_for_version_label};
+    use crate::runs::delivery::{DeliveryDeclaration, DeliveryDestination, DeliveryEvidence};
+    use crate::runs::runner::Framework;
 
     #[test]
     fn draft_runs_are_development() {
@@ -407,5 +446,43 @@ mod tests {
     fn promoted_and_unversioned_runs_are_production() {
         assert_eq!(run_environment_for_version_label(Some("v3")), "production");
         assert_eq!(run_environment_for_version_label(None), "production");
+    }
+
+    fn delivery() -> DeliveryDeclaration {
+        DeliveryDeclaration {
+            note: "Daily brief".into(),
+            destinations: vec![DeliveryDestination {
+                key: "inbox".into(),
+                label: "Inbox".into(),
+                evidence: DeliveryEvidence::InboxItem,
+            }],
+        }
+    }
+
+    #[test]
+    fn live_runs_skip_dry_run_validation() {
+        assert_eq!(dry_run_error(Framework::CargoAi, false, None), None);
+    }
+
+    #[test]
+    fn dry_run_rejects_cargo_ai() {
+        assert!(dry_run_error(Framework::CargoAi, true, Some(&delivery()))
+            .unwrap()
+            .contains("Cargo AI"));
+    }
+
+    #[test]
+    fn dry_run_requires_delivery() {
+        assert!(dry_run_error(Framework::Pydantic, true, None)
+            .unwrap()
+            .contains("delivery"));
+    }
+
+    #[test]
+    fn pydantic_dry_run_with_delivery_is_ok() {
+        assert_eq!(
+            dry_run_error(Framework::Pydantic, true, Some(&delivery())),
+            None
+        );
     }
 }

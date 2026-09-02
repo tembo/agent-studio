@@ -45,6 +45,7 @@ The Pydantic wrapper is split by responsibility:
 - `scripts/pydantic_connections.py` — connection parsing plus Composio and
   native-MCP toolset construction.
 - `scripts/pydantic_scaledown.py` — optional ScaleDown prompt compression.
+- `scripts/pydantic_dry_run.py` — stub declared delivery tools when `TAS_DRY_RUN=1`.
 
 Keep protocol changes covered in `tests/test_run_pydantic_protocol.py`; those
 tests launch the real wrapper against a loopback provider and exercise the same

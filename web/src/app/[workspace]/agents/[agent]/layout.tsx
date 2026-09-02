@@ -10,6 +10,7 @@ import {
   pendingDraftFromContent,
 } from "@/lib/agent-draft-status";
 import { agentDisplayName } from "@/lib/agent-format";
+import { dryRunUnavailableReason } from "@/lib/dry-run";
 import { getAgentOwner, getStableVersion } from "@/lib/agent-versions";
 import { toolkitLabel } from "@/lib/composio-label";
 import { getMcpProvider } from "@/lib/mcp-providers";
@@ -216,6 +217,15 @@ export default async function AgentLayout({
                 members={runAsMembers}
                 currentUserId={session.user.id}
                 stableVersion={stable?.versionNumber}
+                dryRunUnavailableReason={
+                  agent.ok
+                    ? dryRunUnavailableReason({
+                        framework: agent.spec.framework,
+                        delivery: agent.spec.delivery,
+                        connections: agent.spec.raw.connections,
+                      })
+                    : "This agent could not be loaded."
+                }
               />
             )}
           </div>

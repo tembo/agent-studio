@@ -85,6 +85,7 @@ export type SerializedRun = {
   automationId: string | null;
   agentVersionLabel: string | null;
   runEnvironment: RunRecord["runEnvironment"];
+  isDryRun: boolean;
 };
 
 /** Full run record (output, stream, safe failure copy, tokens). */
@@ -122,6 +123,7 @@ export function serializeRunRecord(
     automationId: r.automationId,
     agentVersionLabel: r.agentVersionLabel,
     runEnvironment: r.runEnvironment,
+    isDryRun: r.isDryRun,
   };
   if (options.includeDiagnostics && r.status === "failed" && r.errorMessage) {
     serialized.errorDetails = r.errorMessage;
@@ -142,6 +144,7 @@ export type SerializedRunListItem = {
   costUsd: number | null;
   agentVersionLabel: string | null;
   runEnvironment: RunListItem["runEnvironment"];
+  isDryRun: boolean;
 };
 
 /** Compact list row — the GET /runs body. No full output (use GET /runs/[id]). */
@@ -159,6 +162,7 @@ export function serializeRunListItem(r: RunListItem): SerializedRunListItem {
     costUsd: r.costUsd,
     agentVersionLabel: r.agentVersionLabel,
     runEnvironment: r.runEnvironment,
+    isDryRun: r.isDryRun,
   };
 }
 
