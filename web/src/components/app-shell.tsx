@@ -142,7 +142,11 @@ export async function AppShell({
         </div>
 
         <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3 pt-6">
-          <SidebarNav home={home} inboxCount={inboxCount} />
+          <SidebarNav
+            home={home}
+            inboxCount={inboxCount}
+            isInstanceAdmin={isInstanceAdmin}
+          />
 
           <ActionNeeded
             hasStaticContent={

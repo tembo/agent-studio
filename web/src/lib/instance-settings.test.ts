@@ -6,9 +6,13 @@ vi.mock("@/lib/db", () => ({
 
 import { db } from "@/lib/db";
 import {
+  getRunQueueSettings,
+  getRunQueueSettingsFromEnv,
   getSignupPolicy,
   getSignupPolicyFromEnv,
+  getStoredRunQueueSettings,
   getStoredSignupPolicy,
+  setRunQueueSettings,
   setSignupPolicy,
 } from "./instance-settings";
 
@@ -16,16 +20,22 @@ const mockQuery = vi.mocked(db.query);
 
 const ORIGINAL_POLICY = process.env.TAS_SIGNUP_POLICY;
 const ORIGINAL_DOMAINS = process.env.TAS_SIGNUP_ALLOWED_DOMAINS;
+const ORIGINAL_MAX_RUNS = process.env.API_MAX_CONCURRENT_RUNS;
+const ORIGINAL_MAX_SUBS = process.env.API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR;
 
 beforeEach(() => {
   mockQuery.mockReset();
   delete process.env.TAS_SIGNUP_POLICY;
   delete process.env.TAS_SIGNUP_ALLOWED_DOMAINS;
+  delete process.env.API_MAX_CONCURRENT_RUNS;
+  delete process.env.API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR;
 });
 
 afterEach(() => {
   process.env.TAS_SIGNUP_POLICY = ORIGINAL_POLICY;
   process.env.TAS_SIGNUP_ALLOWED_DOMAINS = ORIGINAL_DOMAINS;
+  process.env.API_MAX_CONCURRENT_RUNS = ORIGINAL_MAX_RUNS;
+  process.env.API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR = ORIGINAL_MAX_SUBS;
 });
 
 function rows(r: unknown[]) {
@@ -110,5 +120,68 @@ describe("setSignupPolicy", () => {
       ["acme.com"],
       "user-1",
     ]);
+  });
+});
+
+describe("run queue settings", () => {
+  it("defaults to ten concurrent runs and three sub-agents", () => {
+    expect(getRunQueueSettingsFromEnv()).toEqual({
+      maxConcurrentRuns: 10,
+      maxSubAgentsPerOrchestrator: 3,
+    });
+  });
+
+  it("reads env fallbacks", () => {
+    process.env.API_MAX_CONCURRENT_RUNS = "8";
+    process.env.API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR = "2";
+    expect(getRunQueueSettingsFromEnv()).toEqual({
+      maxConcurrentRuns: 8,
+      maxSubAgentsPerOrchestrator: 2,
+    });
+  });
+
+  it("prefers stored values over env", async () => {
+    process.env.API_MAX_CONCURRENT_RUNS = "4";
+    mockQuery.mockResolvedValue(
+      rows([
+        {
+          max_concurrent_runs: 10,
+          max_sub_agents_per_orchestrator: 3,
+        },
+      ]),
+    );
+    expect(await getStoredRunQueueSettings()).toEqual({
+      maxConcurrentRuns: 10,
+      maxSubAgentsPerOrchestrator: 3,
+    });
+    expect(await getRunQueueSettings()).toEqual({
+      maxConcurrentRuns: 10,
+      maxSubAgentsPerOrchestrator: 3,
+    });
+  });
+
+  it("falls through to env when stored values are null", async () => {
+    process.env.API_MAX_CONCURRENT_RUNS = "6";
+    mockQuery.mockResolvedValue(
+      rows([
+        {
+          max_concurrent_runs: null,
+          max_sub_agents_per_orchestrator: null,
+        },
+      ]),
+    );
+    expect(await getRunQueueSettings()).toEqual({
+      maxConcurrentRuns: 6,
+      maxSubAgentsPerOrchestrator: 3,
+    });
+  });
+
+  it("writes both limits and the acting admin", async () => {
+    mockQuery.mockResolvedValue(rows([]));
+    await setRunQueueSettings(
+      { maxConcurrentRuns: 10, maxSubAgentsPerOrchestrator: 3 },
+      "user-1",
+    );
+    expect(mockQuery.mock.calls[0][1]).toEqual([10, 3, "user-1"]);
   });
 });

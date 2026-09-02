@@ -258,3 +258,27 @@ export async function cancelRun(
   const body = (await res.json()) as { cancelled: boolean };
   return body.cancelled;
 }
+
+/** Push live run-queue limits to the api process. Saved instance settings
+ *  still win on the next api boot if this call fails. */
+export async function updateRunConcurrency(input: {
+  maxConcurrentRuns: number;
+  maxSubAgentsPerOrchestrator: number;
+}): Promise<void> {
+  const res = await fetch(`${API_URL}/internal/run-concurrency`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    cache: "no-store",
+    body: JSON.stringify({
+      max_concurrent_runs: input.maxConcurrentRuns,
+      max_sub_agents_per_orchestrator: input.maxSubAgentsPerOrchestrator,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Run API returned ${res.status}: ${text.slice(0, 400)}`);
+  }
+}
