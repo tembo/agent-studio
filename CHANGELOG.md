@@ -43,6 +43,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Changed
 
+- **Run now hides the draft version when it matches stable.** If the live file
+  is the same spec as the current snapshot, the dialog offers only that stable
+  version. The draft button appears only when a pending draft exists.
 - **The run queue executes ten agents at once by default.** Each orchestrator
   is limited to three concurrent sub-agents so one fan-out cannot occupy the
   whole pool. Instance admins set both caps under **Instance settings → Run

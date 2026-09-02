@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { runNowAction, type RunNowFormState } from "./actions";
+import { runNowVersionChoice } from "./run-now-version";
 
 const INITIAL: RunNowFormState = {};
 
@@ -32,8 +33,10 @@ type Props = {
    *  themselves and don't get this. */
   members?: { userId: string; name: string | null; email: string }[];
   currentUserId: string;
-  /** When the agent has a stable version, offer it alongside the live draft. */
+  /** When the agent has a stable version, offer it when a pending draft exists. */
   stableVersion?: number;
+  /** True when the live file differs from the current stable snapshot. */
+  hasDraft: boolean;
   /** Null when dry run is available; otherwise the reason the checkbox is disabled. */
   dryRunUnavailableReason?: string | null;
 };
@@ -44,6 +47,7 @@ export function RunNowButton({
   members,
   currentUserId,
   stableVersion,
+  hasDraft,
   dryRunUnavailableReason = null,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -52,9 +56,13 @@ export function RunNowButton({
   // Controlled — React 19's useActionState resets uncontrolled fields
   // after each submission, including the returned-error path. Reset
   // when the dialog closes so reopening starts fresh.
+  const versionChoice = runNowVersionChoice({ stableVersion, hasDraft });
+  const defaultRunVersion =
+    versionChoice === "stable-only" ? "stable" : "draft";
   const [userMessage, setUserMessage] = useState("");
   const [runAs, setRunAs] = useState(currentUserId);
-  const [runVersion, setRunVersion] = useState<"stable" | "draft">("draft");
+  const [runVersion, setRunVersion] =
+    useState<"stable" | "draft">(defaultRunVersion);
   const [dryRun, setDryRun] = useState(false);
   const showRunAs = members !== undefined && members.length > 1;
   const dryRunAvailable = !dryRunUnavailableReason;
@@ -68,7 +76,7 @@ export function RunNowButton({
           if (!next) {
             setUserMessage("");
             setRunAs(currentUserId);
-            setRunVersion("draft");
+            setRunVersion(defaultRunVersion);
             setDryRun(false);
           }
         }}
@@ -92,23 +100,35 @@ export function RunNowButton({
             <input type="hidden" name="agent" value={agentName} />
             <input type="hidden" name="run_version" value={runVersion} />
             <input type="hidden" name="dry_run" value={dryRun ? "1" : "0"} />
-            {stableVersion !== undefined ? (
+            {versionChoice === "draft-only" ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-foreground-weak text-sm">Version</span>
+                <p className="text-foreground text-sm font-medium">
+                  Draft (current file)
+                </p>
+                <p className="text-foreground-muted text-sm">
+                  No stable version has been promoted yet.
+                </p>
+              </div>
+            ) : (
               <div className="flex flex-col gap-1.5">
                 <span className="text-foreground-weak text-sm">Version</span>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRunVersion("draft")}
-                    disabled={pending}
-                    aria-pressed={runVersion === "draft"}
-                    className={
-                      runVersion === "draft"
-                        ? "bg-interactive text-foreground-on-accent border-interactive rounded-md border px-3 py-1 text-sm font-medium"
-                        : "text-foreground hover:bg-surface-raised border-border rounded-md border px-3 py-1 text-sm font-medium"
-                    }
-                  >
-                    Draft (current file)
-                  </button>
+                  {versionChoice === "choose" && (
+                    <button
+                      type="button"
+                      onClick={() => setRunVersion("draft")}
+                      disabled={pending}
+                      aria-pressed={runVersion === "draft"}
+                      className={
+                        runVersion === "draft"
+                          ? "bg-interactive text-foreground-on-accent border-interactive rounded-md border px-3 py-1 text-sm font-medium"
+                          : "text-foreground hover:bg-surface-raised border-border rounded-md border px-3 py-1 text-sm font-medium"
+                      }
+                    >
+                      Draft (current file)
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setRunVersion("stable")}
@@ -127,16 +147,6 @@ export function RunNowButton({
                   {runVersion === "stable"
                     ? `Runs the promoted stable v${stableVersion} snapshot.`
                     : "Runs the live draft from the repository's default branch."}
-                </p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-foreground-weak text-sm">Version</span>
-                <p className="text-foreground text-sm font-medium">
-                  Draft (current file)
-                </p>
-                <p className="text-foreground-muted text-sm">
-                  No stable version has been promoted yet.
                 </p>
               </div>
             )}
