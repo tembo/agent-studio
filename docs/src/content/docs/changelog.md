@@ -48,6 +48,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Changed
 
+- **Run now hides the draft version when it matches stable.** If the live file
+  is the same spec as the current snapshot, the dialog offers only that stable
+  version. The draft button appears only when a pending draft exists.
 - **Agent inventory prioritizes recent activity.** Live-agent rows now open from
   any non-control click and default to most-recently-run order, with an explicit
   sort menu for the compact headerless layout. Agents with no trailing-30-day

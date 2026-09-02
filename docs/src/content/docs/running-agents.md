@@ -11,10 +11,11 @@ covers running on demand and reading the result.
 
 Open an agent and use **Run** to execute it once. You can optionally pass an
 input message; agents with no input run their instructions directly. Manual
-runs default to the live **draft** so your latest repository edits are what get
-tested. The confirmation dialog names the selected version and lets you choose
-the numbered stable snapshot instead. Schedules and other automated runs still
-default to stable.
+runs default to the live **draft** when it differs from stable, so your latest
+repository edits are what get tested. If draft and stable are the same spec,
+the dialog offers only the numbered stable snapshot. When a pending draft
+exists, the confirmation names the selected version and lets you choose stable
+instead. Schedules and other automated runs still default to stable.
 
 The selected lifecycle also sets the run's analytics environment: a **draft**
 run is **Development**, while a promoted/versioned run is **Production**. This

@@ -217,6 +217,7 @@ export default async function AgentLayout({
                 members={runAsMembers}
                 currentUserId={session.user.id}
                 stableVersion={stable?.versionNumber}
+                hasDraft={pendingDraft !== null && stable !== null}
                 dryRunUnavailableReason={
                   agent.ok
                     ? dryRunUnavailableReason({
