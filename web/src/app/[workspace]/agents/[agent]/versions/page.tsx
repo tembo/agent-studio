@@ -27,6 +27,7 @@ import {
 } from "../highlighted-spec";
 import { PromoteButton } from "../promote-button";
 import { VersionsSection } from "../versions-section";
+import { VersionsSourceTabs } from "./versions-source-tabs";
 import {
   SpecVersionViewer,
   type SpecVersionItem,
@@ -34,8 +35,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// Versions tab — promote + numbered snapshots, then the agent's source:
-// definition, eval sidecar, and linked tools_module (if any).
+// Versions tab — promote + numbered snapshots, then a horizontal bar for
+// definition / evals / eval file / linked code.
 
 export default async function AgentVersionsPage({
   params,
@@ -177,89 +178,138 @@ export default async function AgentVersionsPage({
         nameFor={nameFor}
       />
 
-      {commits.length > 0 && repo && (
-        <Section
-          title="Git history"
-          description="Every version of this spec file that landed on GitHub, newest first."
-        >
-          <ul className="flex max-h-80 flex-col divide-y divide-[var(--color-border-weak)] overflow-y-auto">
-            {commits.map((c) => (
-              <li
-                key={c.sha}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm"
-              >
-                <a
-                  href={`https://github.com/${repo.owner}/${repo.name}/blob/${c.sha}/${agent.path}`}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-foreground-category-blue font-mono hover:underline"
+      <VersionsSourceTabs
+        tabs={[
+          {
+            id: "definition",
+            label: "Definition",
+            content: (
+              <>
+                {commits.length > 0 && repo && (
+                  <Section
+                    title="Git history"
+                    description="Every version of this spec file that landed on GitHub, newest first."
+                  >
+                    <ul className="flex max-h-80 flex-col divide-y divide-[var(--color-border-weak)] overflow-y-auto">
+                      {commits.map((c) => (
+                        <li
+                          key={c.sha}
+                          className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm"
+                        >
+                          <a
+                            href={`https://github.com/${repo.owner}/${repo.name}/blob/${c.sha}/${agent.path}`}
+                            target="_blank"
+                            rel="noreferrer noopener"
+                            className="text-foreground-category-blue font-mono hover:underline"
+                          >
+                            {c.shortSha}
+                          </a>
+                          {c.date && (
+                            <span className="text-foreground-weak">
+                              <LocalTime iso={c.date} />
+                            </span>
+                          )}
+                          <span className="text-foreground min-w-0 flex-1 truncate">
+                            {c.summary}
+                          </span>
+                          {c.authorName && (
+                            <span className="text-foreground-muted">
+                              {c.authorName}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </Section>
+                )}
+                <Section
+                  title="Definition"
+                  description={`${specLanguage.toUpperCase()} · ${countSourceLines(raw)} lines. The live draft and each promoted snapshot.`}
                 >
-                  {c.shortSha}
-                </a>
-                {c.date && (
-                  <span className="text-foreground-weak">
-                    <LocalTime iso={c.date} />
-                  </span>
+                  <SpecVersionViewer items={specItems} />
+                </Section>
+              </>
+            ),
+          },
+          {
+            id: "evals",
+            label: "Evals",
+            content: (
+              <EvalsSection
+                latest={latestEval}
+                hasEvalFile={evalSuite !== null}
+                evalPath={evalPath}
+                parseError={evalSuite && !evalSuite.ok ? evalSuite.detail : null}
+                canRun={canEdit && !(evalSuite && !evalSuite.ok)}
+                hasStable={Boolean(stable)}
+                workspaceSlug={workspace.slug}
+                agentName={canonicalName}
+              />
+            ),
+          },
+          {
+            id: "eval-file",
+            label: "Eval file",
+            content: evalContent && evalPath ? (
+              <Section
+                title="Eval file"
+                description={`${evalPath} · ${evalLanguage.toUpperCase()} · ${countSourceLines(evalContent)} lines.`}
+              >
+                <HighlightedSpec source={evalContent} language={evalLanguage} />
+              </Section>
+            ) : (
+              <Section
+                title="Eval file"
+                description="Colocated sidecar next to the agent spec."
+              >
+                <p className="text-foreground-weak rounded-lg border border-dashed border-[var(--color-border)] px-4 py-6 text-center text-sm">
+                  No eval file yet
+                  {evalPath ? (
+                    <>
+                      {" "}
+                      (expected{" "}
+                      <code className="text-foreground-muted">{evalPath}</code>)
+                    </>
+                  ) : null}
+                  . Opt in when creating or editing an agent.
+                </p>
+              </Section>
+            ),
+          },
+          {
+            id: "code",
+            label: "Code",
+            content: (
+              <Section
+                title="Code"
+                description={
+                  toolsModule
+                    ? `Linked tools module ${toolsModule}${toolsModuleContent ? ` · ${countSourceLines(toolsModuleContent)} lines` : ""}.`
+                    : "Sidecar Python the agent declares as tools_module."
+                }
+              >
+                {toolsModule && toolsModuleContent ? (
+                  <pre className="bg-surface border-border text-foreground overflow-x-auto rounded-lg border p-4 font-mono text-sm leading-5">
+                    {toolsModuleContent}
+                  </pre>
+                ) : toolsModule ? (
+                  <p className="text-sentiment-negative text-sm">
+                    The spec references{" "}
+                    <code className="font-mono">{toolsModule}</code> but it
+                    couldn&apos;t be read from the repo.
+                  </p>
+                ) : (
+                  <p className="text-foreground-weak rounded-lg border border-dashed border-[var(--color-border)] px-4 py-6 text-center text-sm">
+                    No linked code. A Pydantic agent can set{" "}
+                    <code className="text-foreground-muted">tools_module:</code>{" "}
+                    to a sibling Python file.
+                  </p>
                 )}
-                <span className="text-foreground min-w-0 flex-1 truncate">
-                  {c.summary}
-                </span>
-                {c.authorName && (
-                  <span className="text-foreground-muted">{c.authorName}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      )}
-
-      <Section
-        title="Definition"
-        description={`${specLanguage.toUpperCase()} · ${countSourceLines(raw)} lines. The live draft and each promoted snapshot.`}
-        collapsible
-      >
-        <SpecVersionViewer items={specItems} />
-      </Section>
-
-      <EvalsSection
-        latest={latestEval}
-        hasEvalFile={evalSuite !== null}
-        evalPath={evalPath}
-        parseError={evalSuite && !evalSuite.ok ? evalSuite.detail : null}
-        canRun={canEdit && !(evalSuite && !evalSuite.ok)}
-        hasStable={Boolean(stable)}
-        workspaceSlug={workspace.slug}
-        agentName={canonicalName}
+              </Section>
+            ),
+          },
+        ]}
       />
-
-      {evalContent && evalPath && (
-        <Section
-          title="Eval file"
-          description={`${evalPath} · ${evalLanguage.toUpperCase()} · ${countSourceLines(evalContent)} lines.`}
-          collapsible
-        >
-          <HighlightedSpec source={evalContent} language={evalLanguage} />
-        </Section>
-      )}
-
-      {toolsModule && (
-        <Section
-          title="Code"
-          description={`Linked tools module ${toolsModule}${toolsModuleContent ? ` · ${countSourceLines(toolsModuleContent)} lines` : ""}.`}
-          collapsible
-        >
-          {toolsModuleContent ? (
-            <pre className="bg-surface border-border text-foreground overflow-x-auto rounded-lg border p-4 font-mono text-sm leading-5">
-              {toolsModuleContent}
-            </pre>
-          ) : (
-            <p className="text-sentiment-negative text-sm">
-              The spec references <code className="font-mono">{toolsModule}</code>{" "}
-              but it couldn&apos;t be read from the repo.
-            </p>
-          )}
-        </Section>
-      )}
     </>
   );
 }

@@ -75,10 +75,9 @@ TAS owns the runner. You do not need a GitHub Action in the agents repo.
   GitHub PAT). Missing scope is ignored; results still land in TAS.
 - **Promote** — if the agent has an eval file, **Promote to Stable** is blocked
   until assertions have passed on *this* draft.
-- **Versions tab** — promote and numbered snapshots, then the definition,
-  eval sidecar (file + latest pass/fail), and linked code if the spec
-  declares a `tools_module`. Agents without a sidecar show an empty eval
-  section; Promote stays ungated.
+- **Versions tab** — promote and numbered snapshots, then a bar for
+  Definition, Evals, Eval file, and Code. Agents without a sidecar show
+  empty eval panes; Promote stays ungated.
 
 Direct-commit (YOLO) authoring has no PR to attach a status to; Promote is
 still gated.
