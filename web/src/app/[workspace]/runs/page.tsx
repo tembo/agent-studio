@@ -43,6 +43,7 @@ export default async function RunsPage({
         : undefined,
       agentName: filters.agentName || undefined,
       search: filters.search || undefined,
+      dryRun: filters.dryRun || undefined,
     }),
     listAgentNamesWithRunsForWorkspace(workspace.id),
   ]);
@@ -74,6 +75,7 @@ export default async function RunsPage({
           environments: filters.environments,
           agentName: filters.agentName,
           search: filters.search,
+          dryRun: filters.dryRun,
         }}
       />
     </div>

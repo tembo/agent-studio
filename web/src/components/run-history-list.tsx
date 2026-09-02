@@ -79,6 +79,11 @@ export function RunHistoryList({
                     Event
                   </Badge>
                 )}
+                {run.isDryRun && (
+                  <Badge variant="orange" size="small">
+                    Dry run
+                  </Badge>
+                )}
                 <span className="flex min-w-0 flex-col">
                   <LocalTime
                     iso={run.createdAt.toISOString()}

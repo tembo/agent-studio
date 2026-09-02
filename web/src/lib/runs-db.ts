@@ -23,6 +23,7 @@ export type RunSummary = {
   createdByName: string | null;
   createdByEmail: string | null;
   runEnvironment: RunEnvironment;
+  isDryRun: boolean;
 };
 
 export type AgentSummary = {
@@ -75,11 +76,12 @@ export async function listAgentSummaries30d(
             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days' AND status = 'succeeded')        AS succeeded_30d,
             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days' AND status = 'failed')           AS failed_30d,
             AVG(cost_usd) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days' AND cost_usd IS NOT NULL)   AS avg_cost_30d
-          FROM run
-         WHERE workspace_id = $1 AND agent_name = ANY($2::text[])
-           AND run_environment = 'production'
-           AND trigger <> 'eval'
-         GROUP BY agent_name
+           FROM run
+          WHERE workspace_id = $1 AND agent_name = ANY($2::text[])
+            AND run_environment = 'production'
+            AND trigger <> 'eval'
+            AND NOT is_dry_run
+          GROUP BY agent_name
      ),
      latest AS (
         SELECT DISTINCT ON (agent_name) agent_name, status, created_at
@@ -171,8 +173,9 @@ export async function listFailingAgents24h(
        SELECT DISTINCT ON (agent_name)
               agent_name, status, created_at
          FROM run
-        WHERE workspace_id = $1 AND created_by = $2
-        ORDER BY agent_name, created_at DESC
+         WHERE workspace_id = $1 AND created_by = $2
+           AND NOT is_dry_run
+         ORDER BY agent_name, created_at DESC
      )
      SELECT r.agent_name,
             COUNT(*)::TEXT  AS failures,
@@ -182,8 +185,9 @@ export async function listFailingAgents24h(
          ON l.agent_name = r.agent_name AND l.status = 'failed'
       WHERE r.workspace_id = $1
         AND r.created_by = $2
-        AND r.status = 'failed'
-        AND r.created_at >= NOW() - INTERVAL '24 hours'
+         AND r.status = 'failed'
+         AND NOT r.is_dry_run
+         AND r.created_at >= NOW() - INTERVAL '24 hours'
       GROUP BY r.agent_name
       ORDER BY failures DESC, last_failure_at DESC`,
     [workspaceId, userId],
@@ -216,6 +220,7 @@ export async function listAgentFailureGroups30d(
       WHERE workspace_id = $1 AND agent_name = $2
         AND status = 'failed'
         AND ($4::TEXT = 'all' OR run_environment = $4)
+        AND NOT is_dry_run
         AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY error_prefix
       ORDER BY occurrences DESC, last_seen DESC
@@ -341,6 +346,7 @@ export async function listAgentToolUsage30d(
        JOIN run r ON r.id = tc.run_id
       WHERE r.workspace_id = $1 AND r.agent_name = $2
         AND ($4::TEXT = 'all' OR r.run_environment = $4)
+        AND NOT r.is_dry_run
         AND r.created_at >= NOW() - INTERVAL '30 days'
       GROUP BY tc.tool_name
       ORDER BY calls DESC, tc.tool_name ASC

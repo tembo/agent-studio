@@ -34,6 +34,8 @@ type Props = {
   currentUserId: string;
   /** When the agent has a stable version, offer it alongside the live draft. */
   stableVersion?: number;
+  /** Null when dry run is available; otherwise the reason the checkbox is disabled. */
+  dryRunUnavailableReason?: string | null;
 };
 
 export function RunNowButton({
@@ -42,6 +44,7 @@ export function RunNowButton({
   members,
   currentUserId,
   stableVersion,
+  dryRunUnavailableReason = null,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [state, formAction, pending] = useActionState(runNowAction, INITIAL);
@@ -52,7 +55,9 @@ export function RunNowButton({
   const [userMessage, setUserMessage] = useState("");
   const [runAs, setRunAs] = useState(currentUserId);
   const [runVersion, setRunVersion] = useState<"stable" | "draft">("draft");
+  const [dryRun, setDryRun] = useState(false);
   const showRunAs = members !== undefined && members.length > 1;
+  const dryRunAvailable = !dryRunUnavailableReason;
 
   return (
     <div className="flex flex-col items-end gap-1">
@@ -64,6 +69,7 @@ export function RunNowButton({
             setUserMessage("");
             setRunAs(currentUserId);
             setRunVersion("draft");
+            setDryRun(false);
           }
         }}
       >
@@ -85,6 +91,7 @@ export function RunNowButton({
             <input type="hidden" name="workspace" value={workspaceSlug} />
             <input type="hidden" name="agent" value={agentName} />
             <input type="hidden" name="run_version" value={runVersion} />
+            <input type="hidden" name="dry_run" value={dryRun ? "1" : "0"} />
             {stableVersion !== undefined ? (
               <div className="flex flex-col gap-1.5">
                 <span className="text-foreground-weak text-sm">Version</span>
@@ -133,6 +140,22 @@ export function RunNowButton({
                 </p>
               </div>
             )}
+            <label className="flex flex-col gap-1.5">
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={dryRun}
+                  disabled={pending || !dryRunAvailable}
+                  onChange={(e) => setDryRun(e.target.checked)}
+                  className="border-border size-4 rounded"
+                />
+                <span className="text-foreground-weak text-sm">Dry run</span>
+              </span>
+              <p className="text-foreground-muted text-sm">
+                {dryRunUnavailableReason ??
+                  "Blocks this agent's declared delivery (email, Slack, inbox, …). Other tools may still make changes. Recorded on this agent with a Dry run badge and excluded from success-rate metrics."}
+              </p>
+            </label>
             {showRunAs && (
               <div className="flex flex-col gap-1.5">
                 <label

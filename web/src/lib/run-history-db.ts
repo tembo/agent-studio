@@ -18,6 +18,7 @@ type RunSummaryRow = {
   created_by_name: string | null;
   created_by_email: string | null;
   run_environment: RunEnvironment;
+  is_dry_run: boolean;
 };
 
 export type RunExecutionIdentity = {
@@ -37,6 +38,7 @@ function toRunSummary(row: RunSummaryRow): RunSummary {
     createdByName: row.created_by_name,
     createdByEmail: row.created_by_email,
     runEnvironment: row.run_environment,
+    isDryRun: row.is_dry_run,
   };
 }
 
@@ -48,7 +50,7 @@ export async function listRecentRunsForAgent(
 ): Promise<RunSummary[]> {
   const { rows } = await db.query<RunSummaryRow>(
     `SELECT r.id, r.agent_name, r.status, r.created_at, r.completed_at,
-            r.trigger, r.automation_id, r.run_environment,
+            r.trigger, r.automation_id, r.run_environment, r.is_dry_run,
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
@@ -69,7 +71,7 @@ export async function listRecentRunsForAutomation(
 ): Promise<RunSummary[]> {
   const { rows } = await db.query<RunSummaryRow>(
     `SELECT r.id, r.agent_name, r.status, r.created_at, r.completed_at,
-            r.trigger, r.automation_id, r.run_environment,
+            r.trigger, r.automation_id, r.run_environment, r.is_dry_run,
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by

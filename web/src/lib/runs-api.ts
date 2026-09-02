@@ -57,6 +57,8 @@ export type CreateRunInput = {
   // The orchestrator run that triggered this sub-agent through trigger_run.
   // Recorded so the orchestrator's page can roll up sub-runs.
   orchestratorRunId?: string;
+  /** Manual dry-run: stub declared delivery tools. Default false. */
+  isDryRun?: boolean;
 };
 
 export type CreateRunResponse = { runId: string };
@@ -98,6 +100,7 @@ export type RunRecord = {
   /** Number of API restarts this run recovered from. */
   resumeCount: number;
   resumedAt: string | null;
+  isDryRun: boolean;
 };
 
 type ApiRunRecord = {
@@ -129,6 +132,7 @@ type ApiRunRecord = {
   run_environment: RunEnvironment;
   resume_count: number;
   resumed_at: string | null;
+  is_dry_run?: boolean;
 };
 
 function fromApi(r: ApiRunRecord): RunRecord {
@@ -161,6 +165,7 @@ function fromApi(r: ApiRunRecord): RunRecord {
     runEnvironment: r.run_environment,
     resumeCount: r.resume_count,
     resumedAt: r.resumed_at,
+    isDryRun: r.is_dry_run ?? false,
   };
 }
 
@@ -190,6 +195,7 @@ export async function createRun(input: CreateRunInput): Promise<CreateRunRespons
       agent_version_label: input.agentVersionLabel,
       orchestrator_run_id: input.orchestratorRunId,
       output_delivery: input.delivery,
+      is_dry_run: input.isDryRun ?? false,
     }),
   });
   if (!res.ok) {

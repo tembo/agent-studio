@@ -189,6 +189,7 @@ export async function listOutputsForWorkspace(
     "r.trigger <> 'eval'",
     "BTRIM(r.output) <> ''",
     "r.completed_at IS NOT NULL",
+    "NOT r.is_dry_run",
   ];
 
   if (filters.search) {
@@ -278,6 +279,7 @@ export async function getOutputForWorkspace(
     "r.trigger <> 'eval'",
     "BTRIM(r.output) <> ''",
     "r.completed_at IS NOT NULL",
+    "NOT r.is_dry_run",
   ].join(" AND ");
   const cte = OUTPUT_ORCHESTRATION_CTE.replace(
     "__CANDIDATE_WHERE__",
@@ -315,7 +317,8 @@ export async function getOutputForWorkspace(
 }
 
 export async function listOutputFacets(workspaceId: string): Promise<OutputFacets> {
-  const eligible = "workspace_id = $1 AND status = 'succeeded' AND trigger <> 'eval' AND BTRIM(output) <> ''";
+  const eligible =
+    "workspace_id = $1 AND status = 'succeeded' AND trigger <> 'eval' AND BTRIM(output) <> '' AND NOT is_dry_run";
   const [agents, users, orchestrators] = await Promise.all([
     db.query<{ agent_name: string }>(
       `SELECT DISTINCT agent_name FROM run WHERE ${eligible} ORDER BY agent_name`,
@@ -329,6 +332,7 @@ export async function listOutputFacets(workspaceId: string): Promise<OutputFacet
            AND r.status = 'succeeded'
            AND r.trigger <> 'eval'
            AND BTRIM(r.output) <> ''
+           AND NOT r.is_dry_run
         ORDER BY actor.name NULLS LAST, actor.email`,
       [workspaceId],
     ),

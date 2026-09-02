@@ -204,6 +204,9 @@ pub struct PydanticArgs<'a> {
     /// Fired by the kill-run endpoint to cancel this run. When cancelled, the
     /// read loop SIGKILLs the wrapper subprocess and bails out.
     pub cancel: &'a CancellationToken,
+    /// When true, the wrapper stubs declared delivery tools instead of
+    /// executing them. Surfaced as `TAS_DRY_RUN=1`.
+    pub is_dry_run: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -284,6 +287,9 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
     // header on the tembo-agent-studio MCP toolset only, so a trigger_run call
     // made from inside this run records the orchestration relationship.
     cmd.env("TAS_RUN_ID", args.run_id.to_string());
+    if args.is_dry_run {
+        cmd.env("TAS_DRY_RUN", "1");
+    }
     cmd.env(
         "TAS_RUN_STARTED_AT",
         args.run_started_at

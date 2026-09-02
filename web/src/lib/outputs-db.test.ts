@@ -60,6 +60,7 @@ describe("outputs read model", () => {
       /\(r\.completed_at, r\.id\) < \(\$3, \$4::uuid\)/,
     );
     expect(query.mock.calls[0]?.[0]).toMatch(/r\.workspace_id = \$1/);
+    expect(query.mock.calls[0]?.[0]).toMatch(/NOT r\.is_dry_run/);
     expect(query.mock.calls[0]?.[1]).toEqual([
       "workspace-1",
       "search term",

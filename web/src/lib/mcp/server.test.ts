@@ -226,6 +226,7 @@ describe("buildMcpServer", () => {
         slack: null,
         agentVersionLabel: "v1",
         runEnvironment: "production",
+        isDryRun: false,
       },
     ]);
     const client = await connectedClient();
@@ -283,6 +284,7 @@ describe("buildMcpServer", () => {
       runEnvironment: "production",
       resumeCount: 0,
       resumedAt: null,
+      isDryRun: false,
     });
     const client = await connectedClient();
     const out = parse(await client.callTool({ name: "get_run", arguments: { id: "run-1" } })) as {
@@ -323,6 +325,7 @@ describe("buildMcpServer", () => {
       runEnvironment: "development",
       resumeCount: 0,
       resumedAt: null,
+      isDryRun: false,
     });
 
     for (const role of ["viewer", "operator"] as const) {

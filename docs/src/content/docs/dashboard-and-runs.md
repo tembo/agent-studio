@@ -15,6 +15,8 @@ Dashboard metrics show **Production** runs by default, so draft testing does
 not lower the live success rate. Use the **Development** or **All runs** tabs to
 inspect testing activity or compare the combined workload. The selected tab
 applies to the headline metrics, trend, failures, tool use, and recent runs.
+**Dry run** executions are excluded from these success-rate, delivery, and
+tool-usage rollups even when you browse All runs.
 
 An agent overview puts its five most recent runs first, ahead of the 30-day
 configuration and health details. Tool usage shows the five most-used tools and
@@ -40,10 +42,10 @@ someone who owns connections or automations.
 ## Runs
 
 The **Runs** page is the full, filterable history of every run in the workspace.
-Filter by agent, status, trigger, and **Environment** to find what you're
-looking for, then open any run for its
+Filter by agent, status, trigger, **Environment**, and **Dry run** to find what
+you're looking for, then open any run for its
 [detail page](/agent-studio/running-agents/) — output, tokens, cost, tools used,
-environment, and the effective **Run as** identity. Production and Development
+environment, and the effective **Run as** identity. Production, Development, and Dry run
 badges keep excluded testing runs visible even when browsing all history. The
 workspace list, agent run lists and recent-run panels, automation history, and
 run detail all use the same identity. Orchestrator run pages also show the

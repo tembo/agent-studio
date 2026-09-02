@@ -11,6 +11,7 @@ describe("parseRunListQuery", () => {
         environment: "production,development,unknown",
         agent: " digest ",
         q: " Ada Lovelace ",
+        dryRun: "1",
       }),
     ).toEqual({
       statuses: ["failed", "running"],
@@ -18,6 +19,7 @@ describe("parseRunListQuery", () => {
       environments: ["production", "development"],
       agentName: "digest",
       search: "Ada Lovelace",
+      dryRun: true,
     });
   });
 
@@ -28,6 +30,7 @@ describe("parseRunListQuery", () => {
     expect(parsed.statuses).toEqual([]);
     expect(parsed.triggers).toEqual([]);
     expect(parsed.environments).toEqual([]);
+    expect(parsed.dryRun).toBe(false);
   });
 
   it("produces distinct remount keys for distinct URL filters", () => {

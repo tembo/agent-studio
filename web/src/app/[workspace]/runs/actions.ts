@@ -25,6 +25,7 @@ export type LoadRunsArgs = {
     triggers?: RunListFilters["triggers"];
     environments?: RunListFilters["environments"];
     search?: string;
+    dryRun?: boolean;
   };
   beforeIso?: string;
 };

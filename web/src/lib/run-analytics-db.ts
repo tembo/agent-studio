@@ -78,6 +78,7 @@ export async function getAgentStats30d(
        FROM run
       WHERE workspace_id = $1 AND agent_name = $2
         AND ($3::TEXT = 'all' OR run_environment = $3)
+        AND NOT is_dry_run
         AND created_at >= NOW() - INTERVAL '30 days'`,
     [workspaceId, agentName, environment],
   );
@@ -94,6 +95,7 @@ export async function getAgentDailyRunBands30d(
        FROM run
       WHERE workspace_id = $1 AND agent_name = $2
         AND ($3::TEXT = 'all' OR run_environment = $3)
+        AND NOT is_dry_run
         AND created_at >= NOW() - INTERVAL '30 days'
       ORDER BY created_at ASC`,
     [workspaceId, agentName, environment],
@@ -123,6 +125,7 @@ export async function listWorkspaceTopFailingAgents30d(
        FROM run
       WHERE workspace_id = $1
         AND ($3::TEXT = 'all' OR run_environment = $3)
+        AND NOT is_dry_run
         AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY agent_name
      HAVING COUNT(*) FILTER (WHERE status = 'failed') > 0
@@ -161,6 +164,7 @@ export async function getWorkspaceStats30d(
        FROM run
       WHERE workspace_id = $1
         AND ($2::TEXT = 'all' OR run_environment = $2)
+        AND NOT is_dry_run
         AND created_at >= NOW() - INTERVAL '30 days'`,
     [workspaceId, environment],
   );
@@ -187,6 +191,7 @@ export async function getWorkspaceDailyRunBands30d(
          FROM run
         WHERE workspace_id = $1
           AND ($2::TEXT = 'all' OR run_environment = $2)
+          AND NOT is_dry_run
           AND created_at >= NOW() - INTERVAL '30 days'
      ), marked AS (
        SELECT day, status, created_at,

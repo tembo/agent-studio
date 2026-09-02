@@ -171,6 +171,11 @@ export default async function MemberDetailPage({
                   {r.agentName}
                 </Link>
                 <div className="text-foreground-weak flex items-center gap-3">
+                  {r.isDryRun && (
+                    <Badge variant="orange" size="small">
+                      Dry run
+                    </Badge>
+                  )}
                   <Badge variant={RUN_BADGE[r.status]} size="small">
                     {r.status}
                   </Badge>
