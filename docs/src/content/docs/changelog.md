@@ -19,6 +19,8 @@ they are no longer release versions. Phase scope now lives in
 
 ## Unreleased
 
+## v2026.9.1 — Agent evals, outputs library, and operator controls
+
 ### Added
 
 - **Agent evals.** Optional colocated `<name>.eval.yaml` (assertion and/or
@@ -41,32 +43,71 @@ they are no longer release versions. Phase scope now lives in
 - **Searchable Outputs library.** Successful non-empty run outputs, including
   sub-agent results, are now searchable independently of the Runs log and can
   be filtered by agent, orchestrator, acting user, date, and delivery evidence.
-  Output detail renders Markdown with an exact raw view and preserves the source
-  run, version, execution identity, trigger, and model. Agents can optionally
+  Each agent also has an Outputs tab scoped to that producer. Output detail
+  renders Markdown with an exact raw view and preserves the source run,
+  version, execution identity, trigger, and model. Agents can optionally
   declare delivery intent in their spec; each run snapshots it and records
   durable inbox/tool-call evidence as confirmed, partial, failed, or unobserved.
+- **Personal secret scopes.** Raw secret connections can be personal or
+  workspace-shared. Runs resolve the acting user's personal secret first, then
+  the shared workspace fallback. Only the owner can manage a personal secret;
+  only workspace admins can manage shared ones. Manual-credential bundles stay
+  shared.
+- **Dry run for manual runs.** Run now has a Dry run checkbox that executes
+  the selected draft or stable spec while stubbing the agent's declared
+  `delivery:` tools (inbox `produce_inbox_item` and named tool-call
+  destinations). Other tools may still make real changes. TAS refuses a dry
+  run when it cannot intercept those tools — Cargo AI, missing `delivery:`,
+  or a Composio tool-router session. Sub-runs inherit the flag. Dry runs stay
+  on the original agent with a badge, are filterable, and are excluded from
+  dashboard success-rate, delivery, and tool-usage rollups.
+- **Filterable inventory views.** The agent list supports Linear-style filters
+  (`is` / `is not`, multiselect, owner, starred, type, orchestrator) plus
+  personal and workspace-shared named views. Permanent All and Mine views sit
+  above search and sort.
+- **Searchable run history.** Workspace and agent run lists search by agent
+  name, full run ID, Run as name/email, input, output, and error text. Filters
+  and the query live in the URL so a view is shareable.
+- **Drafts awaiting promotion.** Agents whose live file differs from stable
+  show in inventory with an Action needed alert, a pending-only deep link, and
+  a Versions-tab indicator. Diff review includes agents that have never had a
+  stable version.
+- **Development vs Production analytics.** Draft runs classify as Development;
+  promoted/versioned runs as Production. Sub-runs inherit the orchestrator's
+  environment. Dashboard metrics default to Production, with Development and
+  All-run views. Environment badges and filters appear in run history, audit,
+  REST, and MCP.
+- **Safe, actionable run failures.** Failed runs show a classified summary and
+  recommendation to every role. Workspace admins can expand sanitized technical
+  diagnostics; raw provider bodies stay off viewer/operator REST, MCP,
+  run-list, dashboard, audit, chat, Slack, and search surfaces.
 
 ### Changed
 
-- **Run now hides the draft version when it matches stable.** If the live file
-  is the same spec as the current snapshot, the dialog offers only that stable
-  version. The draft button appears only when a pending draft exists.
+- **Run now prefers the live draft.** Manual runs default to the current
+  draft; automations still dispatch the stable snapshot. The dialog labels the
+  exact numbered stable version. If the live file matches that snapshot, the
+  draft option is hidden.
 - **The run queue executes ten agents at once by default.** Each orchestrator
   is limited to three concurrent sub-agents so one fan-out cannot occupy the
   whole pool. Instance admins set both caps under **Instance settings → Run
   queue** (sidebar **Instance settings**); env vars remain the fallback until a
   value is saved. Queued sub-agents start before new orchestrator runs.
-- **Agent inventory prioritizes recent activity.** Live-agent rows now open from
-  any non-control click and default to most-recently-run order, with an explicit
-  sort menu for the compact headerless layout. Agents with no trailing-30-day
-  runs remain visible without empty run-count, average-cost, or success fields,
-  and unavailable model or cost values no longer render placeholder dashes.
+- **Agent inventory is denser and activity-first.** Compact headerless rows,
+  two-line descriptions in the list and search, any non-control click to open,
+  most-recently-run default sort, and no placeholder dashes for unavailable
+  model or cost. Agents with no trailing-30-day runs stay visible without
+  empty stats.
 - **Orchestration terminology is consistent across the stack.** Run links now
   use `run.orchestrator_run_id`; the internal MCP handoff uses
   `X-Tas-Orchestrator-Run`; and deployment configuration uses
   `API_RESERVED_SUB_AGENT_RUNS`. Existing run relationships are preserved by a
   database rename migration. Self-hosted deployments that override the former
   reservation variable must rename that override when upgrading.
+- **Chat-to-edit keeps the composer in reach.** The composer sits above the
+  thread with an explicit Test agent / Request change selector, stays
+  available while scrolling, and collapses older turns so the six newest
+  remain visible.
 
 ### Fixed
 
@@ -107,6 +148,34 @@ they are no longer release versions. Phase scope now lives in
   revoked grants, rejected OAuth clients, and unsupported refresh grants are
   classified separately. Connections retain a sanitized health reason and
   reconnect action without storing provider response bodies or token values.
+- **Invitations no longer pretend TAS emails the invitee.** Adding a member is
+  labeled Add member, with a clear warning that TAS does not send email;
+  admins copy the invitation themselves.
+- **Removing a member no longer leaves their automations firing.** Removal
+  atomically reassigns owned automations or pauses enabled schedules by
+  default, and the flow shows ownership counts. Run lists and history show the
+  effective Run as identity.
+- **Schedules no longer fail permanently when the agent is still being created
+  or GitHub blips.** A firing window for an in-progress agent stays due and
+  retries with bounded backoff; genuine not-found remains permanent. Transient
+  repository errors retry without consuming the missed cron window and surface
+  in Action needed.
+- **Native MCP reconnects reuse the saved OAuth client.** Reauthorization
+  recovers the DCR client identity instead of registering a new client every
+  time, which previously tripped provider rate limits. Registration failures
+  become safe actionable messages.
+- **The published web image starts after the Next.js 16.3 upgrade.** Standalone
+  output now traces `@swc/helpers` into the runner image so startup no longer
+  crashes with `MODULE_NOT_FOUND`.
+- **Workspace navigation no longer blocks on GitHub improvement scans.** Pages
+  show loading feedback immediately, agent detail skips the inventory scan,
+  and improvement reconciliation runs after the response.
+
+### Dependencies
+
+- Better Auth 1.7 (account `issuer` backfill shipped in the OAuth fix above),
+  Next.js 16.3.1, and routine Dependabot bumps across web, api, docs, and CI
+  actions.
 
 ## v2026.8.4 — Agent concurrency + Anthropic runtime fixes
 
