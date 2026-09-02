@@ -430,11 +430,21 @@ export function buildMcpServer(
         agent: z.string().optional().describe("Existing agent to edit (omit to create)."),
         name: z.string().optional().describe("Display name for a NEW agent."),
         framework: z.enum(FRAMEWORK_VALUES).optional().describe("New-agent framework (default pydantic-agentspec)."),
+        includeEvals: z
+          .boolean()
+          .optional()
+          .describe("Write a colocated eval sidecar (default true)."),
       },
     },
-    async ({ description, agent, name, framework }) => {
+    async ({ description, agent, name, framework, includeEvals }) => {
       if (!isOperator) return operatorOnly();
-      const res = await requestAgentChange(ctx, { description, agent, name, framework });
+      const res = await requestAgentChange(ctx, {
+        description,
+        agent,
+        name,
+        framework,
+        includeEvals,
+      });
       if (!res.ok) return errorResult(res.error);
       return json(res.result);
     },

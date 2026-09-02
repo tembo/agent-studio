@@ -21,11 +21,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
-- **Agent evals.** Colocate `<name>.eval.yaml` next to an agent spec
-  (assertion and/or LLM-judge cases). TAS runs assertions on authoring PRs
-  and blocks Promote until they pass; the LLM judge is informational. Latest
-  results show on the agent's Versions tab. TAS may post a `tas/evals` commit
-  status on the PR head.
+- **Agent evals.** Optional colocated `<name>.eval.yaml` (assertion and/or
+  LLM-judge cases). Operators opt in when creating or editing an agent
+  (default on). TAS runs assertions on authoring PRs and blocks Promote until
+  they pass; agents without an eval file stay ungated. The LLM judge is
+  informational. Latest results show on the Versions tab. TAS may post a
+  `tas/evals` commit status on the PR head.
 - **Scheduled agent-guidance refresh.** Workspace admins can keep TAS-managed
   `AGENTS.md` and per-framework authoring guides current automatically on a
   daily or weekly cadence from Repository settings; automatic checks are off by

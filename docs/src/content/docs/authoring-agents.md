@@ -15,6 +15,12 @@ writes the agent file and opens a pull request against your repo. Review and
 merge it; the agent then shows up in the **Agents** list. (This requires a Tembo
 API key in **Settings**.)
 
+**Regression evals** are optional and default on. The create (and chat-to-edit /
+Improve) form asks whether to add a colocated eval sidecar. Leave it checked and
+the coding agent writes assertion cases TAS will run on the authoring PR and
+before Promote. Uncheck it to skip; agents without an eval file are not gated.
+See [Agent evals](/agent-studio/agent-evals/).
+
 If the description names a recurring cadence, TAS shows it as a suggested
 schedule after submitting the agent. It does not create an automation. Wait for
 the agent to appear, test and verify it, then use **Create suggested

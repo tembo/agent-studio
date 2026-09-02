@@ -1,10 +1,15 @@
 ---
 title: Agent evals
-description: Colocate an eval file with an agent spec. TAS runs assertions on authoring PRs and blocks Promote until they pass.
+description: Optional regression checks. Opt in when creating or editing an agent. TAS runs assertions on authoring PRs and blocks Promote until they pass.
 ---
 
-An **eval suite** is a regression check for one agent. It lives next to the
-agent spec. TAS runs the agent on known inputs and scores each reply.
+An **eval suite** is an optional regression check for one agent. Existing
+agents without an eval file stay ungated.
+
+When you **create** or **edit** an agent, TAS asks whether to add evals
+(default **yes**). If you leave it on, the coding agent writes a colocated
+`<name>.eval.yaml` with assertion cases for the agent's job. Uncheck it to
+skip — useful for a quick experiment, or for leaving a legacy agent alone.
 
 **Assertions** are the gate: they must pass before you can [promote](/agent-studio/agent-lifecycle/)
 the draft, and TAS runs them on authoring PRs. The **LLM judge** is

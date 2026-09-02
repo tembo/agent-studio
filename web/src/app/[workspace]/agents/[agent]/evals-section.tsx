@@ -66,7 +66,8 @@ export function EvalsSection({
           <code className="text-foreground-muted">
             {evalPath ?? "<name>.eval.yaml"}
           </code>
-          ) to gate Promote and authoring PRs.
+          ). Opt in when creating or editing an agent; without a file,
+          Promote stays ungated.
         </p>
       ) : parseError ? (
         <p className="text-sentiment-negative text-sm" role="alert">

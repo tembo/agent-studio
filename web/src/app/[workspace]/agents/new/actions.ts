@@ -84,6 +84,7 @@ export async function createFromChatAction(
   const agentSlug = suggestSlug(displayName);
   const framework = parseFrameworkField(formData.get("framework"));
   const description = String(formData.get("description") ?? "").trim();
+  const includeEvals = formData.get("include_evals") !== "off";
 
   if (!displayName) {
     return { error: "Enter a name for the agent." };
@@ -166,6 +167,7 @@ export async function createFromChatAction(
     commitMode: workspace.commitMode,
     defaultBranch: repo.defaultBranch,
     repositoryUrl: `https://github.com/${repo.owner}/${repo.name}`,
+    includeEvals,
     ...(await buildPromptConnectionContext(
       workspace.id,
       userId,

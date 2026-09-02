@@ -61,7 +61,7 @@ triggers a run, writes an automation, or kicks off the coding agent needs
 | `GET /slack-apps` · `GET /slack-apps/{id}` | List / read Slack bots (secret-safe). | viewer |
 | `POST /slack-apps` | Create a Slack bot (returns it in `configuring` state). | workspace_admin |
 | `PATCH·DELETE /slack-apps/{id}` | Update (name/labels/owner/secrets) / delete. | workspace_admin |
-| `POST /agent-changes` | Hand an authoring request to the Tembo Coding Agent. | operator |
+| `POST /agent-changes` | Hand an authoring request to the Tembo Coding Agent (`includeEvals` defaults true). | operator |
 | `GET /evals?agent=` | List eval suite runs for an agent (`?latest=true` for the newest). | viewer |
 | `POST /evals` | Queue an eval suite → `202 { eval_id }`. Body: `{ agent, version?, spec?, eval?, commitSha?, source? }`. | operator |
 | `GET /evals/{id}` | One eval suite incl. per-case pass/fail. Poll until `passed` / `failed` / `error`. | viewer |

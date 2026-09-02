@@ -12,6 +12,7 @@ import {
   type Framework,
 } from "@/lib/agent-framework";
 import type { CommitMode } from "@/lib/commit-mode-constants";
+import { EvalOptIn } from "@/components/eval-opt-in";
 import { suggestSlug } from "@/lib/slugify";
 
 import {
@@ -54,6 +55,7 @@ export function NewAgentForm({
   const [name, setName] = useState(defaults?.name ?? "");
   const [description, setDescription] = useState(defaults?.description ?? "");
   const [framework, setFramework] = useState<Framework>(DEFAULT_FRAMEWORK);
+  const [includeEvals, setIncludeEvals] = useState(true);
   // The name is free text; the filename + spec `name:` slug are derived from it.
   const nameSlug = suggestSlug(name.trim());
 
@@ -204,6 +206,12 @@ export function NewAgentForm({
           framework shape, and open a pull request for your team to review.
         </p>
       </div>
+
+      <EvalOptIn
+        checked={includeEvals}
+        onCheckedChange={setIncludeEvals}
+        disabled={pending}
+      />
 
       {advanced ? (
         <div className="grid gap-1.5">
