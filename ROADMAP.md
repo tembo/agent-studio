@@ -61,15 +61,6 @@ group-by views.)
 
 [Discuss & shape it →](https://github.com/tembo/agent-studio/discussions/103)
 
-## Scheduled guidance refresh
-
-Keep the authoring guidance in your repo (`AGENTS.md` and friends) automatically
-up to date with the latest TAS best practices on a schedule, instead of manual
-syncs — so the coding agents that write your agents always work from current
-guidance.
-
-[Discuss & shape it →](https://github.com/tembo/agent-studio/discussions/104)
-
 ## Richer trigger setup
 
 Replace free-text trigger entry with schema-driven config forms pulled from each

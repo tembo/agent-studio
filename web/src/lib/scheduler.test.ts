@@ -26,6 +26,9 @@ vi.mock("@/lib/agent-learning-api", () => ({
 vi.mock("@/lib/cron", () => ({
   hasFiringInWindow: vi.fn().mockReturnValue(true),
 }));
+vi.mock("@/lib/guidance-refresh", () => ({
+  runDueGuidanceRefreshes: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("@/lib/inbox-api", () => ({
   listUnconsumedSignalsForAgent: vi.fn(),
   markSignalsConsumed: vi.fn(),
@@ -46,6 +49,7 @@ import {
   recordAutomationFailure,
 } from "@/lib/automation-events";
 import { isAgentCreatePending } from "@/lib/improvements-api";
+import { runDueGuidanceRefreshes } from "@/lib/guidance-refresh";
 import { startScheduler, stopScheduler } from "@/lib/scheduler";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 
@@ -54,6 +58,7 @@ const mockPauseMissingOwners = vi.mocked(pauseAutomationsWithMissingOwners);
 const mockResolveDispatch = vi.mocked(resolveAgentForDispatch);
 const mockRecordFailure = vi.mocked(recordAutomationFailure);
 const mockIsAgentCreatePending = vi.mocked(isAgentCreatePending);
+const mockRunDueGuidanceRefreshes = vi.mocked(runDueGuidanceRefreshes);
 
 const automation: Automation = {
   id: "automation-1",
@@ -169,6 +174,18 @@ describe("scheduler owner membership", () => {
     expect(mockPauseMissingOwners).toHaveBeenCalledOnce();
     expect(mockPauseMissingOwners.mock.invocationCallOrder[0]).toBeLessThan(
       mockListEnabled.mock.invocationCallOrder[0],
+    );
+  });
+});
+
+describe("scheduler guidance refresh", () => {
+  it("checks due workspace guidance on startup", async () => {
+    mockListEnabled.mockResolvedValue([]);
+
+    startScheduler();
+
+    await vi.waitFor(() =>
+      expect(mockRunDueGuidanceRefreshes).toHaveBeenCalledOnce(),
     );
   });
 });
