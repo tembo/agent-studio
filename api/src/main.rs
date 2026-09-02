@@ -5,7 +5,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Context;
-use axum::{middleware, routing::get, routing::post, Router};
+use axum::{
+    middleware,
+    routing::{get, post, put},
+    Router,
+};
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use tower_http::trace::TraceLayer;
@@ -62,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
         .context("API_BIND_ADDR must be a valid socket address")?;
 
     let db = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(20)
         .connect(&database_url)
         .await
         .context("failed to connect to Postgres")?;
@@ -79,10 +83,11 @@ async fn main() -> anyhow::Result<()> {
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .context("failed to build reqwest client")?;
-    let run_concurrency = runs::concurrency::RunConcurrency::from_env()?;
+    let run_concurrency = runs::concurrency::RunConcurrency::from_db(&db).await?;
     tracing::info!(
         max_concurrent_runs = run_concurrency.max_concurrent_runs(),
         reserved_sub_agent_runs = run_concurrency.reserved_sub_agent_runs(),
+        max_sub_agents_per_orchestrator = run_concurrency.max_sub_agents_per_orchestrator(),
         "run concurrency configured"
     );
 
@@ -104,6 +109,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/runs", post(runs::handlers::create_run))
         .route("/runs/{id}", get(runs::handlers::get_run))
         .route("/runs/{id}/cancel", post(runs::handlers::cancel_run))
+        .route(
+            "/run-concurrency",
+            put(runs::handlers::update_run_concurrency),
+        )
         .layer(middleware::from_fn(auth::require_internal_token))
         .layer(axum::Extension(internal_token));
 

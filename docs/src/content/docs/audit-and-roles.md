@@ -33,10 +33,10 @@ is removed. The last workspace admin still cannot be removed.
 
 Above workspace roles, **instance admins** are bootstrapped from
 `INSTANCE_ADMIN_EMAILS` at deploy time; existing instance admins can add more
-in-app under top-level **Settings**. An instance admin can:
+in-app under **Instance settings** (sidebar, or the user menu). An instance admin can:
 
-- Set the instance name, branding, and **sign-up policy** (top-level **Settings**)
-- Add and remove other instance admins (top-level **Settings**)
+- Set the instance name, branding, **run queue**, and **sign-up policy** (**Instance settings**)
+- Add and remove other instance admins (**Instance settings**)
 - **Create workspaces** (only instance admins see "Create workspace")
 - Access any workspace they're a member of with their assigned workspace role
 

@@ -17,6 +17,7 @@ import {
   IconChevronDownSmall,
   IconDashboardMiddle,
   IconFileText,
+  IconGlobe,
   IconHammer,
   IconHistory,
   IconInboxChecked,
@@ -84,9 +85,11 @@ function useLiveInboxCount(home: string, initial?: number): number | undefined {
 export function SidebarNav({
   home,
   inboxCount,
+  isInstanceAdmin,
 }: {
   home: string;
   inboxCount?: number;
+  isInstanceAdmin?: boolean;
 }) {
   const inboxBadge = useLiveInboxCount(home, inboxCount);
 
@@ -174,6 +177,15 @@ export function SidebarNav({
       {groups.map((g) => (
         <Group key={g.id} group={g} home={home} />
       ))}
+      {isInstanceAdmin && (
+        <div className="mt-2 flex flex-col gap-0.5 border-t border-[var(--color-border-weak)] pt-2">
+          <SidebarNavItem
+            href="/settings"
+            label="Instance settings"
+            icon={<IconGlobe />}
+          />
+        </div>
+      )}
     </div>
   );
 }

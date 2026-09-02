@@ -351,7 +351,10 @@ pub async fn execute_run(state: &AppState, ctx: RunContext, cancel: Cancellation
     let run_id = ctx.run_id;
 
     let is_sub_agent = ctx.orchestrator_run_id.is_some();
-    let permit = state.run_concurrency.acquire(is_sub_agent, &cancel).await;
+    let permit = state
+        .run_concurrency
+        .acquire(ctx.orchestrator_run_id, &cancel)
+        .await;
     let Some(_permit) = permit else {
         if cancel.is_cancelled() {
             tracing::info!(run_id = %run_id, "queued run cancelled before execution capacity was available");

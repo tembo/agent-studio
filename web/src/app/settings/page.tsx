@@ -13,6 +13,7 @@ import { getInstanceNameFromEnv, getPublicOrigin } from "@/lib/config";
 import { authorizeInstance } from "@/lib/instance";
 import { listInstanceAdmins } from "@/lib/instance-admins";
 import {
+  getRunQueueSettings,
   getSignupPolicy,
   getStoredInstanceName,
 } from "@/lib/instance-settings";
@@ -20,6 +21,7 @@ import { formatAllowedDomains } from "@/lib/signup-policy";
 
 import { AdminsSection } from "./admins-section";
 import { InstanceNameForm } from "./instance-name-form";
+import { RunQueueForm } from "./run-queue-form";
 import { SignupPolicyForm } from "./signup-policy-form";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +38,7 @@ export default async function InstanceSettingsPage() {
   const storedName = await getStoredInstanceName();
   const envFallback = getInstanceNameFromEnv();
   const signup = await getSignupPolicy();
+  const runQueue = await getRunQueueSettings();
   const admins = await listInstanceAdmins();
   const oauthConfigured = isAnyAuthConfigured();
 
@@ -72,6 +75,26 @@ export default async function InstanceSettingsPage() {
             <InstanceNameForm
               initialName={storedName ?? ""}
               envFallback={envFallback}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="w-full p-3">
+          <CardHeader className="flex-col items-start gap-1 px-1 pb-3 pt-1">
+            <CardTitle className="text-foreground-title text-base">
+              Run queue
+            </CardTitle>
+            <CardDescription>
+              How many agents execute at once on this instance. Queued
+              sub-agents start before new orchestrator runs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-1 pb-1">
+            <RunQueueForm
+              initialMaxConcurrentRuns={runQueue.maxConcurrentRuns}
+              initialMaxSubAgentsPerOrchestrator={
+                runQueue.maxSubAgentsPerOrchestrator
+              }
             />
           </CardContent>
         </Card>

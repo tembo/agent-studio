@@ -3,6 +3,10 @@ import "server-only";
 import { db } from "@/lib/db";
 import { getInstanceNameFromEnv } from "@/lib/config";
 import {
+  DEFAULT_MAX_CONCURRENT_RUNS,
+  DEFAULT_MAX_SUB_AGENTS_PER_ORCHESTRATOR,
+} from "@/lib/run-queue";
+import {
   isSignupPolicy,
   parseAllowedDomains,
   type SignupPolicy,
@@ -181,5 +185,85 @@ export async function setSignupPolicy(
             updated_by = $3
       WHERE id = TRUE`,
     [policy, allowedDomains, updatedBy],
+  );
+}
+
+export type RunQueueSettings = {
+  maxConcurrentRuns: number;
+  maxSubAgentsPerOrchestrator: number;
+};
+
+function parsePositiveInt(raw: string | undefined): number | null {
+  const n = Number.parseInt(raw?.trim() ?? "", 10);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+export function getRunQueueSettingsFromEnv(): RunQueueSettings {
+  return {
+    maxConcurrentRuns:
+      parsePositiveInt(process.env.API_MAX_CONCURRENT_RUNS) ??
+      DEFAULT_MAX_CONCURRENT_RUNS,
+    maxSubAgentsPerOrchestrator:
+      parsePositiveInt(process.env.API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR) ??
+      DEFAULT_MAX_SUB_AGENTS_PER_ORCHESTRATOR,
+  };
+}
+
+export async function getStoredRunQueueSettings(): Promise<{
+  maxConcurrentRuns: number | null;
+  maxSubAgentsPerOrchestrator: number | null;
+} | null> {
+  try {
+    const { rows } = await db.query<{
+      max_concurrent_runs: number | null;
+      max_sub_agents_per_orchestrator: number | null;
+    }>(
+      `SELECT max_concurrent_runs, max_sub_agents_per_orchestrator
+         FROM instance_settings WHERE id = TRUE LIMIT 1`,
+    );
+    const row = rows[0];
+    return {
+      maxConcurrentRuns:
+        row?.max_concurrent_runs && row.max_concurrent_runs >= 1
+          ? row.max_concurrent_runs
+          : null,
+      maxSubAgentsPerOrchestrator:
+        row?.max_sub_agents_per_orchestrator &&
+        row.max_sub_agents_per_orchestrator >= 1
+          ? row.max_sub_agents_per_orchestrator
+          : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Resolved run-queue limits: DB if an admin has saved, else env, else defaults. */
+export async function getRunQueueSettings(): Promise<RunQueueSettings> {
+  const stored = await getStoredRunQueueSettings();
+  const env = getRunQueueSettingsFromEnv();
+  return {
+    maxConcurrentRuns: stored?.maxConcurrentRuns ?? env.maxConcurrentRuns,
+    maxSubAgentsPerOrchestrator:
+      stored?.maxSubAgentsPerOrchestrator ?? env.maxSubAgentsPerOrchestrator,
+  };
+}
+
+export async function setRunQueueSettings(
+  settings: RunQueueSettings,
+  updatedBy: string,
+): Promise<void> {
+  await db.query(
+    `UPDATE instance_settings
+        SET max_concurrent_runs = $1,
+            max_sub_agents_per_orchestrator = $2,
+            updated_at = now(),
+            updated_by = $3
+      WHERE id = TRUE`,
+    [
+      settings.maxConcurrentRuns,
+      settings.maxSubAgentsPerOrchestrator,
+      updatedBy,
+    ],
   );
 }

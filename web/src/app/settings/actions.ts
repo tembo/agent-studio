@@ -10,8 +10,11 @@ import {
 import {
   isFirstRun,
   setInstanceName,
+  setRunQueueSettings,
   setSignupPolicy,
 } from "@/lib/instance-settings";
+import { MAX_CONCURRENT_RUNS_CAP } from "@/lib/run-queue";
+import { updateRunConcurrency } from "@/lib/runs-api";
 import {
   isSignupPolicy,
   parseAllowedDomains,
@@ -107,6 +110,62 @@ export async function updateSignupPolicyAction(
   await setSignupPolicy(policyRaw, allowedDomains, auth.userId);
   revalidatePath("/settings");
   revalidatePath("/");
+  return { ok: true, saved: true };
+}
+
+function parseQueueInt(raw: string, label: string): number | InstanceSettingsState {
+  const n = Number.parseInt(raw.trim(), 10);
+  if (!Number.isInteger(n) || n < 1) {
+    return { ok: false, error: `${label} must be at least 1.` };
+  }
+  if (n > MAX_CONCURRENT_RUNS_CAP) {
+    return {
+      ok: false,
+      error: `${label} must be ${MAX_CONCURRENT_RUNS_CAP} or fewer.`,
+    };
+  }
+  return n;
+}
+
+export async function updateRunQueueAction(
+  _prev: InstanceSettingsState,
+  formData: FormData,
+): Promise<InstanceSettingsState> {
+  const auth = await authorizeInstance();
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "You don't have permission to change instance settings.",
+    };
+  }
+
+  const maxConcurrentRuns = parseQueueInt(
+    String(formData.get("maxConcurrentRuns") ?? ""),
+    "Concurrent agent runs",
+  );
+  if (typeof maxConcurrentRuns !== "number") return maxConcurrentRuns;
+
+  const maxSubAgentsPerOrchestrator = parseQueueInt(
+    String(formData.get("maxSubAgentsPerOrchestrator") ?? ""),
+    "Concurrent sub-agents per orchestrator",
+  );
+  if (typeof maxSubAgentsPerOrchestrator !== "number") {
+    return maxSubAgentsPerOrchestrator;
+  }
+
+  await setRunQueueSettings(
+    { maxConcurrentRuns, maxSubAgentsPerOrchestrator },
+    auth.userId,
+  );
+  try {
+    await updateRunConcurrency({
+      maxConcurrentRuns,
+      maxSubAgentsPerOrchestrator,
+    });
+  } catch (e) {
+    console.error("updateRunConcurrency failed (saved; api will pick up on restart)", e);
+  }
+  revalidatePath("/settings");
   return { ok: true, saved: true };
 }
 
