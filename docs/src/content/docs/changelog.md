@@ -48,6 +48,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Changed
 
+- **The run queue executes ten agents at once by default.** Each orchestrator
+  is limited to three concurrent sub-agents so one fan-out cannot occupy the
+  whole pool; extra children stay queued until a slot frees. Operators can still
+  tune `API_MAX_CONCURRENT_RUNS` and `API_RESERVED_SUB_AGENT_RUNS`, plus
+  `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR`.
 - **Agent inventory prioritizes recent activity.** Live-agent rows now open from
   any non-control click and default to most-recently-run order, with an explicit
   sort menu for the compact headerless layout. Agents with no trailing-30-day

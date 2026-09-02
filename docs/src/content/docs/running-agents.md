@@ -32,13 +32,16 @@ cannot be intercepted). Dry runs stay on the original agent's history with a
 **Dry run** badge, remain filterable on the Runs page, and are excluded from
 dashboard success-rate and delivery metrics.
 
-The API limits how many agents execute simultaneously. When all execution slots
-are occupied, newly accepted runs stay **queued** and start automatically as
-capacity becomes available. Instance operators configure the cap with
-`API_MAX_CONCURRENT_RUNS`. By default, half of those slots are reserved for
-sub-agents (two of the default four) so concurrent orchestrators can keep making
-progress instead of serializing every sub-agent behind one slot. Queued runs can
-be stopped normally before they start.
+The API limits how many agents execute simultaneously (ten by default). When all
+execution slots are occupied, newly accepted runs stay **queued** and start
+automatically as capacity becomes available. Instance operators configure the
+cap with `API_MAX_CONCURRENT_RUNS`. By default, half of those slots are reserved
+for sub-agents (five of the default ten) so concurrent orchestrators can keep
+making progress instead of serializing every sub-agent behind one slot. Each
+orchestrator is also limited to three concurrent sub-agents; further children of
+that parent stay queued until one finishes. Operators can tune that cap with
+`API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR`. Queued runs can be stopped
+normally before they start.
 
 ## The run detail page
 

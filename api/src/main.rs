@@ -62,7 +62,7 @@ async fn main() -> anyhow::Result<()> {
         .context("API_BIND_ADDR must be a valid socket address")?;
 
     let db = PgPoolOptions::new()
-        .max_connections(10)
+        .max_connections(20)
         .connect(&database_url)
         .await
         .context("failed to connect to Postgres")?;
@@ -83,6 +83,7 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         max_concurrent_runs = run_concurrency.max_concurrent_runs(),
         reserved_sub_agent_runs = run_concurrency.reserved_sub_agent_runs(),
+        max_sub_agents_per_orchestrator = run_concurrency.max_sub_agents_per_orchestrator(),
         "run concurrency configured"
     );
 

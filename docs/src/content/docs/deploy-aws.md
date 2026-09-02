@@ -72,8 +72,9 @@ sit in plaintext task JSON):
 | `DATABASE_URL` | from Secrets Manager |
 | `TAS_ENCRYPTION_KEY` | from Secrets Manager |
 | `INTERNAL_API_TOKEN` | from Secrets Manager |
-| `API_MAX_CONCURRENT_RUNS` | Maximum simultaneous agent executions per task (default `4`); tune against the task's memory limit. |
-| `API_RESERVED_SUB_AGENT_RUNS` | Slots reserved for sub-agents (default: half of the maximum, so `2` when the maximum is `4`; set `0` if orchestration is unused). |
+| `API_MAX_CONCURRENT_RUNS` | Maximum simultaneous agent executions per task (default `10`); tune against the task's memory limit. |
+| `API_RESERVED_SUB_AGENT_RUNS` | Slots reserved for sub-agents (default: half of the maximum, so `5` when the maximum is `10`; set `0` if orchestration is unused). |
+| `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR` | Concurrent sub-agent runs allowed for one orchestrator (default `3`). Extra children of that parent stay queued. |
 | `RUST_LOG` | `info,tas_api=debug` |
 
 (AWS VPC networking is IPv4, so the default bind is reachable — no
@@ -158,7 +159,7 @@ then `web`. Then:
 | --- | --- |
 | `exec format error` on container start. | Ran the `amd64` image on `arm64`/Graviton Fargate. Use the `X86_64` platform. |
 | Sign-in succeeds, then a 401 loop. | `BETTER_AUTH_URL` isn't the real HTTPS origin, or TLS isn't terminating in front of `web` (cookies need `https`). |
-| A run stays queued while other runs are active. | The per-task concurrency cap is full; it starts when a slot opens. Tune `API_MAX_CONCURRENT_RUNS` against task memory. If sub-agents queue behind simultaneous orchestrators, reserve more capacity with `API_RESERVED_SUB_AGENT_RUNS`. |
+| A run stays queued while other runs are active. | The per-task concurrency cap is full; it starts when a slot opens. Tune `API_MAX_CONCURRENT_RUNS` against task memory. If sub-agents queue behind simultaneous orchestrators, reserve more capacity with `API_RESERVED_SUB_AGENT_RUNS`. If one orchestrator's children sit queued while other work is running, raise `API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR`. |
 | Run dispatch fails and no run is created. | web can't reach api: wrong `API_INTERNAL_URL`, or Service Connect not enabled. `/internal/*` 401s mean `INTERNAL_API_TOKEN` mismatch. |
 | `failed to decrypt secret` in api logs. | `TAS_ENCRYPTION_KEY` differs between web and api. |
 | api can't reach Postgres. | RDS security group doesn't allow the task SG on `5432`, or `DATABASE_URL` host is wrong. |

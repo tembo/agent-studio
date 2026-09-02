@@ -1,27 +1,35 @@
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{bail, Context};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
-const DEFAULT_MAX_CONCURRENT_RUNS: usize = 4;
+const DEFAULT_MAX_CONCURRENT_RUNS: usize = 10;
+const DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR: usize = 3;
 
 /// Process-local admission control for agent runs.
 ///
 /// Top-level runs acquire from both pools. Sub-agent runs only acquire from the
 /// global pool, leaving `reserved_sub_agent_runs` slots available when an
-/// orchestrator stays alive while it waits for a sub-agent.
+/// orchestrator stays alive while it waits for a sub-agent. Each orchestrator
+/// is also limited to `max_sub_agents_per_orchestrator` concurrent children so
+/// one fan-out cannot occupy the whole queue.
 #[derive(Clone)]
 pub struct RunConcurrency {
     total: Arc<Semaphore>,
     top_level: Arc<Semaphore>,
+    per_orchestrator: Arc<Mutex<HashMap<Uuid, Arc<Semaphore>>>>,
     max_concurrent_runs: usize,
     reserved_sub_agent_runs: usize,
+    max_sub_agents_per_orchestrator: usize,
 }
 
 pub struct RunPermit {
     _total: OwnedSemaphorePermit,
     _top_level: Option<OwnedSemaphorePermit>,
+    _per_orchestrator: Option<OwnedSemaphorePermit>,
 }
 
 impl RunConcurrency {
@@ -34,10 +42,18 @@ impl RunConcurrency {
         // permits. A one-slot deployment still cannot reserve its only slot.
         let default_reserved = default_reserved_sub_agent_runs(max);
         let reserved = parse_env_usize("API_RESERVED_SUB_AGENT_RUNS")?.unwrap_or(default_reserved);
-        Self::new(max, reserved)
+        let default_per_orchestrator =
+            DEFAULT_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR.min(max.max(1));
+        let per_orchestrator = parse_env_usize("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR")?
+            .unwrap_or(default_per_orchestrator);
+        Self::new(max, reserved, per_orchestrator)
     }
 
-    pub fn new(max_concurrent_runs: usize, reserved_sub_agent_runs: usize) -> anyhow::Result<Self> {
+    pub fn new(
+        max_concurrent_runs: usize,
+        reserved_sub_agent_runs: usize,
+        max_sub_agents_per_orchestrator: usize,
+    ) -> anyhow::Result<Self> {
         if max_concurrent_runs == 0 {
             bail!("API_MAX_CONCURRENT_RUNS must be at least 1");
         }
@@ -47,14 +63,19 @@ impl RunConcurrency {
                  API_MAX_CONCURRENT_RUNS ({max_concurrent_runs})"
             );
         }
+        if max_sub_agents_per_orchestrator == 0 {
+            bail!("API_MAX_CONCURRENT_SUB_AGENTS_PER_ORCHESTRATOR must be at least 1");
+        }
 
         Ok(Self {
             total: Arc::new(Semaphore::new(max_concurrent_runs)),
             top_level: Arc::new(Semaphore::new(
                 max_concurrent_runs - reserved_sub_agent_runs,
             )),
+            per_orchestrator: Arc::new(Mutex::new(HashMap::new())),
             max_concurrent_runs,
             reserved_sub_agent_runs,
+            max_sub_agents_per_orchestrator,
         })
     }
 
@@ -62,10 +83,17 @@ impl RunConcurrency {
     /// while still queued. The returned permits release automatically.
     pub async fn acquire(
         &self,
-        is_sub_agent: bool,
+        orchestrator_run_id: Option<Uuid>,
         cancel: &CancellationToken,
     ) -> Option<RunPermit> {
-        let top_level = if is_sub_agent {
+        let per_orchestrator = if let Some(orchestrator_run_id) = orchestrator_run_id {
+            // Take the per-parent slot first so a fourth child waits here
+            // instead of occupying a global slot.
+            Some(acquire_or_cancel(self.orchestrator_semaphore(orchestrator_run_id), cancel).await?)
+        } else {
+            None
+        };
+        let top_level = if orchestrator_run_id.is_some() {
             None
         } else {
             Some(acquire_or_cancel(self.top_level.clone(), cancel).await?)
@@ -74,6 +102,7 @@ impl RunConcurrency {
         Some(RunPermit {
             _total: total,
             _top_level: top_level,
+            _per_orchestrator: per_orchestrator,
         })
     }
 
@@ -83,6 +112,10 @@ impl RunConcurrency {
 
     pub fn reserved_sub_agent_runs(&self) -> usize {
         self.reserved_sub_agent_runs
+    }
+
+    pub fn max_sub_agents_per_orchestrator(&self) -> usize {
+        self.max_sub_agents_per_orchestrator
     }
 
     pub fn active_runs(&self) -> usize {
@@ -95,6 +128,24 @@ impl RunConcurrency {
     pub fn close(&self) {
         self.top_level.close();
         self.total.close();
+        let gates = self
+            .per_orchestrator
+            .lock()
+            .expect("per_orchestrator mutex poisoned");
+        for semaphore in gates.values() {
+            semaphore.close();
+        }
+    }
+
+    fn orchestrator_semaphore(&self, orchestrator_run_id: Uuid) -> Arc<Semaphore> {
+        let mut gates = self
+            .per_orchestrator
+            .lock()
+            .expect("per_orchestrator mutex poisoned");
+        gates
+            .entry(orchestrator_run_id)
+            .or_insert_with(|| Arc::new(Semaphore::new(self.max_sub_agents_per_orchestrator)))
+            .clone()
     }
 }
 
@@ -137,9 +188,10 @@ mod tests {
 
     #[test]
     fn rejects_invalid_limits() {
-        assert!(RunConcurrency::new(0, 0).is_err());
-        assert!(RunConcurrency::new(4, 4).is_err());
-        assert!(RunConcurrency::new(4, 5).is_err());
+        assert!(RunConcurrency::new(0, 0, 1).is_err());
+        assert!(RunConcurrency::new(4, 4, 1).is_err());
+        assert!(RunConcurrency::new(4, 5, 1).is_err());
+        assert!(RunConcurrency::new(4, 1, 0).is_err());
     }
 
     #[test]
@@ -148,33 +200,35 @@ mod tests {
         assert_eq!(default_reserved_sub_agent_runs(2), 1);
         assert_eq!(default_reserved_sub_agent_runs(4), 2);
         assert_eq!(default_reserved_sub_agent_runs(6), 3);
+        assert_eq!(default_reserved_sub_agent_runs(10), 5);
     }
 
     #[tokio::test]
     async fn reserves_capacity_for_sub_agent_runs() {
-        let gate = RunConcurrency::new(4, 1).unwrap();
+        let gate = RunConcurrency::new(4, 1, 3).unwrap();
         let cancel = CancellationToken::new();
 
         let top_level_runs = [
-            gate.acquire(false, &cancel).await.unwrap(),
-            gate.acquire(false, &cancel).await.unwrap(),
-            gate.acquire(false, &cancel).await.unwrap(),
+            gate.acquire(None, &cancel).await.unwrap(),
+            gate.acquire(None, &cancel).await.unwrap(),
+            gate.acquire(None, &cancel).await.unwrap(),
         ];
         assert_eq!(gate.active_runs(), 3);
 
         assert!(
-            tokio::time::timeout(Duration::from_millis(20), gate.acquire(false, &cancel),)
+            tokio::time::timeout(Duration::from_millis(20), gate.acquire(None, &cancel),)
                 .await
                 .is_err()
         );
 
-        let sub_agent = gate.acquire(true, &cancel).await.unwrap();
+        let sub_agent = gate.acquire(Some(Uuid::new_v4()), &cancel).await.unwrap();
         assert_eq!(gate.active_runs(), 4);
-        assert!(
-            tokio::time::timeout(Duration::from_millis(20), gate.acquire(true, &cancel),)
-                .await
-                .is_err()
-        );
+        assert!(tokio::time::timeout(
+            Duration::from_millis(20),
+            gate.acquire(Some(Uuid::new_v4()), &cancel),
+        )
+        .await
+        .is_err());
 
         drop(sub_agent);
         drop(top_level_runs);
@@ -183,26 +237,26 @@ mod tests {
 
     #[tokio::test]
     async fn balanced_reservation_keeps_two_orchestrators_moving() {
-        let gate = RunConcurrency::new(4, 2).unwrap();
+        let gate = RunConcurrency::new(4, 2, 3).unwrap();
         let cancel = CancellationToken::new();
 
         let orchestrators = [
-            gate.acquire(false, &cancel).await.unwrap(),
-            gate.acquire(false, &cancel).await.unwrap(),
+            gate.acquire(None, &cancel).await.unwrap(),
+            gate.acquire(None, &cancel).await.unwrap(),
         ];
         assert_eq!(gate.active_runs(), 2);
 
         // A third top-level run queues instead of consuming capacity that the
         // two active orchestrators need for their sub-agents.
         assert!(
-            tokio::time::timeout(Duration::from_millis(20), gate.acquire(false, &cancel),)
+            tokio::time::timeout(Duration::from_millis(20), gate.acquire(None, &cancel),)
                 .await
                 .is_err()
         );
 
         let sub_agents = [
-            gate.acquire(true, &cancel).await.unwrap(),
-            gate.acquire(true, &cancel).await.unwrap(),
+            gate.acquire(Some(Uuid::new_v4()), &cancel).await.unwrap(),
+            gate.acquire(Some(Uuid::new_v4()), &cancel).await.unwrap(),
         ];
         assert_eq!(gate.active_runs(), 4);
 
@@ -212,16 +266,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn caps_concurrent_sub_agents_per_orchestrator() {
+        let gate = RunConcurrency::new(10, 5, 3).unwrap();
+        let cancel = CancellationToken::new();
+        let orchestrator = Uuid::new_v4();
+        let other = Uuid::new_v4();
+
+        let sub_agents = [
+            gate.acquire(Some(orchestrator), &cancel).await.unwrap(),
+            gate.acquire(Some(orchestrator), &cancel).await.unwrap(),
+            gate.acquire(Some(orchestrator), &cancel).await.unwrap(),
+        ];
+        assert_eq!(gate.active_runs(), 3);
+
+        assert!(tokio::time::timeout(
+            Duration::from_millis(20),
+            gate.acquire(Some(orchestrator), &cancel),
+        )
+        .await
+        .is_err());
+        assert_eq!(gate.active_runs(), 3);
+
+        let other_sub = gate.acquire(Some(other), &cancel).await.unwrap();
+        assert_eq!(gate.active_runs(), 4);
+
+        drop(sub_agents);
+        drop(other_sub);
+        assert_eq!(gate.active_runs(), 0);
+    }
+
+    #[tokio::test]
     async fn cancellation_interrupts_a_queued_run() {
-        let gate = RunConcurrency::new(1, 0).unwrap();
+        let gate = RunConcurrency::new(1, 0, 1).unwrap();
         let running_cancel = CancellationToken::new();
-        let _running = gate.acquire(false, &running_cancel).await.unwrap();
+        let _running = gate.acquire(None, &running_cancel).await.unwrap();
 
         let queued_cancel = CancellationToken::new();
         let waiter = {
             let gate = gate.clone();
             let queued_cancel = queued_cancel.clone();
-            tokio::spawn(async move { gate.acquire(false, &queued_cancel).await })
+            tokio::spawn(async move { gate.acquire(None, &queued_cancel).await })
         };
         tokio::task::yield_now().await;
         queued_cancel.cancel();
@@ -232,14 +316,14 @@ mod tests {
 
     #[tokio::test]
     async fn closing_the_gate_wakes_queued_runs() {
-        let gate = RunConcurrency::new(1, 0).unwrap();
+        let gate = RunConcurrency::new(1, 0, 1).unwrap();
         let cancel = CancellationToken::new();
-        let _running = gate.acquire(false, &cancel).await.unwrap();
+        let _running = gate.acquire(None, &cancel).await.unwrap();
 
         let waiter = {
             let gate = gate.clone();
             let cancel = cancel.clone();
-            tokio::spawn(async move { gate.acquire(false, &cancel).await })
+            tokio::spawn(async move { gate.acquire(None, &cancel).await })
         };
         tokio::task::yield_now().await;
         gate.close();
