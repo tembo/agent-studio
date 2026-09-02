@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { getSecretConnectionValue } from "@/lib/secret-connections";
+import { getSharedSecretConnectionValue } from "@/lib/secret-connections";
 
 // Minimal LinkedIn Voyager (internal API) client for the WRITE operations the
 // Inbox executor needs: send a message, archive a conversation. Reads the
@@ -26,9 +26,9 @@ type Session = { liAt: string; jsessionid: string; userAgent: string };
 
 async function loadSession(workspaceId: string): Promise<Session> {
   const [liAt, jsessionid, userAgent] = await Promise.all([
-    getSecretConnectionValue(workspaceId, SECRET_LI_AT),
-    getSecretConnectionValue(workspaceId, SECRET_JSESSIONID),
-    getSecretConnectionValue(workspaceId, SECRET_USER_AGENT),
+    getSharedSecretConnectionValue(workspaceId, SECRET_LI_AT),
+    getSharedSecretConnectionValue(workspaceId, SECRET_JSESSIONID),
+    getSharedSecretConnectionValue(workspaceId, SECRET_USER_AGENT),
   ]);
   if (!liAt || !jsessionid) {
     throw new Error(

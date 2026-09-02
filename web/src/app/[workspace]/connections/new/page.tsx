@@ -62,9 +62,8 @@ export default async function NewConnectionPage({
   if (!session) notFound();
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
-  const isAdmin =
-    (await getWorkspaceRole(workspace.id, session.user.id)) ===
-    "workspace_admin";
+  const role = await getWorkspaceRole(workspace.id, session.user.id);
+  const isAdmin = role === "workspace_admin";
 
   const [oauthClients, enableMap, composioPreview] = await Promise.all([
     listNativeOAuthClients(workspace.id),
@@ -306,11 +305,11 @@ export default async function NewConnectionPage({
   if (typeParam === "secret") {
     return (
       <FormShell back={backToTypes} title="Add a secret" logo={<Glyph />}>
-        {isAdmin ? (
-          <SecretAddForm workspaceSlug={workspace.slug} />
+        {role === "operator" || isAdmin ? (
+          <SecretAddForm workspaceSlug={workspace.slug} isAdmin={isAdmin} />
         ) : (
           <p className="text-foreground-muted text-sm">
-            Only workspace admins can add secrets.
+            Operators and workspace admins can add secrets.
           </p>
         )}
       </FormShell>
@@ -378,7 +377,7 @@ export default async function NewConnectionPage({
         workspaceSlug={workspace.slug}
         providers={searchable}
         showManual={isAdmin}
-        showSecret={isAdmin}
+        showSecret={role === "operator" || isAdmin}
       />
     </div>
   );

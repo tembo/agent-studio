@@ -128,16 +128,20 @@ For doing deterministic I/O over a connection from Python, see
 ## Secrets (API keys)
 
 Some services — like Clay — authenticate with a plain **API key**, not OAuth.
-For these, use a **Secret**: a free-form, **workspace-level** key an admin sets
-once under **Connections → Secrets** and the whole workspace shares (unlike the
-per-user OAuth connections above). Secrets are read by an agent's
+For these, use a **Secret**: a free-form key stored under **Connections →
+Secret / API key**. Operators can add a personal secret; workspace admins can
+also add a workspace-wide shared secret. Secrets are read by an agent's
 [sidecar Python tools](/agent-studio/sidecar-python-tools/) via
 `tas_tools.secret("name")` — they attach no tools and are invisible to the
 model.
 
-- **Add one** (admin): Connections → Secrets → name (e.g. `clay`) + value. It's
-  encrypted at rest and shown masked.
+- **Add one**: Connections → New connection → Secret / API key → name (e.g.
+  `clay`) + value. Workspace admins choose **Me** or **Workspace**; operators
+  create personal secrets. Values are encrypted at rest and shown masked.
 - **Use it** in a tool: `tas_tools.secret("clay")` returns the value.
+- **Resolution**: a run uses the acting user's personal value first. When they
+  do not have one with that name, it falls back to the shared workspace value.
+  Other members cannot see or manage a personal secret.
 - **Optionally declare it** on the agent so the studio prompts an admin to set a
   missing one:
 

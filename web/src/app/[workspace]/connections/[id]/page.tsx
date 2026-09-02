@@ -51,7 +51,12 @@ export default async function ConnectionDetailPage({
     session.user.id,
     requestedUser,
   );
-  const loaded = await loadConnection(workspace.id, view.userId, ref);
+  const loaded = await loadConnection(
+    workspace.id,
+    view.userId,
+    ref,
+    view.viewingOther ? undefined : session.user.id,
+  );
   if (!loaded) notFound();
 
   const userQs = view.viewingOther
@@ -79,9 +84,16 @@ export default async function ConnectionDetailPage({
     const s = loaded.secret;
     title = s.slug;
     logoSlug = null;
-    editable = true;
+    editable =
+      s.scope === "personal"
+        ? !view.viewingOther && view.role !== "viewer"
+        : view.isAdmin;
     rows.push(
       { label: "Type", value: "Secret" },
+      {
+        label: "Scope",
+        value: s.scope === "personal" ? "Only me" : "Workspace",
+      },
       { label: "Value", value: <code className="text-foreground">••••••••{s.last4}</code> },
       ...(s.description ? [{ label: "Description", value: s.description }] : []),
       { label: "Updated", value: <LocalTime iso={s.updatedAt} /> },

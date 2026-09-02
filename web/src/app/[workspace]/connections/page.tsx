@@ -39,7 +39,11 @@ export default async function ConnectionsPage({
     requestedUser,
   );
   const members = view.isAdmin ? await listWorkspaceMembers(workspace.id) : [];
-  const rows = await listAllConnections(workspace.id, view.userId);
+  const rows = await listAllConnections(
+    workspace.id,
+    view.userId,
+    view.viewingOther ? undefined : session.user.id,
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-6 py-8">
@@ -51,8 +55,8 @@ export default async function ConnectionsPage({
           <p className="text-foreground-weak text-base">
             Authorizations and secrets the agents in{" "}
             <span className="text-foreground font-medium">{workspace.name}</span>{" "}
-            use at run time. OAuth connections are per-user; secrets are shared
-            across the workspace.
+            use at run time. OAuth connections are per-user; secrets can be
+            personal or shared across the workspace.
           </p>
         </div>
         {view.isAdmin && members.length > 1 && (
@@ -99,7 +103,7 @@ export default async function ConnectionsPage({
             </Link>
           </Button>
         )}
-        {!view.viewingOther && (
+        {!view.viewingOther && view.role !== "viewer" && (
           <Button asChild>
             <Link href={`/${workspace.slug}/connections/new`}>
               <IconPlusLarge size={16} />

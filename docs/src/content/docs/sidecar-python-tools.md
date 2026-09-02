@@ -95,9 +95,9 @@ def enrich(domain: str) -> dict:
 tools = [enrich]
 ```
 
-`tas_tools.secret("name")` returns the value an admin stored under Connections →
-Secrets, or raises a clear error if it isn't set. Secrets are only injected into
-runs that have a tools module.
+`tas_tools.secret("name")` returns the acting user's personal value when set,
+then falls back to the workspace-shared value. It raises a clear error if
+neither exists. Secrets are only injected into runs that have a tools module.
 
 ## Dependencies
 

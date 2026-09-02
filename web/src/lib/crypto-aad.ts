@@ -27,12 +27,14 @@ export function aadWorkspaceUserSecret(
   return `workspace_user_secret${SEP}${workspaceId}${SEP}${userId}${SEP}${kind}`;
 }
 
-/** `workspace_secret_connection` row, keyed by (workspace_id, slug). */
+/** Shared secret AAD stays byte-identical; personal secrets also bind owner. */
 export function aadSecretConnection(
   workspaceId: string,
   slug: string,
+  userId?: string | null,
 ): string {
-  return `secret_connection${SEP}${workspaceId}${SEP}${slug}`;
+  const shared = `secret_connection${SEP}${workspaceId}${SEP}${slug}`;
+  return userId ? `${shared}${SEP}${userId}` : shared;
 }
 
 /** `workspace_connection` (native-MCP creds), keyed by its unique tuple. */

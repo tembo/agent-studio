@@ -34,8 +34,16 @@ pub mod aad {
         format!("workspace_secret{SEP}{workspace_id}{SEP}{kind}")
     }
 
-    pub fn secret_connection(workspace_id: uuid::Uuid, slug: &str) -> String {
-        format!("secret_connection{SEP}{workspace_id}{SEP}{slug}")
+    pub fn secret_connection(
+        workspace_id: uuid::Uuid,
+        slug: &str,
+        user_id: Option<&str>,
+    ) -> String {
+        let shared = format!("secret_connection{SEP}{workspace_id}{SEP}{slug}");
+        match user_id {
+            Some(user_id) => format!("{shared}{SEP}{user_id}"),
+            None => shared,
+        }
     }
 
     pub fn native_connection(
@@ -185,7 +193,7 @@ mod tests {
     fn aad_mismatch_rejected() {
         let k = test_key();
         let a = aad::workspace_secret(uuid::Uuid::nil(), "k");
-        let b = aad::secret_connection(uuid::Uuid::nil(), "k");
+        let b = aad::secret_connection(uuid::Uuid::nil(), "k", None);
         let blob = k.encrypt_aad("v", a.as_bytes()).unwrap();
         assert!(k.decrypt_aad(&blob, b.as_bytes()).is_err());
     }
@@ -205,6 +213,14 @@ mod tests {
         assert_eq!(
             aad::workspace_secret(uuid::Uuid::nil(), "kind"),
             "workspace_secret\u{1f}00000000-0000-0000-0000-000000000000\u{1f}kind"
+        );
+        assert_eq!(
+            aad::secret_connection(uuid::Uuid::nil(), "key", None),
+            "secret_connection\u{1f}00000000-0000-0000-0000-000000000000\u{1f}key"
+        );
+        assert_eq!(
+            aad::secret_connection(uuid::Uuid::nil(), "key", Some("user-1")),
+            "secret_connection\u{1f}00000000-0000-0000-0000-000000000000\u{1f}key\u{1f}user-1"
         );
     }
 }

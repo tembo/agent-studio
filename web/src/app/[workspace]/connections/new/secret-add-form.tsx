@@ -15,7 +15,13 @@ const INITIAL: SecretActionState = {};
 
 // Add a workspace secret (API key / token). On success the action redirects to
 // the secret's connection view; this state only carries validation errors.
-export function SecretAddForm({ workspaceSlug }: { workspaceSlug: string }) {
+export function SecretAddForm({
+  workspaceSlug,
+  isAdmin,
+}: {
+  workspaceSlug: string;
+  isAdmin: boolean;
+}) {
   const [state, action, pending] = useActionState(
     setSecretConnectionAction,
     INITIAL,
@@ -23,6 +29,38 @@ export function SecretAddForm({ workspaceSlug }: { workspaceSlug: string }) {
   return (
     <form action={action} className="flex flex-col gap-3">
       <input type="hidden" name="workspace" value={workspaceSlug} />
+      {isAdmin ? (
+        <fieldset className="grid gap-2">
+          <legend className="text-foreground-weak text-sm font-medium">
+            Who can use it?
+          </legend>
+          <label className="border-border flex cursor-pointer gap-2 rounded-lg border px-3 py-2.5">
+            <input type="radio" name="scope" value="personal" defaultChecked />
+            <span className="flex flex-col">
+              <span className="text-foreground text-sm font-medium">Me</span>
+              <span className="text-foreground-muted text-sm">
+                Only your runs use this value.
+              </span>
+            </span>
+          </label>
+          <label className="border-border flex cursor-pointer gap-2 rounded-lg border px-3 py-2.5">
+            <input type="radio" name="scope" value="workspace" />
+            <span className="flex flex-col">
+              <span className="text-foreground text-sm font-medium">Workspace</span>
+              <span className="text-foreground-muted text-sm">
+                Shared fallback for everyone in the workspace.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+      ) : (
+        <>
+          <input type="hidden" name="scope" value="personal" />
+          <p className="text-foreground-muted text-sm">
+            This secret is personal. Only your runs can use it.
+          </p>
+        </>
+      )}
       <div className="grid gap-1.5">
         <Label htmlFor="secret-slug" className="text-sm">
           Name
