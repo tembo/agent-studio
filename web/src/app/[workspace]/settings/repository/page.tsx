@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { LocalTime } from "@/components/local-time";
 import { Section } from "@/components/section";
+import { getGuidanceRefreshSettings } from "@/lib/guidance-refresh";
 import {
   getWorkspaceBySlug,
   getWorkspaceRepo,
@@ -27,7 +28,10 @@ export default async function RepositoryPage({
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
 
-  const repo = await getWorkspaceRepo(workspace.id);
+  const [repo, guidanceRefresh] = await Promise.all([
+    getWorkspaceRepo(workspace.id),
+    getGuidanceRefreshSettings(workspace.id),
+  ]);
 
   return (
     <div className="divide-y divide-[var(--color-border-weak)]">
@@ -74,7 +78,14 @@ export default async function RepositoryPage({
             title="Agent guidance"
             description="Writes (or refreshes) AGENTS.md and the per-framework AGENT_GUIDE.md files into the connected repo. These tell the Tembo Coding Agent how to write valid agent files. Safe to click repeatedly — it only commits when the files are missing or out of date."
           >
-            <SyncGuidanceForm workspaceSlug={workspace.slug} />
+            <SyncGuidanceForm
+              key={guidanceRefresh.cadence}
+              workspaceSlug={workspace.slug}
+              cadence={guidanceRefresh.cadence}
+              refreshedAtIso={
+                guidanceRefresh.refreshedAt?.toISOString() ?? null
+              }
+            />
           </Section>
         </div>
       )}

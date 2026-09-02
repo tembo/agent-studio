@@ -60,6 +60,14 @@ definitions under `agents/` and reads/writes through the GitHub API. See
 [Getting started → Connect a GitHub repository](/agent-studio/getting-started/#3-connect-a-github-repository)
 for PAT scopes.
 
+Repository settings also manage the TAS-authored guidance files that coding
+agents read: root `AGENTS.md`, `agents/AGENTS.md`, and the per-framework
+`AGENT_GUIDE.md` files. **Sync agent guidance** checks them immediately. Set
+**Automatic refresh** to **Daily** or **Weekly** to check them on that cadence;
+it is **Off** by default. Both manual and automatic checks commit directly to
+the connected repository only when canonical guidance changed. Automatic
+checks appear as system activity in Audit.
+
 ## Members
 
 Add and remove workspace members, set their [roles](/agent-studio/audit-and-roles/)

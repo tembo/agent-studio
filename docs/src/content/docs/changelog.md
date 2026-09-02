@@ -21,6 +21,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Scheduled agent-guidance refresh.** Workspace admins can keep TAS-managed
+  `AGENTS.md` and per-framework authoring guides current automatically on a
+  daily or weekly cadence from Repository settings; automatic checks are off by
+  default, write only when canonical content changed, and appear in Audit as
+  system activity. Manual sync remains available and resets the cadence floor.
 - **Searchable Outputs library.** Successful non-empty run outputs, including
   sub-agent results, are now searchable independently of the Runs log and can
   be filtered by agent, orchestrator, acting user, date, and delivery evidence.

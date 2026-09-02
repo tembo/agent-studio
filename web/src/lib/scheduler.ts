@@ -43,6 +43,7 @@ import {
   type AgentLearning,
 } from "@/lib/agent-learning-api";
 import { hasFiringInWindow } from "@/lib/cron";
+import { runDueGuidanceRefreshes } from "@/lib/guidance-refresh";
 import {
   listUnconsumedSignalsForAgent,
   markSignalsConsumed,
@@ -87,6 +88,9 @@ export function startScheduler() {
   void learningTick().catch((e) =>
     console.error("[scheduler] initial learning tick threw", e),
   );
+  void runDueGuidanceRefreshes().catch((e) =>
+    console.error("[scheduler] initial guidance refresh threw", e),
+  );
   // Refresh every connection's cached tool catalog on boot (i.e. each deploy),
   // throttled so restarts don't re-storm provider APIs. Background — must not
   // block the scheduler from starting.
@@ -97,6 +101,9 @@ export function startScheduler() {
     void tick().catch((e) => console.error("[scheduler] tick threw", e));
     void learningTick().catch((e) =>
       console.error("[scheduler] learning tick threw", e),
+    );
+    void runDueGuidanceRefreshes().catch((e) =>
+      console.error("[scheduler] guidance refresh threw", e),
     );
     // Daily drift catch-up; the throttle makes this a cheap no-op most ticks.
     void maybeReconcileToolCaches(RECONCILE_DAILY_MS).catch((e) =>
