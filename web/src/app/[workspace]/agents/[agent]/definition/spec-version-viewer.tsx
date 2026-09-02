@@ -5,7 +5,7 @@ import { useState, type ReactNode } from "react";
 import { CopyButton } from "@/components/copy-button";
 import { Select } from "@/components/ui/select";
 
-// Lets the Definition tab switch between the live draft and each stable
+// Lets Versions switch between the live draft and each stable
 // version's snapshotted spec. The blocks are rendered server-side (syntax
 // highlighting stays on the server) and passed in as ReactNodes; this just
 // picks which one to show. Defaults to the first item (the draft). `source` is

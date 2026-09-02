@@ -216,6 +216,13 @@ In \`logic\`, \`when\`, exec \`args\`, etc., use \`{ "var": "name" }\`:
   "runtime_vars": { "model": "openai:gpt-4o-mini" }
 }
 \`\`\`
+
+## Eval sidecar (optional)
+
+Same convention as Pydantic: \`<name>.eval.yaml\` next to the JSON
+spec, only when the operator opted in (**Evals: on** in the CAP
+prompt). Not an agent file. \`assert\` cases gate Promote; \`judge\`
+is informational. **Evals: off** → do not create or edit a sidecar.
 `;
 
 const PYDANTIC_GUIDE: string = `# Pydantic AI AgentSpec Guide
@@ -370,6 +377,32 @@ Evidence is scoped to the exact run carrying the declaration. If an orchestrator
 delegates delivery to a sub-agent, put \`delivery\` on the sub-agent that creates
 the inbox item or calls the delivery tool. Evidence from a sub-agent does not
 roll up into the orchestrator's declaration.
+
+### eval sidecar (TAS — regression checks)
+
+**Optional.** Only write an eval sidecar when the operator opted in
+(the CAP prompt will say **Evals: on**). Legacy agents without one
+stay ungated. Colocate \`<name>.eval.yaml\` next to the spec (same
+stem). TAS does **not** treat eval files as agents. Each case has
+\`input\` plus \`assert\` (contains / not_contains / regex / equals /
+max_chars) and/or \`judge.rubric\` (LLM pass/fail). TAS runs the
+suite on authoring PRs and blocks Promote until **assertions** pass.
+\`judge\` is informational and does not fail the gate. If the prompt
+says **Evals: off**, do not create or edit a sidecar.
+
+\`\`\`yaml
+cases:
+  - name: greets
+    input: Hello
+    assert:
+      contains: hello
+  - name: tone
+    input: Hey
+    judge:
+      rubric: Friendly greeting.
+\`\`\`
+
+Do not put evals inside the agent spec.
 
 ### deps_schema
 
@@ -1007,12 +1040,17 @@ agents/
 ├── pydantic-agentspec/
 │   ├── AGENT_GUIDE.md                     ← read before editing .yaml/.json here
 │   ├── hello-world.yaml
+│   ├── hello-world.eval.yaml              ← optional eval sidecar (operator opt-in)
 │   └── …
 └── cargo-ai/
     ├── AGENT_GUIDE.md                     ← read before editing .json here
     ├── hello-world.json
     └── …
 \`\`\`
+
+Eval sidecars are **optional**. Write one only when the operator opted
+in (**Evals: on** in the CAP prompt). Agents without a sidecar are
+not gated.
 
 ## Keeping this guide current
 

@@ -1,0 +1,52 @@
+name: Agent evals
+
+# Reusable workflow for customer agent repos. On PRs that touch agents/,
+# run colocated eval suites against a TAS instance and fail the check on
+# regression.
+#
+# In the agents repo:
+#
+#   name: Agent evals
+#   on:
+#     pull_request:
+#       paths: ["agents/**"]
+#   jobs:
+#     evals:
+#       uses: tembo/agent-studio/.github/workflows/agent-evals.yml@main
+#       with:
+#         tas_url: ${{ vars.TAS_URL }}
+#       secrets:
+#         tas_api_token: ${{ secrets.TAS_API_TOKEN }}
+
+on:
+  workflow_call:
+    inputs:
+      tas_url:
+        description: TAS origin, e.g. https://tas.example.com
+        required: true
+        type: string
+      version:
+        description: draft or stable
+        required: false
+        type: string
+        default: draft
+    secrets:
+      tas_api_token:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: tembo/agent-studio/.github/actions/run-agent-evals@main
+        with:
+          tas-url: ${{ inputs.tas_url }}
+          tas-token: ${{ secrets.tas_api_token }}
+          version: ${{ inputs.version }}
+          base-sha: ${{ github.event.pull_request.base.sha }}

@@ -16,6 +16,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Agent evals.** Optional colocated `<name>.eval.yaml` (assertion and/or
+  LLM-judge cases). Operators opt in when creating or editing an agent
+  (default on). TAS runs assertions on authoring PRs and blocks Promote until
+  they pass; agents without an eval file stay ungated. The LLM judge is
+  informational. Latest results show on the Versions tab. TAS may post a
+  `tas/evals` commit status on the PR head.
 - **Configurable sign-up policy.** Instance admins can set who may create an
   account — invite-only (the previous hardwired default), an email-domain
   allowlist (verified emails only), or open — from Instance settings, with

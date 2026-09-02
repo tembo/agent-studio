@@ -36,6 +36,7 @@ export async function improveAgentAction(args: {
   workspaceSlug: string;
   runId: string;
   improvement: string;
+  includeEvals?: boolean;
 }): Promise<ImproveResult> {
   const improvement = args.improvement.trim();
   if (!improvement) {
@@ -93,6 +94,7 @@ export async function improveAgentAction(args: {
     commitMode: workspace.commitMode,
     defaultBranch: repo.defaultBranch,
     repositoryUrl: `https://github.com/${repo.owner}/${repo.name}`,
+    includeEvals: args.includeEvals !== false,
   });
 
   const res = await createTemboTask({

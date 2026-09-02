@@ -13,6 +13,7 @@ import {
   type Framework,
   type ParseAgentError,
 } from "@/lib/agent-format";
+import { isEvalSidecarFilename } from "@/lib/agent-evals";
 import {
   additionalInstructionsFile,
   guidanceFilesFor,
@@ -284,7 +285,10 @@ export async function listAgents(workspaceId: string): Promise<ListAgentsResult>
   const allEntries = subfolderListings.flatMap((sub) =>
     sub.ok
       ? sub.entries.filter(
-          (e) => e.type === "file" && detectFormat(e.name) !== null,
+          (e) =>
+            e.type === "file" &&
+            detectFormat(e.name) !== null &&
+            !isEvalSidecarFilename(e.name),
         )
       : [],
   );

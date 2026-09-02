@@ -271,6 +271,8 @@ export type RequestAgentChangeInput = {
   /** Where this change originated. Defaults to 'chat'; the scheduler's learning
    *  pass passes 'learning' so the resulting improvement is tagged. */
   source?: ImprovementSource;
+  /** Write/update a colocated eval sidecar. Default true. */
+  includeEvals?: boolean;
 };
 
 export type RequestAgentChangeResult = {
@@ -362,6 +364,7 @@ export async function requestAgentChange(
       commitMode: ctx.workspace.commitMode,
       defaultBranch: repo.defaultBranch,
       repositoryUrl,
+      includeEvals: input.includeEvals !== false,
       ...(await buildPromptConnectionContext(
         ctx.workspace.id,
         ctx.userId,
@@ -432,6 +435,7 @@ export async function requestAgentChange(
     commitMode: ctx.workspace.commitMode,
     defaultBranch: repo.defaultBranch,
     repositoryUrl,
+    includeEvals: input.includeEvals !== false,
     ...(await buildPromptConnectionContext(
       ctx.workspace.id,
       ctx.userId,

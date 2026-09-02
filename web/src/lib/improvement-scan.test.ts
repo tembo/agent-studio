@@ -24,6 +24,10 @@ vi.mock("@/lib/workspace", () => ({
     getWorkspaceSecretPlaintext(...a),
 }));
 
+vi.mock("@/lib/agent-evals-pr", () => ({
+  schedulePrEvals: vi.fn().mockResolvedValue(undefined),
+}));
+
 import {
   scanImprovementsForPRs,
   scheduleImprovementScan,

@@ -22,7 +22,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeApiRequest(request, "operator");
   if (!auth.ok) return authErrorResponse(auth);
 
-  let body: { agent?: unknown; name?: unknown; framework?: unknown; description?: unknown };
+  let body: {
+    agent?: unknown;
+    name?: unknown;
+    framework?: unknown;
+    description?: unknown;
+    includeEvals?: unknown;
+  };
   try {
     body = await request.json();
   } catch {
@@ -44,6 +50,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     name: typeof body.name === "string" ? body.name : undefined,
     framework,
     description: body.description,
+    includeEvals: body.includeEvals === false ? false : true,
   });
   if (!result.ok) return apiError(result.status, result.error);
 

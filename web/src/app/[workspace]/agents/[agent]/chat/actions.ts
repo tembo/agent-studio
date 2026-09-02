@@ -41,6 +41,7 @@ export async function chatSubmitAction(args: {
   workspaceSlug: string;
   agentName: string;
   message: string;
+  includeEvals?: boolean;
 }): Promise<ChatSubmitResult> {
   const text = args.message.trim();
   if (!text) {
@@ -103,6 +104,7 @@ export async function chatSubmitAction(args: {
     commitMode: workspace.commitMode,
     defaultBranch: repo.defaultBranch,
     repositoryUrl: `https://github.com/${repo.owner}/${repo.name}`,
+    includeEvals: args.includeEvals !== false,
     ...(await buildPromptConnectionContext(
       workspace.id,
       userId,

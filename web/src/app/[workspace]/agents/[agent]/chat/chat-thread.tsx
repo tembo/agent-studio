@@ -23,6 +23,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
+import { EvalOptIn } from "@/components/eval-opt-in";
 import { LocalTime } from "@/components/local-time";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ export function ChatThread({
   const [intent, setIntent] = useState<ComposerIntent>("test");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [includeEvals, setIncludeEvals] = useState(true);
 
   // Auto-refresh while any run is in flight so the agent's reply
   // shows up without the user reloading. Cleared as soon as
@@ -105,6 +107,7 @@ export function ChatThread({
         workspaceSlug,
         agentName,
         message,
+        includeEvals,
       });
       if (r.ok) {
         setMessage("");
@@ -188,6 +191,13 @@ export function ChatThread({
           }}
           className="bg-surface border-border text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)] resize-y rounded-md border px-3 py-2 text-sm leading-6"
         />
+        {intent === "change" && (
+          <EvalOptIn
+            checked={includeEvals}
+            onCheckedChange={setIncludeEvals}
+            disabled={pending}
+          />
+        )}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="text-foreground-weak text-sm">
             Cmd/Ctrl-Enter uses the selected action.

@@ -11,6 +11,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
+import { EvalOptIn } from "@/components/eval-opt-in";
 import { Section } from "@/components/section";
 import { Button } from "@/components/ui/button";
 import type { CommitMode } from "@/lib/commit-mode-constants";
@@ -41,6 +42,7 @@ export function ImproveForm({
   const [result, setResult] = useState<ImproveResult | null>(null);
   const [pending, startTransition] = useTransition();
   const [revealed, setRevealed] = useState(false);
+  const [includeEvals, setIncludeEvals] = useState(true);
 
   useEffect(() => {
     const t = setTimeout(() => setRevealed(true), REVEAL_DELAY_MS);
@@ -57,6 +59,7 @@ export function ImproveForm({
           workspaceSlug,
           runId,
           improvement,
+          includeEvals,
         });
       } catch {
         // A thrown server action — most commonly "Failed to find Server
@@ -104,6 +107,12 @@ export function ImproveForm({
           rows={5}
           disabled={pending}
           className="bg-surface border-border text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)] rounded-md border px-3 py-2 text-sm leading-6 resize-y"
+        />
+
+        <EvalOptIn
+          checked={includeEvals}
+          onCheckedChange={setIncludeEvals}
+          disabled={pending}
         />
 
         <div className="flex items-center gap-3">

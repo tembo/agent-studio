@@ -31,6 +31,7 @@ export const DOC_SECTIONS: DocSection[] = [
           { slug: "agent-library", label: "Agent library" },
           { slug: "example-agents", label: "Example Agents" },
           { slug: "agent-lifecycle", label: "Agent lifecycle" },
+          { slug: "agent-evals", label: "Agent evals" },
           { slug: "sidecar-python-tools", label: "Sidecar Python tools" },
           { slug: "skills", label: "Skills" },
           { slug: "tools-and-tool-uses", label: "Tools & Tool uses" },
