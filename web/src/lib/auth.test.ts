@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
       options,
     })),
     isInstanceAdmin: vi.fn(),
+    getSignupPolicy: vi.fn(),
     getMcpOAuthWorkspaceSelection: vi.fn(),
     hasPendingInvite: vi.fn(),
     resolvePendingInvitesForUser: vi.fn(),
@@ -70,6 +71,10 @@ vi.mock("@/lib/instance-admins", () => ({
   isInstanceAdmin: mocks.isInstanceAdmin,
 }));
 
+vi.mock("@/lib/instance-settings", () => ({
+  getSignupPolicy: mocks.getSignupPolicy,
+}));
+
 vi.mock("@/lib/mcp-oauth-selection", () => ({
   getMcpOAuthWorkspaceSelection: mocks.getMcpOAuthWorkspaceSelection,
 }));
@@ -100,6 +105,7 @@ type TestUser = {
   id: string;
   email: string;
   name?: string;
+  emailVerified?: boolean;
 };
 
 const ORIGINAL_ENV = process.env;
@@ -140,6 +146,10 @@ beforeEach(() => {
   mocks.resolvePendingInvitesForUser.mockResolvedValue(0);
   mocks.listWorkspacesForUser.mockResolvedValue([]);
   mocks.getMcpOAuthWorkspaceSelection.mockResolvedValue("ws-1");
+  mocks.getSignupPolicy.mockResolvedValue({
+    policy: "invite_only",
+    allowedDomains: [],
+  });
 });
 
 describe("better-auth account creation hooks", () => {
@@ -193,6 +203,60 @@ describe("better-auth account creation hooks", () => {
     expect(mocks.resolvePendingInvitesForUser).toHaveBeenCalledWith(
       "user-invited",
       "invited@example.com",
+    );
+  });
+
+  it("allows a verified email on the domain allowlist to self-join", async () => {
+    mocks.isInstanceAdmin.mockResolvedValue(false);
+    mocks.getSignupPolicy.mockResolvedValue({
+      policy: "domain_allowlist",
+      allowedDomains: ["acme.com"],
+    });
+    const config = await loadAuthConfig();
+    const user = {
+      id: "user-domain",
+      email: "ada@acme.com",
+      name: "Ada",
+      emailVerified: true,
+    };
+
+    await expect(config.databaseHooks.user.create.before(user)).resolves.toEqual(
+      { data: user },
+    );
+  });
+
+  it("rejects an unverified email even when the domain matches", async () => {
+    mocks.isInstanceAdmin.mockResolvedValue(false);
+    mocks.getSignupPolicy.mockResolvedValue({
+      policy: "domain_allowlist",
+      allowedDomains: ["acme.com"],
+    });
+    const config = await loadAuthConfig();
+
+    await expect(
+      config.databaseHooks.user.create.before({
+        id: "user-unverified",
+        email: "ada@acme.com",
+        emailVerified: false,
+      }),
+    ).rejects.toThrow(/allowed email domains/);
+  });
+
+  it("allows anyone with an email when the policy is open", async () => {
+    mocks.isInstanceAdmin.mockResolvedValue(false);
+    mocks.getSignupPolicy.mockResolvedValue({
+      policy: "open",
+      allowedDomains: [],
+    });
+    const config = await loadAuthConfig();
+    const user = {
+      id: "user-open",
+      email: "stranger@example.com",
+      emailVerified: false,
+    };
+
+    await expect(config.databaseHooks.user.create.before(user)).resolves.toEqual(
+      { data: user },
     );
   });
 });

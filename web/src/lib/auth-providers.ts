@@ -84,9 +84,8 @@ export function isAnyAuthConfigured(): boolean {
  * Email + password is the zero-config quickstart: it auto-enables when NO OAuth
  * provider (Google / Microsoft / OIDC) is configured, so a fresh instance is
  * reachable without setting up an OAuth app. Configure any OAuth provider and
- * this turns off — OAuth becomes the path. The closed-instance gate (an
- * `INSTANCE_ADMIN_EMAILS` address or a pending invite) still governs sign-up,
- * so enabling it doesn't open the instance to the public.
+ * this turns off — OAuth becomes the path. The instance sign-up policy
+ * (invite-only by default) still governs who may create an account.
  */
 export function emailPasswordEnabled(): boolean {
   return !isAnyAuthConfigured();

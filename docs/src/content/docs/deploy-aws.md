@@ -94,8 +94,9 @@ sit in plaintext task JSON):
 | `GOOGLE_CLIENT_ID` | OAuth 2.0 client. Redirect URI `https://<domain>/api/auth/callback/google`. |
 | `GOOGLE_CLIENT_SECRET` | from Secrets Manager |
 | `MICROSOFT_*` / `OIDC_*` | Optional alternative providers (Entra ID / any OIDC IdP). Redirect URIs `https://<domain>/api/auth/oauth2/callback/{microsoft,oidc}`. See `.env.example`. |
-| `INSTANCE_ADMIN_EMAILS` | **Required to bootstrap** — comma-separated instance-admin emails. The instance is invite-only; only these admins can sign in to a fresh deployment and create workspaces / invite others. |
+| `INSTANCE_ADMIN_EMAILS` | **Required to bootstrap** — comma-separated instance-admin emails. Sign-up is invite-only by default; only these admins can sign in to a fresh deployment and create workspaces / invite others. |
 | `TAS_INSTANCE_NAME` | optional brand label |
+| `TAS_SIGNUP_POLICY` / `TAS_SIGNUP_ALLOWED_DOMAINS` | Optional. Default invite-only. See [Instance administration](/agent-studio/instance-admin/#sign-up-policy). |
 
 :::note
 Pulling from GHCR needs no credentials (the images are public). To keep images

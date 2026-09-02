@@ -9,10 +9,15 @@ import { genericOAuthConfigs, emailPasswordEnabled } from "@/lib/auth-providers"
 import { writeAuditEvent } from "@/lib/audit-db";
 import { getPublicOrigin } from "@/lib/config";
 import { isInstanceAdmin } from "@/lib/instance-admins";
+import { getSignupPolicy } from "@/lib/instance-settings";
 import {
   hasPendingInvite,
   resolvePendingInvitesForUser,
 } from "@/lib/invitations";
+import {
+  isSignupAllowed,
+  signupRejectionMessage,
+} from "@/lib/signup-policy";
 import { listWorkspacesForUser } from "@/lib/workspace";
 import {
   hasMcpOAuthScope,
@@ -46,8 +51,8 @@ export const auth = betterAuth({
   baseURL: publicOrigin,
   disabledPaths: ["/token"],
   // Zero-config quickstart: email + password auto-enables when no OAuth provider
-  // is configured (see emailPasswordEnabled). The closed-instance gate below
-  // still governs who may sign up. No email verification — keep first-run
+  // is configured (see emailPasswordEnabled). The sign-up policy below still
+  // governs who may create an account. No email verification — keep first-run
   // SMTP-free; configure an OAuth provider for production.
   emailAndPassword: emailPasswordEnabled()
     ? {
@@ -117,21 +122,36 @@ export const auth = betterAuth({
       ? [genericOAuth({ config: oauthConfigs })]
       : []),
   ],
-  // Closed-instance gate. A new account may only be created for an
-  // instance admin or an invited email — everyone else is rejected at
-  // sign-up, so an uninvited person can't get into the instance at all.
-  // Existing users (already have an account) are unaffected.
+  // Sign-up gate. Policy (invite-only / domain allowlist / open) lives in
+  // instance_settings with an env fallback; default is invite-only so
+  // existing instances stay closed. Instance admins and pending invites
+  // always pass. Existing users (already have an account) are unaffected.
   databaseHooks: {
     user: {
       create: {
         before: async (user) => {
-          const allowed =
-            (await isInstanceAdmin(user.email)) ||
-            (await hasPendingInvite(user.email));
+          // Bootstrap path: don't depend on instance_settings being
+          // readable yet — an env-listed admin must always get in.
+          if (await isInstanceAdmin(user.email)) {
+            return { data: user };
+          }
+          const [{ policy, allowedDomains }, hasInvite] = await Promise.all([
+            getSignupPolicy(),
+            hasPendingInvite(user.email),
+          ]);
+          const allowed = isSignupAllowed({
+            policy,
+            allowedDomains,
+            email: user.email,
+            emailVerified: Boolean(
+              (user as { emailVerified?: boolean }).emailVerified,
+            ),
+            isAdmin: false,
+            hasInvite,
+          });
           if (!allowed) {
             throw new APIError("FORBIDDEN", {
-              message:
-                "This instance is invite-only. Ask an admin to invite your email.",
+              message: signupRejectionMessage(policy),
             });
           }
           return { data: user };
@@ -157,8 +177,8 @@ export const auth = betterAuth({
     //
     // Not covered here: logout (better-auth exposes no session-delete database
     // hook in this version) and rejected sign-ups (the `user.create.before`
-    // gate above throws for uninvited emails, but a rejected user has no
-    // workspace to attribute the event to).
+    // gate above throws, but a rejected user has no workspace to attribute
+    // the event to).
     session: {
       create: {
         after: async (session) => {

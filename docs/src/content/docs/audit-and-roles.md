@@ -35,12 +35,14 @@ Above workspace roles, **instance admins** are bootstrapped from
 `INSTANCE_ADMIN_EMAILS` at deploy time; existing instance admins can add more
 in-app under top-level **Settings**. An instance admin can:
 
-- Set the instance name and branding (top-level **Settings**)
+- Set the instance name, branding, and **sign-up policy** (top-level **Settings**)
 - Add and remove other instance admins (top-level **Settings**)
 - **Create workspaces** (only instance admins see "Create workspace")
 - Access any workspace they're a member of with their assigned workspace role
 
-Everyone else joins via workspace invitation. On a fresh instance, the first
-person to sign in with an email listed in `INSTANCE_ADMIN_EMAILS` becomes an
-instance admin and can create the first workspace. See
-[Setup checklist](/agent-studio/customer-setup/) for the bootstrap checklist.
+Everyone else joins a workspace via invitation. On a fresh instance, sign-up is
+invite-only: the first person to sign in with an email listed in
+`INSTANCE_ADMIN_EMAILS` becomes an instance admin and can create the first
+workspace. The sign-up policy can later be opened to a domain allowlist or to
+anyone — see [Instance administration](/agent-studio/instance-admin/#sign-up-policy).
+See [Setup checklist](/agent-studio/customer-setup/) for the bootstrap checklist.

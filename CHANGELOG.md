@@ -16,6 +16,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Configurable sign-up policy.** Instance admins can set who may create an
+  account — invite-only (the previous hardwired default), an email-domain
+  allowlist (verified emails only), or open — from Instance settings, with
+  `TAS_SIGNUP_POLICY` / `TAS_SIGNUP_ALLOWED_DOMAINS` env fallback. Existing
+  instances stay invite-only until changed. Workspace membership is still by
+  invitation.
 - **Scheduled agent-guidance refresh.** Workspace admins can keep TAS-managed
   `AGENTS.md` and per-framework authoring guides current automatically on a
   daily or weekly cadence from Repository settings; automatic checks are off by
