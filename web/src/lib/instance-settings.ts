@@ -124,11 +124,12 @@ export function getSignupPolicyFromEnv(): SignupPolicyConfig {
   };
 }
 
-/** Raw stored policy (null if unset) — for the settings form. */
+/** Raw stored policy. `null` policy means unset (use env). The whole
+ *  result is `null` when the table/columns can't be read. */
 export async function getStoredSignupPolicy(): Promise<{
   policy: SignupPolicy | null;
   allowedDomains: string[];
-}> {
+} | null> {
   try {
     const { rows } = await db.query<{
       signup_policy: string | null;
@@ -143,15 +144,19 @@ export async function getStoredSignupPolicy(): Promise<{
       allowedDomains: parseAllowedDomains(row?.signup_allowed_domains),
     };
   } catch {
-    return { policy: null, allowedDomains: [] };
+    return null;
   }
 }
 
 /** Resolved policy: DB value if an admin has set one, else env, else
- *  invite-only. Fail closed (invite-only) on a missing table / no DB so a
- *  pre-migration window never opens the instance. */
+ *  invite-only. A missing table / query failure fails closed (invite-only)
+ *  and does not consult env, so a pre-migration window never opens the
+ *  instance even if `TAS_SIGNUP_POLICY=open`. */
 export async function getSignupPolicy(): Promise<SignupPolicyConfig> {
   const stored = await getStoredSignupPolicy();
+  if (!stored) {
+    return { policy: "invite_only", allowedDomains: [] };
+  }
   if (stored.policy) {
     return {
       policy: stored.policy,

@@ -163,4 +163,11 @@ describe("signupRejectionMessage", () => {
     expect(msg).toMatch(/allowed email domains/i);
     expect(msg).not.toMatch(/invite-only/i);
   });
+
+  it("open-policy reject is about a missing email, not a closed instance", () => {
+    const msg = signupRejectionMessage("open");
+    expect(msg).toMatch(/email/i);
+    expect(msg).not.toMatch(/invite-only/i);
+    expect(msg).not.toMatch(/can't create an account/i);
+  });
 });

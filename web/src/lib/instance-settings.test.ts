@@ -90,8 +90,10 @@ describe("getStoredSignupPolicy / getSignupPolicy", () => {
     });
   });
 
-  it("fails closed to invite-only when the table is missing", async () => {
+  it("fails closed to invite-only when the table is missing, even if env is open", async () => {
+    process.env.TAS_SIGNUP_POLICY = "open";
     mockQuery.mockRejectedValue(new Error("relation does not exist"));
+    expect(await getStoredSignupPolicy()).toBeNull();
     expect(await getSignupPolicy()).toEqual({
       policy: "invite_only",
       allowedDomains: [],

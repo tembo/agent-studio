@@ -81,7 +81,7 @@ export function signupRejectionMessage(policy: SignupPolicy): string {
     case "domain_allowlist":
       return "This instance only allows accounts from allowed email domains. Use a verified work email, or ask an admin to invite you.";
     case "open":
-      return "You can't create an account on this instance.";
+      return "Sign-in didn't provide an email address. Use a provider that shares your email, or ask an admin to invite you.";
     case "invite_only":
       return "This instance is invite-only. Ask an admin to invite your email.";
   }
