@@ -98,6 +98,7 @@ type AuthConfig = {
     };
   };
   emailAndPassword: { enabled: boolean };
+  socialProviders?: Record<string, unknown>;
   plugins?: unknown[];
 };
 
@@ -272,11 +273,12 @@ describe("better-auth provider wiring", () => {
     const config = await loadAuthConfig();
 
     expect(config.emailAndPassword).toEqual({ enabled: false });
+    expect(config.socialProviders?.microsoft).toMatchObject({
+      clientId: "microsoft-id",
+      clientSecret: "microsoft-secret",
+    });
     expect(mocks.genericOAuth).toHaveBeenCalledWith({
-      config: expect.arrayContaining([
-        expect.objectContaining({ providerId: "microsoft" }),
-        expect.objectContaining({ providerId: "oidc" }),
-      ]),
+      config: [expect.objectContaining({ providerId: "oidc" })],
     });
     expect(config.plugins).toHaveLength(3);
   });

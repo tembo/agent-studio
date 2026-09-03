@@ -1,12 +1,16 @@
 import "server-only";
 
+import type {
+  MicrosoftEntraIDProfile,
+  MicrosoftOptions,
+} from "better-auth/social-providers";
+
 import { getPublicOrigin } from "@/lib/config";
 
 // Configured sign-in providers, derived from env (each provider is
 // enabled by the presence of its credentials, like Google has always
-// been). Google is a built-in better-auth social provider; Microsoft
-// (Entra ID) and a generic OIDC provider both go through the
-// genericOAuth plugin (Microsoft = a known Entra discovery URL).
+// been). Google and Microsoft are built-in better-auth social providers;
+// generic OIDC goes through the genericOAuth plugin.
 //
 // Pure env reads, server-only. The login page calls
 // getConfiguredAuthProviders() and passes the plain list to the client
@@ -40,12 +44,6 @@ function oidcConfigured(): boolean {
       process.env.OIDC_CLIENT_SECRET &&
       process.env.OIDC_DISCOVERY_URL,
   );
-}
-
-/** Entra ID OIDC discovery URL for the configured tenant. */
-export function microsoftDiscoveryUrl(): string {
-  const tenant = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
-  return `https://login.microsoftonline.com/${tenant}/v2.0/.well-known/openid-configuration`;
 }
 
 export function getConfiguredAuthProviders(): AuthProvider[] {
@@ -92,11 +90,15 @@ export function emailPasswordEnabled(): boolean {
 }
 
 type OAuthUserInfo = {
-  id: string;
   email: string;
   emailVerified: boolean;
   name?: string;
   image?: string;
+};
+
+type MicrosoftUserInfo = {
+  user: OAuthUserInfo;
+  data: MicrosoftEntraIDProfile;
 };
 
 export type GenericOAuthProviderConfig = {
@@ -107,9 +109,6 @@ export type GenericOAuthProviderConfig = {
   clientSecret: string;
   scopes: string[];
   redirectURI: string;
-  getUserInfo?: (tokens: {
-    idToken?: string;
-  }) => Promise<OAuthUserInfo | null>;
 };
 
 /**
@@ -120,12 +119,12 @@ export type GenericOAuthProviderConfig = {
  * through to the userinfo endpoint, which doesn't carry those fields
  * either — so sign-in dies with `email_is_missing`. Decode the id_token
  * ourselves and synthesize the email from the first claim that actually
- * looks like one. The token was just exchanged over TLS using our client
- * secret, so reading the (unverified) payload here is safe.
+ * looks like one. Better Auth's Microsoft provider verifies the token before
+ * this mapper runs.
  */
 async function microsoftGetUserInfo(tokens: {
   idToken?: string;
-}): Promise<OAuthUserInfo | null> {
+}): Promise<MicrosoftUserInfo | null> {
   const idToken = tokens.idToken;
   if (!idToken) return null;
   const payload = idToken.split(".")[1];
@@ -150,36 +149,44 @@ async function microsoftGetUserInfo(tokens: {
       claims.preferred_username) ||
     email;
   return {
-    id: sub,
-    email,
-    // Entra authenticated the user against the org directory; treat the
-    // address as verified so gating / account-linking behave normally.
-    emailVerified: true,
-    name,
-    image: typeof claims.picture === "string" ? claims.picture : undefined,
+    user: {
+      email,
+      // Entra authenticated the user against the org directory; treat the
+      // address as verified so gating / account-linking behave normally.
+      emailVerified: true,
+      name,
+      image: typeof claims.picture === "string" ? claims.picture : undefined,
+    },
+    // Better Auth 1.7's built-in provider verifies the original claims before
+    // this hook. Preserve TAS's pre-1.7 account key so existing users still
+    // match their account rows after switching provider implementations.
+    data: {
+      ...claims,
+      oid: sub,
+      iss: "local:oauth:microsoft",
+    } as MicrosoftEntraIDProfile,
   };
 }
 
-/** genericOAuth plugin config entries (Microsoft + generic OIDC). */
+export function microsoftProviderConfig(): MicrosoftOptions | undefined {
+  if (!microsoftConfigured()) return undefined;
+  return {
+    clientId: process.env.MICROSOFT_CLIENT_ID!,
+    clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
+    tenantId: process.env.MICROSOFT_TENANT_ID?.trim() || "common",
+    disableDefaultScope: true,
+    scope: ["openid", "profile", "email"],
+    redirectURI: authProviderRedirectUri(
+      { id: "microsoft", kind: "oauth2" },
+      getPublicOrigin(),
+    ),
+    getUserInfo: microsoftGetUserInfo,
+  };
+}
+
+/** genericOAuth plugin config entries (generic OIDC only). */
 export function genericOAuthConfigs(): GenericOAuthProviderConfig[] {
   const configs: GenericOAuthProviderConfig[] = [];
-  if (microsoftConfigured()) {
-    configs.push({
-      providerId: "microsoft",
-      // Keep account identity provider-scoped, as it was in Better Auth 1.6.
-      // Discovery still verifies the token's real issuer independently.
-      accountIssuer: "local:oauth:microsoft",
-      discoveryUrl: microsoftDiscoveryUrl(),
-      clientId: process.env.MICROSOFT_CLIENT_ID!,
-      clientSecret: process.env.MICROSOFT_CLIENT_SECRET!,
-      scopes: ["openid", "profile", "email"],
-      redirectURI: authProviderRedirectUri(
-        { id: "microsoft", kind: "oauth2" },
-        getPublicOrigin(),
-      ),
-      getUserInfo: microsoftGetUserInfo,
-    });
-  }
   if (oidcConfigured()) {
     configs.push({
       providerId: "oidc",

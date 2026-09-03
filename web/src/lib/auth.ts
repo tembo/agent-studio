@@ -5,7 +5,11 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { Pool } from "pg";
 
 import { resolveAuthSecret } from "@/lib/auth-secret";
-import { genericOAuthConfigs, emailPasswordEnabled } from "@/lib/auth-providers";
+import {
+  emailPasswordEnabled,
+  genericOAuthConfigs,
+  microsoftProviderConfig,
+} from "@/lib/auth-providers";
 import { writeAuditEvent } from "@/lib/audit-db";
 import { getPublicOrigin } from "@/lib/config";
 import { isInstanceAdmin } from "@/lib/instance-admins";
@@ -40,9 +44,9 @@ const publicOrigin = getPublicOrigin();
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const microsoftConfig = microsoftProviderConfig();
 
-// Microsoft (Entra ID) + generic OIDC both run through the genericOAuth
-// plugin; Google stays a built-in social provider below.
+// Generic OIDC uses the plugin; Google and Microsoft use built-in providers.
 const oauthConfigs = genericOAuthConfigs();
 
 export const auth = betterAuth({
@@ -65,12 +69,17 @@ export const auth = betterAuth({
       }
     : { enabled: false },
   socialProviders:
-    googleClientId && googleClientSecret
+    (googleClientId && googleClientSecret) || microsoftConfig
       ? {
-          google: {
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-          },
+          ...(microsoftConfig ? { microsoft: microsoftConfig } : {}),
+          ...(googleClientId && googleClientSecret
+            ? {
+                google: {
+                  clientId: googleClientId,
+                  clientSecret: googleClientSecret,
+                },
+              }
+            : {}),
         }
       : undefined,
   plugins: [

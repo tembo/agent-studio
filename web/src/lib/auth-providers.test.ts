@@ -5,7 +5,7 @@ import {
   emailPasswordEnabled,
   genericOAuthConfigs,
   getConfiguredAuthProviders,
-  microsoftDiscoveryUrl,
+  microsoftProviderConfig,
 } from "./auth-providers";
 
 const ORIGINAL_ENV = process.env;
@@ -87,7 +87,7 @@ describe("auth provider configuration", () => {
     ).toBe("https://tas.example.com/api/auth/oauth2/callback/oidc");
   });
 
-  it("configures Microsoft and generic OIDC through genericOAuth", () => {
+  it("configures Microsoft through its built-in provider and OIDC generically", () => {
     clearProviderEnv();
     setEnv({
       MICROSOFT_CLIENT_ID: "microsoft-id",
@@ -100,21 +100,15 @@ describe("auth provider configuration", () => {
       BETTER_AUTH_URL: "https://tas.example.com",
     });
 
-    expect(microsoftDiscoveryUrl()).toBe(
-      "https://login.microsoftonline.com/tenant-123/v2.0/.well-known/openid-configuration",
-    );
+    expect(microsoftProviderConfig()).toMatchObject({
+      clientId: "microsoft-id",
+      clientSecret: "microsoft-secret",
+      tenantId: "tenant-123",
+      disableDefaultScope: true,
+      scope: ["openid", "profile", "email"],
+      redirectURI: "https://tas.example.com/api/auth/oauth2/callback/microsoft",
+    });
     expect(genericOAuthConfigs()).toMatchObject([
-      {
-        providerId: "microsoft",
-        accountIssuer: "local:oauth:microsoft",
-        discoveryUrl:
-          "https://login.microsoftonline.com/tenant-123/v2.0/.well-known/openid-configuration",
-        clientId: "microsoft-id",
-        clientSecret: "microsoft-secret",
-        scopes: ["openid", "profile", "email"],
-        redirectURI:
-          "https://tas.example.com/api/auth/oauth2/callback/microsoft",
-      },
       {
         providerId: "oidc",
         accountIssuer: "local:oauth:oidc",
@@ -133,9 +127,8 @@ describe("auth provider configuration", () => {
       MICROSOFT_CLIENT_ID: "microsoft-id",
       MICROSOFT_CLIENT_SECRET: "microsoft-secret",
     });
-    const microsoft = genericOAuthConfigs().find(
-      (config) => config.providerId === "microsoft",
-    );
+    const microsoft = microsoftProviderConfig();
+    expect(microsoft).toMatchObject({ tenantId: "common" });
 
     await expect(
       microsoft?.getUserInfo?.({
@@ -145,12 +138,17 @@ describe("auth provider configuration", () => {
           name: "Invited User",
         }),
       }),
-    ).resolves.toEqual({
-      id: "entra-user-1",
-      email: "invited@example.com",
-      emailVerified: true,
-      name: "Invited User",
-      image: undefined,
+    ).resolves.toMatchObject({
+      user: {
+        email: "invited@example.com",
+        emailVerified: true,
+        name: "Invited User",
+        image: undefined,
+      },
+      data: {
+        oid: "entra-user-1",
+        iss: "local:oauth:microsoft",
+      },
     });
   });
 });

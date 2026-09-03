@@ -43,6 +43,9 @@ function describeAuthError(raw: string, policy: SignupPolicy): string {
   if (code.includes("oauth_code_verification_failed")) {
     return "Couldn't complete sign-in with your provider (token exchange failed). Check the provider's client secret and that the redirect URI matches this site.";
   }
+  if (code.includes("unable_to_get_user_info")) {
+    return `Couldn't verify your user profile with the sign-in provider (${raw}). Ask the instance administrator to check the provider configuration.`;
+  }
   if (
     code.includes("invite") ||
     code.includes("unable_to_create_user") ||
