@@ -19,6 +19,17 @@ they are no longer release versions. Phase scope now lives in
 
 ## Unreleased
 
+## v2026.9.2 — Microsoft multi-tenant sign-in fix
+
+### Fixed
+
+- **Microsoft sign-in on multi-tenant Entra configurations.** Better Auth 1.7's
+  generic OIDC verification rejected valid tokens from `common`,
+  `organizations`, and `consumers` tenants because Microsoft's discovery issuer
+  contains a tenant placeholder. Microsoft sign-in now uses the provider's
+  multi-tenant-aware verification while preserving existing account links and
+  the documented callback URI.
+
 ## v2026.9.1 — Agent evals, outputs library, and operator controls
 
 ### Added

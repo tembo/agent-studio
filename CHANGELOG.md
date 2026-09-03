@@ -14,6 +14,8 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+## [v2026.9.2] — Microsoft multi-tenant sign-in fix — shipped 2026-09-03
+
 ### Fixed
 
 - **Microsoft sign-in on multi-tenant Entra configurations.** Better Auth 1.7's
