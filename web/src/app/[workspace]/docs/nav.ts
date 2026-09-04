@@ -60,6 +60,7 @@ export const DOC_SECTIONS: DocSection[] = [
           { slug: "settings", label: "Settings" },
           { slug: "audit-and-roles", label: "Audit & roles" },
           { slug: "slack-apps", label: "Slack apps" },
+          { slug: "text-messages", label: "Text messages" },
         ],
       },
       {

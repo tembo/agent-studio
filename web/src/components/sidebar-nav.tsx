@@ -21,6 +21,7 @@ import {
   IconHammer,
   IconHistory,
   IconInboxChecked,
+  IconPhone,
   IconSettingsSliderHor,
   IconShield,
   IconSlack,
@@ -113,6 +114,11 @@ export function SidebarNav({
           href: `${home}/slack-apps`,
           label: "Slack apps",
           icon: <IconSlack />,
+        },
+        {
+          href: `${home}/text-messages`,
+          label: "Text messages",
+          icon: <IconPhone />,
         },
         {
           href: `${home}/improvements`,

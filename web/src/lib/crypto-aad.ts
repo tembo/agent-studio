@@ -4,7 +4,7 @@ import "server-only";
 // encryptSecret/decryptSecret; the same string must be used on both the
 // encrypt and decrypt of a given row. For rows the Rust runtime also touches
 // (workspace secrets, native connection credentials, native OAuth client
-// secrets, Slack bot tokens), api/src/crypto.rs builds BYTE-IDENTICAL strings —
+// secrets, Slack bot tokens, Twilio auth tokens), api/src/crypto.rs builds BYTE-IDENTICAL strings —
 // keep the two in lockstep or those rows stop decrypting cross-language.
 //
 // Fields are joined with a unit separator (0x1f) so a value that happens to
@@ -59,6 +59,11 @@ export function aadNativeOauthClient(
 /** A secret column on a `workspace_slack_app` row, keyed by (id, column). */
 export function aadSlackSecret(slackAppId: string, column: string): string {
   return `slack_app${SEP}${slackAppId}${SEP}${column}`;
+}
+
+/** Twilio auth token on a `workspace_sms_channel` row, keyed by channel id. */
+export function aadSmsSecret(smsChannelId: string): string {
+  return `sms_channel${SEP}${smsChannelId}${SEP}auth_token`;
 }
 
 /** `workspace_webhook` token, keyed by (workspace_id, id). */
