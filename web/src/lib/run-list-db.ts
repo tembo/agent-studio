@@ -36,6 +36,9 @@ export type RunListItem = {
     permalink: string | null;
     channel: string;
   } | null;
+  sms?: {
+    phoneNumber: string;
+  } | null;
   agentVersionLabel: string | null;
   runEnvironment: RunEnvironment;
   isDryRun: boolean;
@@ -132,6 +135,7 @@ export async function listRunsForWorkspace(
     slack_user_id: string | null;
     slack_permalink: string | null;
     slack_channel: string | null;
+    sms_phone_number: string | null;
     agent_version_label: string | null;
     run_environment: RunEnvironment;
     is_dry_run: boolean;
@@ -142,11 +146,14 @@ export async function listRunsForWorkspace(
             r.run_environment, r.is_dry_run,
             u.name AS created_by_name, u.email AS created_by_email,
             sa.name AS slack_app_name, sd.slack_user_id,
-            sd.permalink AS slack_permalink, sd.channel AS slack_channel
+            sd.permalink AS slack_permalink, sd.channel AS slack_channel,
+            sc.phone_number AS sms_phone_number
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
        LEFT JOIN slack_delivery sd ON sd.run_id = r.id
        LEFT JOIN workspace_slack_app sa ON sa.id = sd.slack_app_id
+       LEFT JOIN sms_delivery smsd ON smsd.run_id = r.id
+       LEFT JOIN workspace_sms_channel sc ON sc.id = smsd.sms_channel_id
       WHERE ${where.join(" AND ")}
       ORDER BY r.created_at DESC
       LIMIT $${params.length}`,
@@ -177,6 +184,9 @@ export async function listRunsForWorkspace(
           permalink: row.slack_permalink,
           channel: row.slack_channel,
         }
+      : null,
+    sms: row.sms_phone_number
+      ? { phoneNumber: row.sms_phone_number }
       : null,
     agentVersionLabel: row.agent_version_label,
     runEnvironment: row.run_environment,

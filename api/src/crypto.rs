@@ -62,6 +62,10 @@ pub mod aad {
     pub fn slack_secret(slack_app_id: uuid::Uuid, column: &str) -> String {
         format!("slack_app{SEP}{slack_app_id}{SEP}{column}")
     }
+
+    pub fn sms_secret(sms_channel_id: uuid::Uuid) -> String {
+        format!("sms_channel{SEP}{sms_channel_id}{SEP}auth_token")
+    }
 }
 
 pub struct MasterKey(Key<Aes256Gcm>);

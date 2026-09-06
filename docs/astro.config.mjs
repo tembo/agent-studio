@@ -66,6 +66,7 @@ export default defineConfig({
             { label: "Skills", slug: "skills" },
             { label: "Tools & Tool uses", slug: "tools-and-tool-uses" },
             { label: "Slack apps", slug: "slack-apps" },
+            { label: "Text messages", slug: "text-messages" },
           ],
         },
         {

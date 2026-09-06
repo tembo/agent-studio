@@ -10,6 +10,7 @@ import {
   type SlackApp,
 } from "@/lib/slack-apps";
 import { resolveAgentForDispatch } from "@/lib/workspace-agents";
+import { parseAgentMessage } from "@/lib/message-router";
 import { listWorkspaceMembers } from "@/lib/workspace";
 
 // Per-user guard against runaway loops (a misbehaving integration, or a
@@ -20,18 +21,6 @@ const RATE_LIMIT_PER_MIN = 20;
 // The explicit-routing dispatcher: turn a Slack message into a TAS run.
 // "Explicit" = the agent is named (slash `/tas <agent> <input>`, or the
 // picker modal's submission). Natural-language routing is Step 5.
-
-/** Split "<agent> <input…>" — first whitespace-delimited token is the agent. */
-export function parseCommand(text: string): {
-  agentName: string;
-  input: string;
-} {
-  const trimmed = text.trim();
-  if (!trimmed) return { agentName: "", input: "" };
-  const m = trimmed.match(/^(\S+)\s*([\s\S]*)$/);
-  if (!m) return { agentName: "", input: "" };
-  return { agentName: m[1], input: m[2].trim() };
-}
 
 // The callback_id the interactivity route matches to dispatch a picker
 // submission. private_metadata carries the originating channel/thread so
@@ -224,7 +213,7 @@ export async function dispatchToAgent(args: {
   threadTs: string | null;
 }): Promise<DispatchResult> {
   const { app, botToken, slackUserId, text, channel, threadTs } = args;
-  const { agentName, input } = parseCommand(text);
+  const { agentName, input } = parseAgentMessage(text);
   if (!agentName) {
     return { ok: false, reason: "no-agent", message: "No agent named." };
   }

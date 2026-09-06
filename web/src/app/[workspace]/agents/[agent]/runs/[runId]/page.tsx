@@ -26,6 +26,7 @@ import {
   listToolCallsForRun,
 } from "@/lib/runs-db";
 import { getServerSession } from "@/lib/session";
+import { getSmsDeliveryForRun } from "@/lib/sms-channel";
 import { isTemboConfiguredForUser } from "@/lib/tembo-credentials";
 import { getWorkspaceBySlug, getWorkspaceRole } from "@/lib/workspace";
 
@@ -78,6 +79,7 @@ export default async function RunDetailPage({
     subAgentRuns,
     subAgentToolNames,
     runIdentity,
+    smsDelivery,
   ] =
     await Promise.all([
       listToolCallsForRun(workspace.id, run.id),
@@ -86,6 +88,7 @@ export default async function RunDetailPage({
       listSubAgentRuns(workspace.id, run.id),
       listSubAgentRunToolNames(workspace.id, run.id),
       getRunExecutionIdentity(workspace.id, run.id),
+      getSmsDeliveryForRun(workspace.id, run.id),
     ]);
 
   // tool_name → provider (slug for the logo + label for the tooltip). First
@@ -264,6 +267,8 @@ export default async function RunDetailPage({
                 </>
               ) : run.trigger === "schedule" ? (
                 "Scheduled (automation deleted)"
+              ) : smsDelivery ? (
+                `Text message via ${smsDelivery.senderNumber}`
               ) : run.trigger === "event" ? (
                 "Event (Composio webhook)"
               ) : run.trigger === "eval" ? (
@@ -286,6 +291,30 @@ export default async function RunDetailPage({
               )}
             </dd>
           </div>
+          {smsDelivery && (
+            <div className="flex gap-3">
+              <dt className="text-foreground-weak w-24 shrink-0 font-medium">
+                Text reply
+              </dt>
+              <dd
+                className={
+                  smsDelivery.deliveryError
+                    ? "text-sentiment-negative"
+                    : "text-foreground"
+                }
+              >
+                {smsDelivery.deliveryError ? (
+                  `Failed — ${smsDelivery.deliveryError}`
+                ) : smsDelivery.deliveredAt ? (
+                  <>
+                    Sent <LocalTime iso={smsDelivery.deliveredAt.toISOString()} />
+                  </>
+                ) : (
+                  "Pending"
+                )}
+              </dd>
+            </div>
+          )}
           <div className="flex gap-3">
             <dt className="text-foreground-weak w-24 shrink-0 font-medium">
               Run as

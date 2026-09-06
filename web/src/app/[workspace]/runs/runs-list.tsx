@@ -480,11 +480,12 @@ export function RunsList({
 }
 
 // Source = how the run was instigated + who it acted as, plus a deep link
-// back to the Slack conversation when one started it. Slack runs are
-// trigger=event *with* a slack_delivery row; other events are webhooks.
+// back to the Slack conversation when one started it. Channel delivery rows
+// distinguish Slack/SMS from other event-triggered runs.
 function SourceCell({ run }: { run: LoadedRun }) {
   const who = runIdentityLabel(run.createdByName, run.createdByEmail);
   const slack = run.slack;
+  const sms = run.sms;
   return (
     <div className="flex flex-col gap-0.5">
       <span className="flex items-center gap-1.5">
@@ -492,6 +493,13 @@ function SourceCell({ run }: { run: LoadedRun }) {
           <Badge variant="green" size="small">
             Slack
           </Badge>
+        ) : sms ? (
+          <>
+            <Badge variant="blue" size="small">
+              Text
+            </Badge>
+            <span className="text-foreground-muted text-sm">{sms.phoneNumber}</span>
+          </>
         ) : run.trigger === "schedule" ? (
           <Badge variant="blue" size="small">
             Scheduled

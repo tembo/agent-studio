@@ -1,6 +1,6 @@
 import "server-only";
 
-// Natural-language routing for Slack messages that don't name an agent
+// Natural-language routing for channel messages that don't name an agent
 // explicitly. A cheap Haiku classifier maps a free-text message to one of
 // the app's scoped agents (or none) and extracts the task to run. No tools,
 // low max_tokens — this is a router, not the agent itself. Falls back
@@ -20,18 +20,42 @@ function buildSystemPrompt(agents: RouterAgent[]): string {
     .map((a) => `- ${a.name}${a.description ? `: ${a.description}` : ""}`)
     .join("\n");
   return [
-    "You route a user's Slack message to exactly one agent from a fixed list, or to none.",
+    "You route a user's message to exactly one agent from a fixed list, or to none.",
     "",
     "Agents:",
     list,
     "",
     "Rules:",
     "- Pick the single best-matching agent by what the user wants done.",
+    "- If multiple agents fit and there is no clearly best match, use null.",
     '- If no agent clearly fits (e.g. a greeting, small talk, or an unrelated request), use null.',
     "- `input` is the task to hand the agent: the user's message, lightly cleaned, with any agent-naming removed. Keep their intent and details verbatim.",
     '- Respond with ONLY a JSON object, no prose: {"agent": "<name>"|null, "input": "<task>"}.',
     "- `agent` must be exactly one of the names above, or null.",
   ].join("\n");
+}
+
+/** Split "<agent> <input…>" using the first whitespace-delimited token. */
+export function parseAgentMessage(text: string): {
+  agentName: string;
+  input: string;
+} {
+  const trimmed = text.trim();
+  if (!trimmed) return { agentName: "", input: "" };
+  const match = trimmed.match(/^(\S+)\s*([\s\S]*)$/);
+  if (!match) return { agentName: "", input: "" };
+  return { agentName: match[1], input: match[2].trim() };
+}
+
+export function matchExplicitAgent(
+  agents: RouterAgent[],
+  message: string,
+): { agentName: string; input: string } | null {
+  const parsed = parseAgentMessage(message);
+  const agent = agents.find(
+    (candidate) => candidate.name.toLowerCase() === parsed.agentName.toLowerCase(),
+  );
+  return agent ? { agentName: agent.name, input: parsed.input } : null;
 }
 
 /** Extract the first JSON object from a model response (may be prose-wrapped). */

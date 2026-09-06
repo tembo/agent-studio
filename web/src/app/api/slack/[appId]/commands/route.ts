@@ -4,8 +4,8 @@ import { openView, postResponseUrl } from "@/lib/slack-api";
 import {
   buildPickerView,
   dispatchToAgent,
-  parseCommand,
 } from "@/lib/slack-dispatch";
+import { parseAgentMessage } from "@/lib/message-router";
 import { authenticateSlackRequest } from "@/lib/slack-inbound";
 import { listAgentsForSlackApp } from "@/lib/slack-apps";
 
@@ -45,7 +45,7 @@ export async function POST(
   const triggerId = form.get("trigger_id") ?? "";
   const responseUrl = form.get("response_url") ?? "";
 
-  const { agentName } = parseCommand(text);
+  const { agentName } = parseAgentMessage(text);
 
   // No agent named → open the picker (the trigger_id expires in ~3s, so
   // this must happen inside the request, not deferred).

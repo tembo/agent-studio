@@ -427,16 +427,21 @@ async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &Cancellat
             {
                 tracing::error!(run_id = %ctx.run_id, ?e, "mark_succeeded failed");
             }
-            let body = if outcome.output.trim().is_empty() {
+            let reply = crate::slack_mrkdwn::strip_user_echo(&outcome.output);
+            let slack_body = if reply.trim().is_empty() {
                 ":white_check_mark: Done (no output).".to_string()
             } else {
                 // Drop the "user> …" echo (they typed it in Slack already),
                 // then convert Markdown → Slack mrkdwn.
-                crate::slack_mrkdwn::to_mrkdwn(crate::slack_mrkdwn::strip_user_echo(
-                    &outcome.output,
-                ))
+                crate::slack_mrkdwn::to_mrkdwn(reply)
             };
-            deliver_slack_result(state, ctx.run_id, &body).await;
+            let sms_body = if reply.trim().is_empty() {
+                "Done (no output)."
+            } else {
+                reply
+            };
+            deliver_slack_result(state, ctx.run_id, &slack_body).await;
+            deliver_sms_result(state, ctx.run_id, sms_body).await;
         }
         Err(e) => {
             // A user-cancelled run already had its row written to 'cancelled' by
@@ -453,15 +458,9 @@ async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &Cancellat
             if let Err(db_err) = mark_failed(state, ctx.run_id, &failure).await {
                 tracing::error!(run_id = %ctx.run_id, ?db_err, "mark_failed failed");
             }
-            deliver_slack_result(
-                state,
-                ctx.run_id,
-                &format!(
-                    ":warning: Run failed: {} {}",
-                    failure.summary, failure.recommendation
-                ),
-            )
-            .await;
+            let message = format!("Run failed: {} {}", failure.summary, failure.recommendation);
+            deliver_slack_result(state, ctx.run_id, &format!(":warning: {message}")).await;
+            deliver_sms_result(state, ctx.run_id, &message).await;
         }
     }
 }
@@ -1001,7 +1000,15 @@ async fn mark_succeeded(
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_emit_reply, RunFailure};
+    use super::{extract_emit_reply, truncate_sms_body, RunFailure, SMS_TEXT_LIMIT};
+
+    #[test]
+    fn sms_body_truncates_on_character_boundaries() {
+        let body = "🛰".repeat(SMS_TEXT_LIMIT + 1);
+        let truncated = truncate_sms_body(&body);
+        assert!(truncated.ends_with("\n…(truncated)"));
+        assert_eq!(truncated.matches('🛰').count(), SMS_TEXT_LIMIT);
+    }
 
     #[test]
     fn extracts_reply_lines_drops_progress_lines() {
@@ -1270,5 +1277,135 @@ async fn deliver_slack_result(state: &AppState, run_id: Uuid, body: &str) {
         .await
     {
         tracing::warn!(run_id = %run_id, ?e, "slack delivery mark failed");
+    }
+}
+
+// Twilio accepts at most 1,600 characters in one outbound Messages request.
+// Leave room for a truncation marker and avoid accidental multi-message bills
+// from very large agent output.
+const SMS_TEXT_LIMIT: usize = 1500;
+
+#[derive(sqlx::FromRow)]
+struct SmsDeliveryRow {
+    recipient_number: String,
+    sender_number: String,
+    account_sid: String,
+    auth_token: Vec<u8>,
+    sms_channel_id: Uuid,
+}
+
+/// Send a Twilio-backed run result to the phone number that started it. Like
+/// Slack delivery this is best-effort and never changes the run's own status;
+/// provider failures are persisted on sms_delivery for operator visibility.
+async fn deliver_sms_result(state: &AppState, run_id: Uuid, body: &str) {
+    let row = match sqlx::query_as::<_, SmsDeliveryRow>(
+        "SELECT d.recipient_number, d.sender_number, c.account_sid, \
+                c.auth_token, c.id AS sms_channel_id \
+           FROM sms_delivery d \
+           JOIN workspace_sms_channel c ON c.id = d.sms_channel_id \
+          WHERE d.run_id = $1 AND d.delivered_at IS NULL AND c.enabled",
+    )
+    .bind(run_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(row)) => row,
+        Ok(None) => return,
+        Err(error) => {
+            tracing::warn!(run_id = %run_id, ?error, "sms delivery lookup failed");
+            return;
+        }
+    };
+
+    let auth_token = match state.encryption_key.decrypt_aad(
+        &row.auth_token,
+        crate::crypto::aad::sms_secret(row.sms_channel_id).as_bytes(),
+    ) {
+        Ok(token) => token,
+        Err(error) => {
+            tracing::warn!(run_id = %run_id, ?error, "twilio auth token decrypt failed");
+            record_sms_delivery_error(state, run_id, "Could not decrypt the Twilio auth token")
+                .await;
+            return;
+        }
+    };
+
+    let text = truncate_sms_body(body);
+    let url = format!(
+        "https://api.twilio.com/2010-04-01/Accounts/{}/Messages.json",
+        row.account_sid
+    );
+    let response = state
+        .http
+        .post(url)
+        .basic_auth(&row.account_sid, Some(&auth_token))
+        .form(&[
+            ("From", row.sender_number.as_str()),
+            ("To", row.recipient_number.as_str()),
+            ("Body", text.as_str()),
+        ])
+        .send()
+        .await;
+
+    let response = match response {
+        Ok(response) => response,
+        Err(error) => {
+            tracing::warn!(run_id = %run_id, ?error, "twilio message send failed");
+            record_sms_delivery_error(state, run_id, &error.to_string()).await;
+            return;
+        }
+    };
+    let status = response.status();
+    let payload = response.json::<serde_json::Value>().await;
+    if !status.is_success() {
+        let detail = payload
+            .ok()
+            .and_then(|json| {
+                json.get("message")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| format!("Twilio returned HTTP {status}"));
+        tracing::warn!(run_id = %run_id, %status, detail, "twilio message returned an error");
+        record_sms_delivery_error(state, run_id, &detail).await;
+        return;
+    }
+
+    let provider_sid = payload.ok().and_then(|json| {
+        json.get("sid")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+    });
+    if let Err(error) = sqlx::query(
+        "UPDATE sms_delivery \
+            SET delivered_at = now(), provider_sid = $2, delivery_error = NULL \
+          WHERE run_id = $1",
+    )
+    .bind(run_id)
+    .bind(provider_sid)
+    .execute(&state.db)
+    .await
+    {
+        tracing::warn!(run_id = %run_id, ?error, "sms delivery mark failed");
+    }
+}
+
+fn truncate_sms_body(body: &str) -> String {
+    if body.chars().count() <= SMS_TEXT_LIMIT {
+        return body.to_string();
+    }
+    let truncated: String = body.chars().take(SMS_TEXT_LIMIT).collect();
+    format!("{truncated}\n…(truncated)")
+}
+
+async fn record_sms_delivery_error(state: &AppState, run_id: Uuid, detail: &str) {
+    let safe_detail: String = detail.chars().take(500).collect();
+    if let Err(error) = sqlx::query("UPDATE sms_delivery SET delivery_error = $2 WHERE run_id = $1")
+        .bind(run_id)
+        .bind(safe_detail)
+        .execute(&state.db)
+        .await
+    {
+        tracing::warn!(run_id = %run_id, ?error, "sms delivery error record failed");
     }
 }
