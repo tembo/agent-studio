@@ -20,7 +20,7 @@
     "@base-ui/react": "^1.7.0",
     "@better-auth/oauth-provider": "^1.7.2",
     "@better-auth/utils": "0.4.2",
-    "@composio/core": "^0.14.1",
+    "@composio/core": "^0.18.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@radix-ui/react-alert-dialog": "^1.1.20",
     "@radix-ui/react-label": "^2.1.15",
