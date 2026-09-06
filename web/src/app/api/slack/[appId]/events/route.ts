@@ -4,7 +4,6 @@ import { postMessage, publishHomeView } from "@/lib/slack-api";
 import {
   buildHomeView,
   dispatchToAgent,
-  parseCommand,
 } from "@/lib/slack-dispatch";
 import { authenticateSlackRequest } from "@/lib/slack-inbound";
 import {
@@ -12,7 +11,7 @@ import {
   listAgentsForSlackApp,
   type SlackApp,
 } from "@/lib/slack-apps";
-import { classifyMessage } from "@/lib/slack-router";
+import { classifyMessage, parseAgentMessage } from "@/lib/message-router";
 import { getWorkspaceSecretPlaintext } from "@/lib/workspace";
 
 // Events API endpoint. Handles the one-time url_verification handshake
@@ -136,7 +135,7 @@ async function handleEvent(
   const threadTs = event.thread_ts ?? event.ts ?? null;
 
   const text = stripMentions(event.text ?? "");
-  const { agentName } = parseCommand(text);
+  const { agentName } = parseAgentMessage(text);
 
   const scoped = await listAgentsForSlackApp(app);
   const matched = agentName

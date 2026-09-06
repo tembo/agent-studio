@@ -20,7 +20,7 @@ type ChannelView = {
   hasAuthToken: boolean;
   phoneNumber: string;
   allowedNumbers: string[];
-  agentName: string;
+  agentLabels: string[];
   defaultOwnerUserId: string;
   enabled: boolean;
 } | null;
@@ -32,12 +32,14 @@ export function TextMessageForm({
   channel,
   webhookUrl,
   agents,
+  scopedAgentNames,
   members,
 }: {
   workspaceSlug: string;
   channel: ChannelView;
   webhookUrl: string | null;
-  agents: Option[];
+  agents: { name: string; labels: string[] }[];
+  scopedAgentNames: string[];
   members: Option[];
 }) {
   const [state, action, pending] = useActionState(saveSmsChannelAction, INITIAL);
@@ -100,12 +102,13 @@ export function TextMessageForm({
             required
             disabled={pending}
           />
-          <SelectField
-            label="Agent"
-            name="agent_name"
-            options={agents}
-            defaultValue={channel?.agentName ?? ""}
-            placeholder="Choose an agent…"
+          <Field
+            label="Agent labels"
+            name="agent_labels"
+            defaultValue={channel?.agentLabels.join(", ")}
+            placeholder="sales, support"
+            list="sms-agent-labels"
+            required
             disabled={pending}
           />
           <SelectField
@@ -118,10 +121,25 @@ export function TextMessageForm({
           />
         </div>
 
+        <datalist id="sms-agent-labels">
+          {Array.from(new Set(agents.flatMap((agent) => agent.labels))).map((label) => (
+            <option key={label} value={label} />
+          ))}
+        </datalist>
+
         <p className="text-foreground-muted text-sm">
-          Texts run the selected agent&apos;s stable version and use this member&apos;s
-          connections. Replies are limited to one 1,500-character SMS.
+          Comma-separated. The number can launch agents carrying any of these
+          labels. Runs use the selected member&apos;s connections and each agent&apos;s
+          stable version.
         </p>
+
+        {channel && (
+          <p className="text-foreground-muted text-sm">
+            {scopedAgentNames.length > 0
+              ? `Connected agents: ${scopedAgentNames.join(", ")}`
+              : "No agents currently match these labels."}
+          </p>
+        )}
 
         {channel && (
           <label className="text-foreground flex items-center gap-2 text-sm">
@@ -179,6 +197,7 @@ function Field({
   placeholder,
   required,
   disabled,
+  list,
 }: {
   label: string;
   name: string;
@@ -187,6 +206,7 @@ function Field({
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  list?: string;
 }) {
   return (
     <div className="grid gap-1.5">
@@ -202,6 +222,7 @@ function Field({
         required={required}
         disabled={disabled}
         autoComplete="off"
+        list={list}
       />
     </div>
   );

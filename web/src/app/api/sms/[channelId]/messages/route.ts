@@ -1,13 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getPublicOrigin } from "@/lib/config";
+import { classifyMessage, matchExplicitAgent } from "@/lib/message-router";
 import { dispatchSmsToAgent } from "@/lib/sms-dispatch";
 import {
   claimSmsEvent,
   getSmsAuthToken,
   getSmsChannelById,
+  listAgentsForSmsChannel,
 } from "@/lib/sms-channel";
 import { verifyTwilioRequest } from "@/lib/twilio-verify";
+import { getWorkspaceSecretPlaintext } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +30,20 @@ function twiml(message?: string): NextResponse {
     status: 200,
     headers: { "Content-Type": "text/xml; charset=utf-8" },
   });
+}
+
+function agentMenu(agents: { name: string }[]): string {
+  const visible = agents.slice(0, 20).map((agent) => agent.name);
+  const suffix = agents.length > visible.length ? `, and ${agents.length - visible.length} more` : "";
+  return `Available agents: ${visible.join(", ")}${suffix}. Text "<agent> <request>", or describe the task for automatic routing.`;
+}
+
+async function getRouterKey(workspaceId: string): Promise<string | null> {
+  try {
+    return await getWorkspaceSecretPlaintext(workspaceId, "anthropic_api_key");
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(
@@ -69,12 +86,39 @@ export async function POST(
 
   if (!(await claimSmsEvent(channel.id, inboundSid))) return twiml();
 
+  const scoped = await listAgentsForSmsChannel(channel);
+  if (scoped.length === 0) {
+    return twiml("No agents are connected to this number yet.");
+  }
+  const normalized = body.trim().toLowerCase();
+  if (["help", "agents", "list"].includes(normalized)) {
+    return twiml(agentMenu(scoped));
+  }
+
+  let routed = matchExplicitAgent(scoped, body);
+  if (!routed && scoped.length === 1) {
+    routed = { agentName: scoped[0].name, input: body };
+  }
+  if (!routed) {
+    const apiKey = await getRouterKey(channel.workspaceId);
+    if (apiKey) {
+      const classified = await classifyMessage({
+        apiKey,
+        agents: scoped,
+        message: body,
+      });
+      if (classified.agentName) routed = classified;
+    }
+  }
+  if (!routed) return twiml(agentMenu(scoped));
+
   const result = await dispatchSmsToAgent({
     channel,
+    agentName: routed.agentName,
     inboundSid,
     from,
     to,
-    body,
+    input: routed.input,
   });
   return result.ok
     ? twiml(`${result.agentName} is working on it. I'll text the result shortly.`)

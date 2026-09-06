@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 
 import { writeAuditEvent } from "@/lib/audit-db";
+import { listAgentsByLabels } from "@/lib/agent-scope";
 import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import {
   createSmsChannel,
@@ -12,12 +13,22 @@ import {
   updateSmsChannel,
 } from "@/lib/sms-channel";
 import { listWorkspaceMembers } from "@/lib/workspace";
-import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 
 export type SmsChannelFormState = { error?: string; message?: string };
 
 const ACCOUNT_SID = /^AC[0-9a-f]{32}$/i;
 const E164 = /^\+[1-9]\d{7,14}$/;
+
+function parseLabels(raw: string): string[] {
+  return Array.from(
+    new Set(
+      raw
+        .split(",")
+        .map((label) => label.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  );
+}
 
 export async function saveSmsChannelAction(
   _previous: SmsChannelFormState,
@@ -36,7 +47,7 @@ export async function saveSmsChannelAction(
         .filter(Boolean),
     ),
   );
-  const agentName = String(formData.get("agent_name") ?? "").trim();
+  const agentLabels = parseLabels(String(formData.get("agent_labels") ?? ""));
   const defaultOwnerUserId = String(formData.get("default_owner") ?? "").trim();
   const enabled = formData.get("enabled") === "on";
 
@@ -49,7 +60,9 @@ export async function saveSmsChannelAction(
   if (allowedNumbers.length === 0 || allowedNumbers.some((number) => !E164.test(number))) {
     return { error: "Enter at least one allowed sender in E.164 form." };
   }
-  if (!agentName) return { error: "Choose the agent that should answer texts." };
+  if (agentLabels.length === 0) {
+    return { error: "Enter at least one agent label." };
+  }
   if (!defaultOwnerUserId) return { error: "Choose the member these runs act as." };
 
   const auth = await authorizeWorkspace(slug, "workspace_admin");
@@ -66,8 +79,10 @@ export async function saveSmsChannelAction(
   if (!members.some((member) => member.userId === defaultOwnerUserId)) {
     return { error: "The selected default owner is not a workspace member." };
   }
-  const agent = await resolveAgentForDispatch(auth.workspace.id, agentName);
-  if (!agent.ok) return { error: `That agent is not runnable: ${agent.error.message}` };
+  const scopedAgents = await listAgentsByLabels(auth.workspace.id, agentLabels);
+  if (scopedAgents.length === 0) {
+    return { error: "No valid agents have any of those labels." };
+  }
 
   try {
     if (current) {
@@ -76,7 +91,7 @@ export async function saveSmsChannelAction(
         ...(authToken ? { authToken } : {}),
         phoneNumber,
         allowedNumbers,
-        agentName: agent.resolved.agentName,
+        agentLabels,
         defaultOwnerUserId,
         enabled,
       });
@@ -87,7 +102,7 @@ export async function saveSmsChannelAction(
         authToken,
         phoneNumber,
         allowedNumbers,
-        agentName: agent.resolved.agentName,
+        agentLabels,
         defaultOwnerUserId,
         createdBy: auth.userId,
       });
@@ -104,9 +119,10 @@ export async function saveSmsChannelAction(
     kind: current ? "sms_channel.updated" : "sms_channel.created",
     targetType: "sms_channel",
     targetId: saved?.id ?? null,
-    agentName: agent.resolved.agentName,
+    agentName: null,
     payload: {
       phoneNumber,
+      agentLabels,
       enabled: current ? enabled : true,
       authTokenRotated: Boolean(authToken),
     },
@@ -130,7 +146,7 @@ export async function deleteSmsChannelAction(formData: FormData): Promise<void> 
     kind: "sms_channel.deleted",
     targetType: "sms_channel",
     targetId: channel.id,
-    agentName: channel.agentName,
+    agentName: null,
     payload: { phoneNumber: channel.phoneNumber },
   });
   revalidatePath(`/${slug}/text-messages`);

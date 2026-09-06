@@ -4,6 +4,7 @@ import { writeAuditEvent } from "@/lib/audit-db";
 import { createRun } from "@/lib/runs-api";
 import {
   countRecentSmsDispatches,
+  listAgentsForSmsChannel,
   recordSmsDelivery,
   type SmsChannel,
 } from "@/lib/sms-channel";
@@ -17,14 +18,15 @@ export type SmsDispatchResult =
 
 export async function dispatchSmsToAgent(args: {
   channel: SmsChannel;
+  agentName: string;
   inboundSid: string;
   from: string;
   to: string;
-  body: string;
+  input: string;
 }): Promise<SmsDispatchResult> {
   const { channel, inboundSid, from, to } = args;
-  const body = args.body.trim();
-  if (!body) return { ok: false, message: "Send a message with some text." };
+  const input = args.input.trim();
+  if (!input) return { ok: false, message: "Send a request after the agent name." };
 
   const recent = await countRecentSmsDispatches(channel.id, from, 60);
   if (recent >= RATE_LIMIT_PER_MINUTE) {
@@ -34,10 +36,13 @@ export async function dispatchSmsToAgent(args: {
     };
   }
 
-  const dispatch = await resolveAgentForDispatch(
-    channel.workspaceId,
-    channel.agentName,
-  );
+  const scoped = await listAgentsForSmsChannel(channel);
+  const selected = scoped.find((agent) => agent.name === args.agentName);
+  if (!selected) {
+    return { ok: false, message: "That agent is not connected to this number." };
+  }
+
+  const dispatch = await resolveAgentForDispatch(channel.workspaceId, selected.name);
   if (!dispatch.ok) {
     return {
       ok: false,
@@ -53,7 +58,7 @@ export async function dispatchSmsToAgent(args: {
       agentName: agent.agentName,
       agentPath: agent.agentPath,
       model: agent.model,
-      userMessage: body,
+      userMessage: input,
       framework: agent.framework,
       specContent: agent.specContent,
       specFormat: agent.specFormat,

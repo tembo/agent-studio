@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { getPublicOrigin } from "@/lib/config";
+import { listAgentsByLabels } from "@/lib/agent-scope";
 import { getServerSession } from "@/lib/session";
 import { getSmsChannel } from "@/lib/sms-channel";
 import {
@@ -35,8 +36,8 @@ export default async function TextMessagesPage({
   const agents = listing.ok
     ? listing.agents
         .filter((agent) => agent.ok)
-        .map((agent) => ({ value: agent.spec.name, label: agent.spec.name }))
-        .sort((a, b) => a.label.localeCompare(b.label))
+        .map((agent) => ({ name: agent.spec.name, labels: agent.spec.labels }))
+        .sort((a, b) => a.name.localeCompare(b.name))
     : [];
   const members = memberRows.map((member) => ({
     value: member.userId,
@@ -45,6 +46,11 @@ export default async function TextMessagesPage({
   const webhookUrl = channel
     ? `${getPublicOrigin()}/api/sms/${channel.id}/messages`
     : null;
+  const scopedAgentNames = channel
+    ? (await listAgentsByLabels(workspace.id, channel.agentLabels)).map(
+        (agent) => agent.name,
+      )
+    : [];
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8">
@@ -53,9 +59,9 @@ export default async function TextMessagesPage({
           Text messages
         </h1>
         <p className="text-foreground-weak text-base">
-          Let anyone with the number message one Agent Studio agent from their
-          phone. Twilio receives the text; Agent Studio runs the agent and texts
-          its answer back.
+          Connect a label-scoped set of agents to one phone number. People can
+          name an agent or describe the task; Agent Studio routes the text and
+          sends the result back.
         </p>
       </div>
 
@@ -75,6 +81,7 @@ export default async function TextMessagesPage({
           channel={channel}
           webhookUrl={webhookUrl}
           agents={agents}
+          scopedAgentNames={scopedAgentNames}
           members={members}
         />
       )}

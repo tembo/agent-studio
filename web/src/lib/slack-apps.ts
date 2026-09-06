@@ -2,10 +2,10 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { listAgentsByLabels, type ScopedAgent } from "@/lib/agent-scope";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { aadSlackSecret } from "@/lib/crypto-aad";
 import { db } from "@/lib/db";
-import { listAgents } from "@/lib/workspace-agents";
 
 // Data access for TAS-managed Slack apps (workspace_slack_app). One row
 // per Slack app TAS owns for a workspace — its identity, install, and the
@@ -250,8 +250,6 @@ export async function getSlackAppSecrets(
   };
 }
 
-export type ScopedAgent = { name: string; path: string; description?: string };
-
 /**
  * Valid agents in the app's workspace whose labels intersect the app's
  * scope — the registry its slash command, picker, and App Home expose.
@@ -261,18 +259,7 @@ export type ScopedAgent = { name: string; path: string; description?: string };
 export async function listAgentsForSlackApp(
   app: Pick<SlackApp, "workspaceId" | "agentLabels">,
 ): Promise<ScopedAgent[]> {
-  if (app.agentLabels.length === 0) return [];
-  const labels = new Set(app.agentLabels);
-  const listing = await listAgents(app.workspaceId);
-  if (!listing.ok) return [];
-  const out: ScopedAgent[] = [];
-  for (const a of listing.agents) {
-    if (!a.ok) continue;
-    if (a.spec.labels.some((l) => labels.has(l))) {
-      out.push({ name: a.spec.name, path: a.path, description: a.spec.description });
-    }
-  }
-  return out;
+  return listAgentsByLabels(app.workspaceId, app.agentLabels);
 }
 
 /**

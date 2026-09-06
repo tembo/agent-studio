@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { listAgentsByLabels, type ScopedAgent } from "@/lib/agent-scope";
 import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { aadSmsSecret } from "@/lib/crypto-aad";
 import { db } from "@/lib/db";
@@ -13,7 +14,7 @@ export type SmsChannel = {
   hasAuthToken: boolean;
   phoneNumber: string;
   allowedNumbers: string[];
-  agentName: string;
+  agentLabels: string[];
   defaultOwnerUserId: string;
   enabled: boolean;
   createdBy: string;
@@ -28,7 +29,7 @@ type Row = {
   auth_token: Buffer;
   phone_number: string;
   allowed_numbers: string[];
-  agent_name: string;
+  agent_labels: string[];
   default_owner_user_id: string;
   enabled: boolean;
   created_by: string;
@@ -37,7 +38,7 @@ type Row = {
 };
 
 const SELECT = `id, workspace_id, account_sid, auth_token, phone_number, allowed_numbers,
-  agent_name, default_owner_user_id, enabled, created_by, created_at, updated_at`;
+  agent_labels, default_owner_user_id, enabled, created_by, created_at, updated_at`;
 
 function rowToChannel(row: Row): SmsChannel {
   return {
@@ -47,7 +48,7 @@ function rowToChannel(row: Row): SmsChannel {
     hasAuthToken: row.auth_token !== null,
     phoneNumber: row.phone_number,
     allowedNumbers: row.allowed_numbers ?? [],
-    agentName: row.agent_name,
+    agentLabels: row.agent_labels ?? [],
     defaultOwnerUserId: row.default_owner_user_id,
     enabled: row.enabled,
     createdBy: row.created_by,
@@ -90,7 +91,7 @@ export async function createSmsChannel(args: {
   authToken: string;
   phoneNumber: string;
   allowedNumbers: string[];
-  agentName: string;
+  agentLabels: string[];
   defaultOwnerUserId: string;
   createdBy: string;
 }): Promise<SmsChannel> {
@@ -98,7 +99,7 @@ export async function createSmsChannel(args: {
   const { rows } = await db.query<Row>(
     `INSERT INTO workspace_sms_channel
        (id, workspace_id, account_sid, auth_token, phone_number, allowed_numbers,
-        agent_name, default_owner_user_id, created_by)
+        agent_labels, default_owner_user_id, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING ${SELECT}`,
     [
@@ -108,7 +109,7 @@ export async function createSmsChannel(args: {
       encryptSecret(args.authToken, aadSmsSecret(id)),
       args.phoneNumber,
       args.allowedNumbers,
-      args.agentName,
+      args.agentLabels,
       args.defaultOwnerUserId,
       args.createdBy,
     ],
@@ -124,7 +125,7 @@ export async function updateSmsChannel(
     authToken?: string;
     phoneNumber: string;
     allowedNumbers: string[];
-    agentName: string;
+    agentLabels: string[];
     defaultOwnerUserId: string;
     enabled: boolean;
   },
@@ -135,7 +136,7 @@ export async function updateSmsChannel(
             auth_token = COALESCE($4, auth_token),
             phone_number = $5,
             allowed_numbers = $6,
-            agent_name = $7,
+            agent_labels = $7,
             default_owner_user_id = $8,
             enabled = $9,
             updated_at = now()
@@ -147,12 +148,18 @@ export async function updateSmsChannel(
       args.authToken ? encryptSecret(args.authToken, aadSmsSecret(id)) : null,
       args.phoneNumber,
       args.allowedNumbers,
-      args.agentName,
+      args.agentLabels,
       args.defaultOwnerUserId,
       args.enabled,
     ],
   );
   return (result.rowCount ?? 0) > 0;
+}
+
+export async function listAgentsForSmsChannel(
+  channel: Pick<SmsChannel, "workspaceId" | "agentLabels">,
+): Promise<ScopedAgent[]> {
+  return listAgentsByLabels(channel.workspaceId, channel.agentLabels);
 }
 
 export async function deleteSmsChannel(

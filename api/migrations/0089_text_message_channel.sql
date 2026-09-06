@@ -1,5 +1,5 @@
 -- One Twilio-backed text-message channel per workspace. Incoming messages to
--- the configured number launch one selected agent; the run result is sent back
+-- the configured number route to a label-scoped agent; the run result is sent back
 -- to the originating phone number. The Twilio auth token is encrypted by the
 -- web process and decrypted by the runner only when it delivers the reply.
 
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS workspace_sms_channel (
     auth_token            BYTEA       NOT NULL,
     phone_number          TEXT        NOT NULL,
     allowed_numbers       TEXT[]      NOT NULL DEFAULT '{}',
-    agent_name            TEXT        NOT NULL,
+    agent_labels          TEXT[]      NOT NULL DEFAULT '{}',
     default_owner_user_id TEXT        NOT NULL REFERENCES "user"(id) ON DELETE RESTRICT,
     enabled               BOOLEAN     NOT NULL DEFAULT TRUE,
     created_by            TEXT        NOT NULL REFERENCES "user"(id) ON DELETE RESTRICT,
