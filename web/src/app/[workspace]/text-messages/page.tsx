@@ -3,14 +3,11 @@ import { notFound } from "next/navigation";
 import { getPublicOrigin } from "@/lib/config";
 import { listAgentsByLabels } from "@/lib/agent-scope";
 import { getServerSession } from "@/lib/session";
-import { getSmsChannel } from "@/lib/sms-channel";
-import {
-  getWorkspaceBySlug,
-  getWorkspaceRole,
-  listWorkspaceMembers,
-} from "@/lib/workspace";
+import { getSmsChannel, getSmsPhoneForMember } from "@/lib/sms-channel";
+import { getWorkspaceBySlug, getWorkspaceRole } from "@/lib/workspace";
 import { listAgents } from "@/lib/workspace-agents";
 
+import { PhoneLinkCard } from "./phone-link-card";
 import { TextMessageForm } from "./text-message-form";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +25,10 @@ export default async function TextMessagesPage({
   const role = await getWorkspaceRole(workspace.id, session.user.id);
   if (!role) notFound();
 
-  const [channel, listing, memberRows] = await Promise.all([
+  const [channel, listing, linkedPhoneNumber] = await Promise.all([
     getSmsChannel(workspace.id),
     listAgents(workspace.id),
-    listWorkspaceMembers(workspace.id),
+    getSmsPhoneForMember(workspace.id, session.user.id),
   ]);
   const agents = listing.ok
     ? listing.agents
@@ -39,10 +36,6 @@ export default async function TextMessagesPage({
         .map((agent) => ({ name: agent.spec.name, labels: agent.spec.labels }))
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
-  const members = memberRows.map((member) => ({
-    value: member.userId,
-    label: member.name?.trim() || member.email,
-  }));
   const webhookUrl = channel
     ? `${getPublicOrigin()}/api/sms/${channel.id}/messages`
     : null;
@@ -59,17 +52,24 @@ export default async function TextMessagesPage({
           Text messages
         </h1>
         <p className="text-foreground-weak text-base">
-          Connect a label-scoped set of agents to one phone number. People can
-          name an agent or describe the task; Agent Studio routes the text and
-          sends the result back.
+          Connect a label-scoped set of agents to one shared number. Members
+          link their phone, then text an agent name or describe the task.
         </p>
       </div>
 
-      <hr className="border-[var(--color-border-weak)]" />
+      {channel && (
+        <PhoneLinkCard
+          workspaceSlug={workspace.slug}
+          smsPhoneNumber={channel.phoneNumber}
+          linkedPhoneNumber={linkedPhoneNumber}
+        />
+      )}
 
       {role !== "workspace_admin" ? (
         <p className="text-foreground-weak text-sm">
-          Only workspace admins can manage text messages.
+          {channel
+            ? "A workspace admin manages the shared number and connected agents."
+            : "A workspace admin has not configured text messages yet."}
         </p>
       ) : agents.length === 0 ? (
         <p className="text-foreground-weak text-sm">
@@ -82,7 +82,6 @@ export default async function TextMessagesPage({
           webhookUrl={webhookUrl}
           agents={agents}
           scopedAgentNames={scopedAgentNames}
-          members={members}
         />
       )}
     </div>

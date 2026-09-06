@@ -13,15 +13,12 @@ import {
   type SmsChannelFormState,
 } from "./actions";
 
-type Option = { value: string; label: string };
 type ChannelView = {
   id: string;
   accountSid: string;
   hasAuthToken: boolean;
   phoneNumber: string;
-  allowedNumbers: string[];
   agentLabels: string[];
-  defaultOwnerUserId: string;
   enabled: boolean;
 } | null;
 
@@ -33,19 +30,24 @@ export function TextMessageForm({
   webhookUrl,
   agents,
   scopedAgentNames,
-  members,
 }: {
   workspaceSlug: string;
   channel: ChannelView;
   webhookUrl: string | null;
   agents: { name: string; labels: string[] }[];
   scopedAgentNames: string[];
-  members: Option[];
 }) {
   const [state, action, pending] = useActionState(saveSmsChannelAction, INITIAL);
 
   return (
     <div className="flex flex-col gap-7">
+      <div>
+        <h2 className="text-foreground font-medium">Workspace setup</h2>
+        <p className="text-foreground-weak mt-1 text-sm">
+          Admins configure the shared Twilio number and the agents it can launch.
+        </p>
+      </div>
+
       {webhookUrl && (
         <div className="border-border bg-surface-raised flex flex-col gap-3 rounded-xl border p-4">
           <div>
@@ -95,28 +97,12 @@ export function TextMessageForm({
             disabled={pending}
           />
           <Field
-            label="Allowed sender numbers"
-            name="allowed_numbers"
-            defaultValue={channel?.allowedNumbers.join(", ")}
-            placeholder="+14155550100, +14155550101"
-            required
-            disabled={pending}
-          />
-          <Field
             label="Agent labels"
             name="agent_labels"
             defaultValue={channel?.agentLabels.join(", ")}
             placeholder="sales, support"
             list="sms-agent-labels"
             required
-            disabled={pending}
-          />
-          <SelectField
-            label="Run as"
-            name="default_owner"
-            options={members}
-            defaultValue={channel?.defaultOwnerUserId ?? ""}
-            placeholder="Choose a workspace member…"
             disabled={pending}
           />
         </div>
@@ -129,8 +115,8 @@ export function TextMessageForm({
 
         <p className="text-foreground-muted text-sm">
           Comma-separated. The number can launch agents carrying any of these
-          labels. Runs use the selected member&apos;s connections and each agent&apos;s
-          stable version.
+          labels. Each linked sender runs as themselves with their own
+          connections; agents use their stable versions.
         </p>
 
         {channel && (
@@ -224,47 +210,6 @@ function Field({
         autoComplete="off"
         list={list}
       />
-    </div>
-  );
-}
-
-function SelectField({
-  label,
-  name,
-  options,
-  defaultValue,
-  placeholder,
-  disabled,
-}: {
-  label: string;
-  name: string;
-  options: Option[];
-  defaultValue: string;
-  placeholder: string;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={`sms-${name}`} className="text-sm">
-        {label}
-      </Label>
-      <select
-        id={`sms-${name}`}
-        name={name}
-        required
-        defaultValue={defaultValue}
-        disabled={disabled}
-        className="bg-input text-foreground rounded-lg px-3 py-2 text-sm shadow-[0_0_0_1px_var(--color-border)] focus:outline-none"
-      >
-        <option value="" disabled>
-          {placeholder}
-        </option>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

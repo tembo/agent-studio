@@ -6,7 +6,8 @@ description: Connect a Twilio phone number so people can run label-scoped agents
 Agent Studio can connect one **Twilio SMS number** to a label-scoped set of
 agents in each workspace. A person texts the number, TAS routes the request to
 one of those agents, launches its current stable version, and Twilio sends the
-result back to the originating phone.
+result back to the originating phone. Each workspace member links their own
+phone, so the run acts as that member and uses their connections.
 
 ## Set up the channel
 
@@ -16,15 +17,14 @@ Only a workspace admin can configure text messages.
 2. In TAS, open **Build → Text messages**.
 3. Enter the Twilio **Account SID**, **Auth Token**, and phone number in E.164
    form (for example, `+14155550123`).
-4. Add the phone numbers that may send requests. Unlisted senders receive no
-   response and cannot start a run.
-5. Enter one or more **agent labels** as a comma-separated list. Every valid
+4. Enter one or more **agent labels** as a comma-separated list. Every valid
    agent carrying at least one of those labels is connected to the number.
-   Choose the workspace member the runs should act as, then save.
-6. Copy the webhook URL TAS reveals. In Twilio's phone-number configuration,
+5. Copy the webhook URL TAS reveals. In Twilio's phone-number configuration,
    set **A message comes in** to **Webhook**, paste the URL, choose **HTTP POST**,
    and save.
-7. Send the Twilio number a text. TAS immediately acknowledges a routed request
+6. Each workspace member opens **Build → Text messages**, chooses **Link this
+   phone**, and texts the displayed one-time `link` command from their phone.
+7. Send the Twilio number a request. TAS immediately acknowledges a routed request
    and sends a second message with the agent's result when the run finishes.
 
 The TAS host must be publicly reachable over HTTPS, and `BETTER_AUTH_URL` must
@@ -55,10 +55,15 @@ fits, a request is ambiguous, or natural-language routing is unavailable.
 
 ## Identity and connections
 
-Phone numbers are not TAS identities. Every SMS run acts as the **Run as**
-member selected by the admin and uses that member's connections. Choose a
-service account or another member whose permissions fit what the SMS agent may
-do.
+The phone that sends a text determines the acting TAS member. Linking starts
+from an authenticated Agent Studio session and finishes when the member sends a
+single-use code from that phone. Codes expire after 15 minutes. A phone can
+identify only one member within a workspace, though the same member can link
+that phone independently in another workspace.
+
+Every SMS run uses the linked member's connections. Removing the member from
+the workspace immediately removes their text access through the membership
+cascade. Members can unlink their own phone from **Build → Text messages**.
 
 The channel runs the routed agent's **stable version**, matching other
 unattended entry points. Promote a draft before expecting text messages to use
@@ -67,9 +72,9 @@ the number without changing the text-message channel.
 
 ## Security and limits
 
-- Only explicitly allowed E.164 sender numbers can invoke the agent. Still
-  treat the number as an external entry point and give the agent narrowly
-  scoped tools.
+- Only phones linked by current workspace members can invoke an agent. Unknown
+  numbers cannot start runs. Still treat the shared number as an external entry
+  point and give agents narrowly scoped tools.
 - TAS verifies every inbound request with Twilio's `X-Twilio-Signature` and
   ignores repeated `MessageSid` deliveries.
 - The Twilio Auth Token is AES-256-GCM encrypted at rest and is never shown

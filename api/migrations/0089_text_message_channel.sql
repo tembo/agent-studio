@@ -1,7 +1,7 @@
 -- One Twilio-backed text-message channel per workspace. Incoming messages to
--- the configured number route to a label-scoped agent; the run result is sent back
--- to the originating phone number. The Twilio auth token is encrypted by the
--- web process and decrypted by the runner only when it delivers the reply.
+-- the configured number route to a label-scoped agent; the run result is sent
+-- back to the originating phone number. The Twilio auth token is encrypted by
+-- the web process and decrypted by the runner only when it delivers the reply.
 
 CREATE TABLE IF NOT EXISTS workspace_sms_channel (
     id                    UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -9,13 +9,34 @@ CREATE TABLE IF NOT EXISTS workspace_sms_channel (
     account_sid           TEXT        NOT NULL,
     auth_token            BYTEA       NOT NULL,
     phone_number          TEXT        NOT NULL,
-    allowed_numbers       TEXT[]      NOT NULL DEFAULT '{}',
     agent_labels          TEXT[]      NOT NULL DEFAULT '{}',
-    default_owner_user_id TEXT        NOT NULL REFERENCES "user"(id) ON DELETE RESTRICT,
     enabled               BOOLEAN     NOT NULL DEFAULT TRUE,
     created_by            TEXT        NOT NULL REFERENCES "user"(id) ON DELETE RESTRICT,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- A sender links their own phone by texting a one-time code while signed in as
+-- a workspace member. Phone identity is workspace-scoped because the same TAS
+-- account may belong to unrelated organizations.
+ALTER TABLE workspace_member
+    ADD COLUMN IF NOT EXISTS sms_phone_number TEXT
+        CHECK (sms_phone_number IS NULL OR sms_phone_number ~ '^\+[1-9][0-9]{7,14}$');
+
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_member_sms_phone_number_idx
+    ON workspace_member (workspace_id, sms_phone_number)
+    WHERE sms_phone_number IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS workspace_sms_link_code (
+    workspace_id UUID        NOT NULL,
+    user_id      TEXT        NOT NULL,
+    code_hash    TEXT        NOT NULL,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (workspace_id, user_id),
+    UNIQUE (workspace_id, code_hash),
+    FOREIGN KEY (workspace_id, user_id)
+        REFERENCES workspace_member(workspace_id, user_id) ON DELETE CASCADE
 );
 
 -- The delivery row is both the outbound destination and the per-number rate

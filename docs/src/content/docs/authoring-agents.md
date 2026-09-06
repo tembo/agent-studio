@@ -63,7 +63,8 @@ Key fields:
 - **`tools_module:`** (optional) — a sibling Python file of deterministic tool
   functions; see [Sidecar Python tools](/agent-studio/sidecar-python-tools/).
 - **`labels:`** (optional) — tags used for grouping and for scoping which
-  [Slack app](/agent-studio/slack-apps/) may launch the agent.
+  [Slack app](/agent-studio/slack-apps/) or
+  [text-message number](/agent-studio/text-messages/) may launch the agent.
 - **`scaledown:`** (optional) — opt into [ScaleDown](#scaledown-prompt-compression)
   prompt compression to cut frontier-model tokens (`off` / `prompt` /
   `aggressive`).

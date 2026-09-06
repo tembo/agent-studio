@@ -7,14 +7,20 @@ import { writeAuditEvent } from "@/lib/audit-db";
 import { listAgentsByLabels } from "@/lib/agent-scope";
 import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import {
+  createSmsLinkCode,
   createSmsChannel,
   deleteSmsChannel,
   getSmsChannel,
+  unlinkSmsPhone,
   updateSmsChannel,
 } from "@/lib/sms-channel";
-import { listWorkspaceMembers } from "@/lib/workspace";
 
 export type SmsChannelFormState = { error?: string; message?: string };
+export type SmsLinkFormState = {
+  error?: string;
+  code?: string;
+  smsPhoneNumber?: string;
+};
 
 const ACCOUNT_SID = /^AC[0-9a-f]{32}$/i;
 const E164 = /^\+[1-9]\d{7,14}$/;
@@ -39,16 +45,7 @@ export async function saveSmsChannelAction(
   const accountSid = String(formData.get("account_sid") ?? "").trim();
   const authToken = String(formData.get("auth_token") ?? "").trim();
   const phoneNumber = String(formData.get("phone_number") ?? "").trim();
-  const allowedNumbers = Array.from(
-    new Set(
-      String(formData.get("allowed_numbers") ?? "")
-        .split(",")
-        .map((number) => number.trim())
-        .filter(Boolean),
-    ),
-  );
   const agentLabels = parseLabels(String(formData.get("agent_labels") ?? ""));
-  const defaultOwnerUserId = String(formData.get("default_owner") ?? "").trim();
   const enabled = formData.get("enabled") === "on";
 
   if (!ACCOUNT_SID.test(accountSid)) {
@@ -57,13 +54,9 @@ export async function saveSmsChannelAction(
   if (!E164.test(phoneNumber)) {
     return { error: "Enter the Twilio number in E.164 form, such as +14155550123." };
   }
-  if (allowedNumbers.length === 0 || allowedNumbers.some((number) => !E164.test(number))) {
-    return { error: "Enter at least one allowed sender in E.164 form." };
-  }
   if (agentLabels.length === 0) {
     return { error: "Enter at least one agent label." };
   }
-  if (!defaultOwnerUserId) return { error: "Choose the member these runs act as." };
 
   const auth = await authorizeWorkspace(slug, "workspace_admin");
   if (!auth.ok) {
@@ -75,10 +68,6 @@ export async function saveSmsChannelAction(
   if (!current && !authToken) return { error: "Enter the Twilio Auth Token." };
   if (id && current?.id !== id) return { error: "Text-message configuration not found." };
 
-  const members = await listWorkspaceMembers(auth.workspace.id);
-  if (!members.some((member) => member.userId === defaultOwnerUserId)) {
-    return { error: "The selected default owner is not a workspace member." };
-  }
   const scopedAgents = await listAgentsByLabels(auth.workspace.id, agentLabels);
   if (scopedAgents.length === 0) {
     return { error: "No valid agents have any of those labels." };
@@ -90,9 +79,7 @@ export async function saveSmsChannelAction(
         accountSid,
         ...(authToken ? { authToken } : {}),
         phoneNumber,
-        allowedNumbers,
         agentLabels,
-        defaultOwnerUserId,
         enabled,
       });
     } else {
@@ -101,9 +88,7 @@ export async function saveSmsChannelAction(
         accountSid,
         authToken,
         phoneNumber,
-        allowedNumbers,
         agentLabels,
-        defaultOwnerUserId,
         createdBy: auth.userId,
       });
     }
@@ -129,6 +114,45 @@ export async function saveSmsChannelAction(
   });
   revalidatePath(`/${slug}/text-messages`);
   return { message: current ? "Text-message channel updated." : "Text-message channel created." };
+}
+
+export async function createSmsLinkCodeAction(
+  _previous: SmsLinkFormState,
+  formData: FormData,
+): Promise<SmsLinkFormState> {
+  const slug = String(formData.get("workspace") ?? "");
+  const auth = await authorizeWorkspace(slug, "viewer");
+  if (!auth.ok) {
+    if (auth.reason === "denied") return { error: DENIED_MESSAGE };
+    notFound();
+  }
+  const channel = await getSmsChannel(auth.workspace.id);
+  if (!channel) return { error: "A workspace admin has not configured text messages yet." };
+  if (!channel.enabled) return { error: "Text messages are currently paused." };
+
+  const link = await createSmsLinkCode(auth.workspace.id, auth.userId);
+  if (!link) return { error: "You are no longer a member of this workspace." };
+  return { code: link, smsPhoneNumber: channel.phoneNumber };
+}
+
+export async function unlinkSmsPhoneAction(formData: FormData): Promise<void> {
+  const slug = String(formData.get("workspace") ?? "");
+  const auth = await authorizeWorkspace(slug, "viewer");
+  if (!auth.ok) return;
+  const unlinked = await unlinkSmsPhone(auth.workspace.id, auth.userId);
+  if (unlinked) {
+    await writeAuditEvent({
+      workspaceId: auth.workspace.id,
+      actorUserId: auth.userId,
+      source: "human_action",
+      kind: "sms_identity.unlinked",
+      targetType: "member",
+      targetId: auth.userId,
+      agentName: null,
+      payload: {},
+    });
+  }
+  revalidatePath(`/${slug}/text-messages`);
 }
 
 export async function deleteSmsChannelAction(formData: FormData): Promise<void> {

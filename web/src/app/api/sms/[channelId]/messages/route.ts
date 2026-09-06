@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { writeAuditEvent } from "@/lib/audit-db";
 import { getPublicOrigin } from "@/lib/config";
 import { classifyMessage, matchExplicitAgent } from "@/lib/message-router";
 import { dispatchSmsToAgent } from "@/lib/sms-dispatch";
@@ -7,6 +8,8 @@ import {
   claimSmsEvent,
   getSmsAuthToken,
   getSmsChannelById,
+  getSmsMemberByPhone,
+  linkSmsPhoneWithCode,
   listAgentsForSmsChannel,
 } from "@/lib/sms-channel";
 import { verifyTwilioRequest } from "@/lib/twilio-verify";
@@ -15,6 +18,7 @@ import { getWorkspaceSecretPlaintext } from "@/lib/workspace";
 export const dynamic = "force-dynamic";
 
 type RouteParams = Promise<{ channelId: string }>;
+const E164 = /^\+[1-9]\d{7,14}$/;
 
 function twiml(message?: string): NextResponse {
   const escaped = message
@@ -82,9 +86,45 @@ export async function POST(
   const body = form.get("Body") ?? "";
   if (!inboundSid || !from || !to) return twiml("This message was incomplete.");
   if (to !== channel.phoneNumber) return twiml("This number is not configured.");
-  if (!channel.allowedNumbers.includes(from)) return twiml();
+  if (!E164.test(from)) return twiml();
 
   if (!(await claimSmsEvent(channel.id, inboundSid))) return twiml();
+
+  const linkMatch = body.trim().match(/^link(?:\s+(\S+))?\s*$/i);
+  if (linkMatch) {
+    const code = linkMatch[1] ?? "";
+    if (!code) return twiml('Send "link <code>" using the code from Agent Studio.');
+    const linked = await linkSmsPhoneWithCode(channel.workspaceId, code, from);
+    if (!linked.ok) {
+      return twiml(
+        linked.reason === "phone-in-use"
+          ? "This phone is already linked to another workspace member."
+          : "That link code is invalid or expired. Create a new code in Agent Studio.",
+      );
+    }
+    try {
+      await writeAuditEvent({
+        workspaceId: channel.workspaceId,
+        actorUserId: linked.userId,
+        source: "dashboard_event",
+        kind: "sms_identity.linked",
+        targetType: "member",
+        targetId: linked.userId,
+        agentName: null,
+        payload: { smsChannelId: channel.id },
+      });
+    } catch {
+      // The phone is already linked; audit provenance is best-effort.
+    }
+    return twiml("Phone linked. Send help to see the available agents.");
+  }
+
+  const member = await getSmsMemberByPhone(channel.workspaceId, from);
+  if (!member) {
+    return twiml(
+      'This phone is not linked. Sign in to Agent Studio, open Text messages, and choose "Link this phone."',
+    );
+  }
 
   const scoped = await listAgentsForSmsChannel(channel);
   if (scoped.length === 0) {
@@ -114,6 +154,7 @@ export async function POST(
 
   const result = await dispatchSmsToAgent({
     channel,
+    userId: member.userId,
     agentName: routed.agentName,
     inboundSid,
     from,
