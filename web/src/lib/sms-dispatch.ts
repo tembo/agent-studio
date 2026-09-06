@@ -18,6 +18,7 @@ export type SmsDispatchResult =
 
 export async function dispatchSmsToAgent(args: {
   channel: SmsChannel;
+  userId: string;
   agentName: string;
   inboundSid: string;
   from: string;
@@ -54,7 +55,7 @@ export async function dispatchSmsToAgent(args: {
   try {
     const { runId } = await createRun({
       workspaceId: channel.workspaceId,
-      userId: channel.defaultOwnerUserId,
+      userId: args.userId,
       agentName: agent.agentName,
       agentPath: agent.agentPath,
       model: agent.model,
@@ -79,7 +80,7 @@ export async function dispatchSmsToAgent(args: {
     try {
       await writeAuditEvent({
         workspaceId: channel.workspaceId,
-        actorUserId: channel.defaultOwnerUserId,
+        actorUserId: args.userId,
         source: "dashboard_event",
         kind: "sms.dispatch",
         targetType: "run",
