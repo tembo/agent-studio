@@ -31,7 +31,7 @@
     "central-icons": "npm:@central-icons-react/round-outlined-radius-2-stroke-2@^1.1.246",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "cron-parser": "^5.7.0",
+    "cron-parser": "^5.10.0",
     "cronstrue": "^3.21.0",
     "fflate": "^0.8.3",
     "lucide-react": "^1.34.0",
