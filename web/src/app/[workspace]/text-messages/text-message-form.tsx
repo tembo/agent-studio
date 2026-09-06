@@ -2,7 +2,6 @@
 
 import { useActionState } from "react";
 
-import { CopyButton } from "@/components/copy-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +14,7 @@ import {
 
 type ChannelView = {
   id: string;
+  name: string;
   accountSid: string;
   hasAuthToken: boolean;
   phoneNumber: string;
@@ -27,48 +27,28 @@ const INITIAL: SmsChannelFormState = {};
 export function TextMessageForm({
   workspaceSlug,
   channel,
-  webhookUrl,
   agents,
-  scopedAgentNames,
 }: {
   workspaceSlug: string;
   channel: ChannelView;
-  webhookUrl: string | null;
   agents: { name: string; labels: string[] }[];
-  scopedAgentNames: string[];
 }) {
   const [state, action, pending] = useActionState(saveSmsChannelAction, INITIAL);
 
   return (
     <div className="flex flex-col gap-7">
-      <div>
-        <h2 className="text-foreground font-medium">Workspace setup</h2>
-        <p className="text-foreground-weak mt-1 text-sm">
-          Admins configure the shared Twilio number and the agents it can launch.
-        </p>
-      </div>
-
-      {webhookUrl && (
-        <div className="border-border bg-surface-raised flex flex-col gap-3 rounded-xl border p-4">
-          <div>
-            <h2 className="text-foreground font-medium">Twilio webhook</h2>
-            <p className="text-foreground-weak mt-1 text-sm">
-              In Twilio, set this phone number&apos;s incoming-message webhook to
-              HTTP POST.
-            </p>
-          </div>
-          <div className="border-border bg-surface flex items-center gap-2 rounded-lg border px-3 py-2">
-            <code className="text-foreground min-w-0 flex-1 break-all text-sm">
-              {webhookUrl}
-            </code>
-            <CopyButton text={webhookUrl} ariaLabel="Copy Twilio webhook URL" />
-          </div>
-        </div>
-      )}
-
       <form action={action} className="flex flex-col gap-5">
         <input type="hidden" name="workspace" value={workspaceSlug} />
         {channel && <input type="hidden" name="id" value={channel.id} />}
+
+        <Field
+          label="Name"
+          name="name"
+          defaultValue={channel?.name}
+          placeholder="Support number"
+          required
+          disabled={pending}
+        />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field
@@ -120,14 +100,6 @@ export function TextMessageForm({
         </p>
 
         {channel && (
-          <p className="text-foreground-muted text-sm">
-            {scopedAgentNames.length > 0
-              ? `Connected agents: ${scopedAgentNames.join(", ")}`
-              : "No agents currently match these labels."}
-          </p>
-        )}
-
-        {channel && (
           <label className="text-foreground flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -144,15 +116,9 @@ export function TextMessageForm({
             {state.error}
           </p>
         )}
-        {state.message && (
-          <p className="text-sentiment-positive text-sm" role="status">
-            {state.message}
-          </p>
-        )}
-
         <div>
           <Button type="submit" variant="primary" disabled={pending || agents.length === 0}>
-            {pending ? "Saving…" : channel ? "Save changes" : "Set up text messages"}
+            {pending ? "Saving…" : channel ? "Save changes" : "Create text number"}
           </Button>
         </div>
       </form>
@@ -166,7 +132,7 @@ export function TextMessageForm({
               type="submit"
               className="text-foreground-weak hover:text-sentiment-negative text-sm"
             >
-              Remove text-message channel
+              Delete this text number
             </button>
           </form>
         </div>

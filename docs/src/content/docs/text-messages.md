@@ -1,29 +1,34 @@
 ---
 title: Text messages
-description: Connect a Twilio phone number so people can run label-scoped agents over SMS.
+description: Connect Twilio phone numbers so people can run label-scoped agents over SMS.
 ---
 
-Agent Studio can connect one **Twilio SMS number** to a label-scoped set of
-agents in each workspace. A person texts the number, TAS routes the request to
-one of those agents, launches its current stable version, and Twilio sends the
-result back to the originating phone. Each workspace member links their own
-phone, so the run acts as that member and uses their connections.
+Agent Studio can connect multiple named **Twilio SMS numbers** to a workspace.
+Each number has its own credentials and label-scoped set of agents, similar to
+having multiple Slack apps for different teams. A person texts a number, TAS
+routes the request to one of its connected agents, launches the current stable
+version, and Twilio sends the result back to the originating phone. Each
+workspace member links their own phone once, so runs on every workspace number
+act as that member and use their connections.
 
-## Set up the channel
+## Set up a text number
 
 Only a workspace admin can configure text messages.
 
 1. In Twilio, buy or select an SMS-capable phone number.
-2. In TAS, open **Build → Text messages**.
-3. Enter the Twilio **Account SID**, **Auth Token**, and phone number in E.164
-   form (for example, `+14155550123`).
+2. In TAS, open **Build → Text messages** and choose **New text number**.
+3. Give the number a recognizable name, then enter the Twilio **Account SID**,
+   **Auth Token**, and phone number in E.164 form (for example,
+   `+14155550123`).
 4. Enter one or more **agent labels** as a comma-separated list. Every valid
    agent carrying at least one of those labels is connected to the number.
 5. Copy the webhook URL TAS reveals. In Twilio's phone-number configuration,
    set **A message comes in** to **Webhook**, paste the URL, choose **HTTP POST**,
    and save.
-6. Each workspace member opens **Build → Text messages**, chooses **Link this
-   phone**, and texts the displayed one-time `link` command from their phone.
+6. Each workspace member opens **Build → Text messages**, chooses an enabled
+   number under **Your phone**, then texts the displayed one-time `link`
+   command from their phone. Linking once enables that phone on every text
+   number in the workspace.
 7. Send the Twilio number a request. TAS immediately acknowledges a routed request
    and sends a second message with the agent's result when the run finishes.
 
@@ -63,7 +68,9 @@ that phone independently in another workspace.
 
 Every SMS run uses the linked member's connections. Removing the member from
 the workspace immediately removes their text access through the membership
-cascade. Members can unlink their own phone from **Build → Text messages**.
+cascade. Members can unlink their own phone from **Build → Text messages**. The
+link is workspace-wide: adding another text number does not require members to
+link again.
 
 The channel runs the routed agent's **stable version**, matching other
 unattended entry points. Promote a draft before expecting text messages to use
@@ -73,7 +80,7 @@ the number without changing the text-message channel.
 ## Security and limits
 
 - Only phones linked by current workspace members can invoke an agent. Unknown
-  numbers cannot start runs. Still treat the shared number as an external entry
+  numbers cannot start runs. Still treat each text number as an external entry
   point and give agents narrowly scoped tools.
 - TAS verifies every inbound request with Twilio's `X-Twilio-Signature` and
   ignores repeated `MessageSid` deliveries.
@@ -84,9 +91,9 @@ the number without changing the text-message channel.
   truncation marker when longer. Carrier segmentation and Twilio messaging
   charges still apply.
 
-Disable **Accept incoming text messages** to pause the channel without deleting
-its settings. Remove the channel to delete its credentials and delivery
-history.
+Disable **Accept incoming text messages** to pause a number without deleting
+its settings. Delete a text number to remove its credentials and delivery
+history without affecting the workspace's other numbers or member phone links.
 
 ## Observability
 

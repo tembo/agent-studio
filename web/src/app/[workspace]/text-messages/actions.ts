@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { writeAuditEvent } from "@/lib/audit-db";
 import { listAgentsByLabels } from "@/lib/agent-scope";
@@ -19,6 +19,7 @@ export type SmsChannelFormState = { error?: string; message?: string };
 export type SmsLinkFormState = {
   error?: string;
   code?: string;
+  channelId?: string;
   smsPhoneNumber?: string;
 };
 
@@ -42,12 +43,15 @@ export async function saveSmsChannelAction(
 ): Promise<SmsChannelFormState> {
   const slug = String(formData.get("workspace") ?? "");
   const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
   const accountSid = String(formData.get("account_sid") ?? "").trim();
   const authToken = String(formData.get("auth_token") ?? "").trim();
   const phoneNumber = String(formData.get("phone_number") ?? "").trim();
   const agentLabels = parseLabels(String(formData.get("agent_labels") ?? ""));
-  const enabled = formData.get("enabled") === "on";
+  const enabled = id ? formData.get("enabled") === "on" : true;
 
+  if (!name) return { error: "Give the text number a name." };
+  if (name.length > 80) return { error: "Keep the name under 80 characters." };
   if (!ACCOUNT_SID.test(accountSid)) {
     return { error: "Enter a Twilio Account SID beginning with AC." };
   }
@@ -64,18 +68,20 @@ export async function saveSmsChannelAction(
     notFound();
   }
 
-  const current = await getSmsChannel(auth.workspace.id);
+  const current = id ? await getSmsChannel(auth.workspace.id, id) : null;
+  if (id && !current) return { error: "Text number not found." };
   if (!current && !authToken) return { error: "Enter the Twilio Auth Token." };
-  if (id && current?.id !== id) return { error: "Text-message configuration not found." };
 
   const scopedAgents = await listAgentsByLabels(auth.workspace.id, agentLabels);
   if (scopedAgents.length === 0) {
     return { error: "No valid agents have any of those labels." };
   }
 
+  let saved = current;
   try {
     if (current) {
       await updateSmsChannel(auth.workspace.id, current.id, {
+        name,
         accountSid,
         ...(authToken ? { authToken } : {}),
         phoneNumber,
@@ -83,8 +89,9 @@ export async function saveSmsChannelAction(
         enabled,
       });
     } else {
-      await createSmsChannel({
+      saved = await createSmsChannel({
         workspaceId: auth.workspace.id,
+        name,
         accountSid,
         authToken,
         phoneNumber,
@@ -92,28 +99,35 @@ export async function saveSmsChannelAction(
         createdBy: auth.userId,
       });
     }
-  } catch {
-    return { error: "Couldn't save the text-message channel." };
+  } catch (error) {
+    const duplicate = (error as { code?: string }).code === "23505";
+    return {
+      error: duplicate
+        ? "A text number with that name already exists in this workspace."
+        : "Couldn't save the text number.",
+    };
   }
+  if (!saved) return { error: "Couldn't save the text number." };
 
-  const saved = await getSmsChannel(auth.workspace.id);
   await writeAuditEvent({
     workspaceId: auth.workspace.id,
     actorUserId: auth.userId,
     source: "human_action",
     kind: current ? "sms_channel.updated" : "sms_channel.created",
     targetType: "sms_channel",
-    targetId: saved?.id ?? null,
+    targetId: saved.id,
     agentName: null,
     payload: {
+      name,
       phoneNumber,
       agentLabels,
-      enabled: current ? enabled : true,
-      authTokenRotated: Boolean(authToken),
+      enabled,
+      authTokenRotated: current ? Boolean(authToken) : true,
     },
   });
   revalidatePath(`/${slug}/text-messages`);
-  return { message: current ? "Text-message channel updated." : "Text-message channel created." };
+  revalidatePath(`/${slug}/text-messages/${saved.id}`);
+  redirect(`/${slug}/text-messages/${saved.id}`);
 }
 
 export async function createSmsLinkCodeAction(
@@ -121,18 +135,19 @@ export async function createSmsLinkCodeAction(
   formData: FormData,
 ): Promise<SmsLinkFormState> {
   const slug = String(formData.get("workspace") ?? "");
+  const channelId = String(formData.get("channel_id") ?? "");
   const auth = await authorizeWorkspace(slug, "viewer");
   if (!auth.ok) {
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const channel = await getSmsChannel(auth.workspace.id);
+  const channel = await getSmsChannel(auth.workspace.id, channelId);
   if (!channel) return { error: "A workspace admin has not configured text messages yet." };
   if (!channel.enabled) return { error: "Text messages are currently paused." };
 
   const link = await createSmsLinkCode(auth.workspace.id, auth.userId);
   if (!link) return { error: "You are no longer a member of this workspace." };
-  return { code: link, smsPhoneNumber: channel.phoneNumber };
+  return { code: link, channelId: channel.id, smsPhoneNumber: channel.phoneNumber };
 }
 
 export async function unlinkSmsPhoneAction(formData: FormData): Promise<void> {
@@ -160,8 +175,8 @@ export async function deleteSmsChannelAction(formData: FormData): Promise<void> 
   const id = String(formData.get("id") ?? "");
   const auth = await authorizeWorkspace(slug, "workspace_admin");
   if (!auth.ok) return;
-  const channel = await getSmsChannel(auth.workspace.id);
-  if (!channel || channel.id !== id) return;
+  const channel = await getSmsChannel(auth.workspace.id, id);
+  if (!channel) return;
   await deleteSmsChannel(auth.workspace.id, channel.id);
   await writeAuditEvent({
     workspaceId: auth.workspace.id,
@@ -171,7 +186,8 @@ export async function deleteSmsChannelAction(formData: FormData): Promise<void> 
     targetType: "sms_channel",
     targetId: channel.id,
     agentName: null,
-    payload: { phoneNumber: channel.phoneNumber },
+    payload: { name: channel.name, phoneNumber: channel.phoneNumber },
   });
   revalidatePath(`/${slug}/text-messages`);
+  redirect(`/${slug}/text-messages`);
 }

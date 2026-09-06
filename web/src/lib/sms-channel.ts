@@ -10,6 +10,7 @@ import { db } from "@/lib/db";
 export type SmsChannel = {
   id: string;
   workspaceId: string;
+  name: string;
   accountSid: string;
   hasAuthToken: boolean;
   phoneNumber: string;
@@ -23,6 +24,7 @@ export type SmsChannel = {
 type Row = {
   id: string;
   workspace_id: string;
+  name: string;
   account_sid: string;
   auth_token: Buffer;
   phone_number: string;
@@ -33,13 +35,14 @@ type Row = {
   updated_at: Date;
 };
 
-const SELECT = `id, workspace_id, account_sid, auth_token, phone_number,
+const SELECT = `id, workspace_id, name, account_sid, auth_token, phone_number,
   agent_labels, enabled, created_by, created_at, updated_at`;
 
 function rowToChannel(row: Row): SmsChannel {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
+    name: row.name,
     accountSid: row.account_sid,
     hasAuthToken: row.auth_token !== null,
     phoneNumber: row.phone_number,
@@ -51,12 +54,26 @@ function rowToChannel(row: Row): SmsChannel {
   };
 }
 
+export async function listSmsChannels(
+  workspaceId: string,
+): Promise<SmsChannel[]> {
+  const { rows } = await db.query<Row>(
+    `SELECT ${SELECT} FROM workspace_sms_channel
+      WHERE workspace_id = $1
+      ORDER BY lower(name), created_at`,
+    [workspaceId],
+  );
+  return rows.map(rowToChannel);
+}
+
 export async function getSmsChannel(
   workspaceId: string,
+  id: string,
 ): Promise<SmsChannel | null> {
   const { rows } = await db.query<Row>(
-    `SELECT ${SELECT} FROM workspace_sms_channel WHERE workspace_id = $1`,
-    [workspaceId],
+    `SELECT ${SELECT} FROM workspace_sms_channel
+      WHERE workspace_id = $1 AND id = $2`,
+    [workspaceId, id],
   );
   return rows[0] ? rowToChannel(rows[0]) : null;
 }
@@ -81,6 +98,7 @@ export async function getSmsAuthToken(id: string): Promise<string | null> {
 
 export async function createSmsChannel(args: {
   workspaceId: string;
+  name: string;
   accountSid: string;
   authToken: string;
   phoneNumber: string;
@@ -90,13 +108,14 @@ export async function createSmsChannel(args: {
   const id = randomUUID();
   const { rows } = await db.query<Row>(
     `INSERT INTO workspace_sms_channel
-       (id, workspace_id, account_sid, auth_token, phone_number,
+       (id, workspace_id, name, account_sid, auth_token, phone_number,
         agent_labels, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING ${SELECT}`,
     [
       id,
       args.workspaceId,
+      args.name,
       args.accountSid,
       encryptSecret(args.authToken, aadSmsSecret(id)),
       args.phoneNumber,
@@ -111,6 +130,7 @@ export async function updateSmsChannel(
   workspaceId: string,
   id: string,
   args: {
+    name: string;
     accountSid: string;
     authToken?: string;
     phoneNumber: string;
@@ -120,16 +140,18 @@ export async function updateSmsChannel(
 ): Promise<boolean> {
   const result = await db.query(
     `UPDATE workspace_sms_channel
-        SET account_sid = $3,
-            auth_token = COALESCE($4, auth_token),
-            phone_number = $5,
-            agent_labels = $6,
-            enabled = $7,
+        SET name = $3,
+            account_sid = $4,
+            auth_token = COALESCE($5, auth_token),
+            phone_number = $6,
+            agent_labels = $7,
+            enabled = $8,
             updated_at = now()
       WHERE workspace_id = $1 AND id = $2`,
     [
       workspaceId,
       id,
+      args.name,
       args.accountSid,
       args.authToken ? encryptSecret(args.authToken, aadSmsSecret(id)) : null,
       args.phoneNumber,

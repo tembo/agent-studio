@@ -1,7 +1,24 @@
 -- Replace the channel-level sender allowlist and fallback owner with verified,
--- workspace-scoped member identity. The legacy columns stay in place so
--- existing channel configuration remains recoverable during rollout; new code
--- no longer reads them.
+-- workspace-scoped member identity, and allow multiple named SMS channels per
+-- workspace. The legacy columns stay in place so existing channel
+-- configuration remains recoverable during rollout; new code no longer reads
+-- them.
+
+ALTER TABLE workspace_sms_channel
+    DROP CONSTRAINT IF EXISTS workspace_sms_channel_workspace_id_key;
+
+ALTER TABLE workspace_sms_channel
+    ADD COLUMN IF NOT EXISTS name TEXT;
+
+UPDATE workspace_sms_channel
+SET name = phone_number
+WHERE name IS NULL;
+
+ALTER TABLE workspace_sms_channel
+    ALTER COLUMN name SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS workspace_sms_channel_workspace_name_idx
+    ON workspace_sms_channel (workspace_id, lower(name));
 
 ALTER TABLE workspace_sms_channel
     ALTER COLUMN default_owner_user_id DROP NOT NULL;
