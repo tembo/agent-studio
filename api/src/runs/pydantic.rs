@@ -174,6 +174,7 @@ pub struct PydanticArgs<'a> {
     /// (provider, name) slot, with the bearer token in
     /// Authorization headers.
     pub native_mcp_connections_json: Option<&'a str>,
+    pub memory_json: Option<&'a str>,
     /// Sidecar Python module source (the agent's `tools_module:`),
     /// surfaced as `TAS_TOOLS_MODULE_CONTENT`. The wrapper execs it and
     /// exposes its `tools = [...]` export to the agent. None = no module.
@@ -329,6 +330,9 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
     // decode error.
     if let Some(native_json) = args.native_mcp_connections_json {
         cmd.env("TAS_NATIVE_MCP_CONNECTIONS", native_json);
+    }
+    if let Some(memory_json) = args.memory_json {
+        cmd.env("TAS_MEMORY_CONNECTION", memory_json);
     }
     // Sidecar tools module source — wrapper execs it and exposes its
     // `tools = [...]` export. Only set when the agent declared one.

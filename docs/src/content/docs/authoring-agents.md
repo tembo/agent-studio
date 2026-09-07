@@ -3,6 +3,15 @@ title: Authoring agents
 description: How to create and change agents through chat-to-PR, what's in a Pydantic AgentSpec, and how to pick a model.
 ---
 
+When the deployment enables Tembo Memory, Pydantic agents automatically receive
+managed Memory tools and instructions to consult shared workspace knowledge and
+report durable findings. No agent-spec opt-in is needed. Keep `memory_ask`,
+`memory_search`, `memory_entities`, and `memory_report` free of sidecar naming
+collisions. Memory is optional: unavailable reads produce a warning, and report
+writes return durable queued receipts for background delivery. See
+[Connections](/agent-studio/connections/#optional-tembo-memory) for workspace
+sharing, setup, and outage behavior.
+
 Agents are authored as files and changed through pull requests. You can write
 those files directly, but the usual path is to describe what you want and let
 TAS open the PR for you.

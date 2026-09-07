@@ -1,0 +1,22 @@
+[
+  {
+    "name": "memory_ask",
+    "description": "Consult shared workspace memory before acting on an account, person, or repository. An unavailable response is not evidence that no knowledge exists.",
+    "inputSchema": {"type":"object","properties":{"question":{"type":"string"},"entities":{"type":"array","items":{"type":"string"}}},"required":["question"]}
+  },
+  {
+    "name": "memory_search",
+    "description": "Search claims visible in the selected Memory workspace by literal text or semantic meaning.",
+    "inputSchema": {"type":"object","properties":{"q":{"type":"string"},"semantic":{"type":"string"},"entities":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":{"type":"string"}}}
+  },
+  {
+    "name": "memory_entities",
+    "description": "Discover existing entity identifiers in shared workspace memory before creating new spellings.",
+    "inputSchema": {"type":"object","properties":{"kind":{"type":"string"}}}
+  },
+  {
+    "name": "memory_report",
+    "description": "Queue a durable observation, decision, or constraint for workspace memory. Prefer a concise fact and source pointer, not raw correspondence. actor is the observed person, not this agent. A queued receipt means Studio has stored the report for later delivery, not that Memory has extracted claims. Payload limit is 64 KiB.",
+    "inputSchema": {"type":"object","properties":{"text":{"type":"string"},"raw_ref":{"type":"string"},"actor":{"type":"string"},"owner":{"type":"string"},"source":{"type":"string"},"occurred_at":{"type":"string","description":"Original event time in ISO 8601 format."},"external_id":{"type":"string","description":"Stable source-item identifier, reused for replay."},"entities":{"type":"array","items":{"anyOf":[{"type":"string"},{"type":"object","properties":{"id":{"type":"string"},"email":{"type":"string"},"url":{"type":"string"},"handle":{"type":"string"}}}]}},"suggested_sensitivity":{"type":"string","enum":["public-org","internal","restricted","privileged"]},"audience_hint":{"type":"string"},"shape":{"type":"string","enum":["message","document","table","event","pointer"]},"seal_reason":{"type":"string"}}}
+  }
+]

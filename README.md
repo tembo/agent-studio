@@ -6,6 +6,12 @@
 <a href="https://github.com/tembo/agent-studio/discussions"><img alt="Join the community on GitHub" src="https://img.shields.io/badge/Join%20the%20community-blueviolet.svg?style=for-the-badge&logo=Github&labelColor=000000&logoWidth=20"></a>
 </div>
 
+Optional **Tembo Memory** integration: set `TAS_MEMORY_URL` and
+`TAS_MEMORY_ADMIN_TOKEN` on the API service to give every Pydantic agent managed
+Memory tools. Instance admins choose a dedicated or shared Memory workspace in
+Workspace Settings → General. Reports are encrypted and queued in Studio during
+outages, then delivered by a background worker without requiring another agent run.
+
 > Self-hosted control plane for AI agents. Definitions live in Git, every
 > change is a commit (PR by default, or direct commit in YOLO mode), and runs,
 > audit logs, and identity stay in your environment.

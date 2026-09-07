@@ -4,6 +4,7 @@ import { Section } from "@/components/section";
 import { getWorkspaceBySlug } from "@/lib/workspace";
 
 import { RenameWorkspaceForm } from "../rename-workspace-form";
+import { MemorySection } from "../memory-section";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export default async function GeneralSettingsPage({
           />
         </Section>
       </div>
+      <div className="py-6"><MemorySection workspaceId={workspace.id} slug={workspace.slug} /></div>
     </div>
   );
 }

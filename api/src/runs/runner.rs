@@ -810,6 +810,19 @@ async fn run_pydantic(
         );
     }
 
+    let memory_json = match crate::memory::prepare_run(state, ctx.run_id).await {
+        Ok(connection) => connection,
+        Err(_) => {
+            tracing::warn!(run_id = %ctx.run_id, "Memory attachment unavailable; continuing without memory");
+            crate::memory::warn(
+                state,
+                ctx.run_id,
+                "Memory attachment unavailable; this run continued without memory tools",
+            )
+            .await;
+            None
+        }
+    };
     let (result, tool_calls, steps) = pydantic::invoke(pydantic::PydanticArgs {
         spec_content,
         message_history: ctx.message_history.as_ref(),
@@ -822,6 +835,7 @@ async fn run_pydantic(
         composio_user_id: composio_key.as_ref().map(|_| composio_user_id.as_str()),
         composio_connected_accounts_json: composio_connected_accounts_json.as_deref(),
         native_mcp_connections_json: native_mcp_connections_json.as_deref(),
+        memory_json: memory_json.as_deref(),
         tools_module_content: ctx.tools_module_content.as_deref(),
         skills_content_json: skills_content_json.as_deref(),
         secrets_json: secrets_json.as_deref(),

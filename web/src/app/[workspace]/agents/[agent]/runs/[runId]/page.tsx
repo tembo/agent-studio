@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { BackLink } from "@/components/back-link";
 import { LocalTime } from "@/components/local-time";
+import { MemoryRunStatus } from "@/components/memory-run-status";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
 import { isAgentLocked } from "@/lib/agent-lock";
@@ -216,6 +217,7 @@ export default async function RunDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <RunPoller status={run.status} />
+      <MemoryRunStatus workspaceId={workspace.id} runId={run.id} />
       <div className="flex flex-col gap-3">
         <BackLink href={agentHref} label={run.agentName} />
         <h1 className="text-foreground-title text-2xl font-bold tracking-tight">
