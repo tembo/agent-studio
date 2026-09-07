@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { writeAuditEvent } from "@/lib/audit-db";
 import { getPublicOrigin } from "@/lib/config";
 import { classifyMessage, matchExplicitAgent } from "@/lib/message-router";
+import {
+  getSmsComplianceCommand,
+  SMS_HELP_MESSAGE,
+} from "@/lib/sms-compliance";
 import { dispatchSmsToAgent } from "@/lib/sms-dispatch";
 import {
   claimSmsEvent,
@@ -90,6 +94,13 @@ export async function POST(
 
   if (!(await claimSmsEvent(channel.id, inboundSid))) return twiml();
 
+  const complianceCommand = getSmsComplianceCommand(
+    body,
+    form.get("OptOutType"),
+  );
+  if (complianceCommand === "twilio-handled") return twiml();
+  if (complianceCommand === "help") return twiml(SMS_HELP_MESSAGE);
+
   const linkMatch = body.trim().match(/^link(?:\s+(\S+))?\s*$/i);
   if (linkMatch) {
     const code = linkMatch[1] ?? "";
@@ -116,7 +127,7 @@ export async function POST(
     } catch {
       // The phone is already linked; audit provenance is best-effort.
     }
-    return twiml("Phone linked. Send help to see the available agents.");
+    return twiml("Phone linked. Send AGENTS to see the available agents.");
   }
 
   const member = await getSmsMemberByPhone(channel.workspaceId, from);
@@ -131,7 +142,7 @@ export async function POST(
     return twiml("No agents are connected to this number yet.");
   }
   const normalized = body.trim().toLowerCase();
-  if (["help", "agents", "list"].includes(normalized)) {
+  if (["agents", "list"].includes(normalized)) {
     return twiml(agentMenu(scoped));
   }
 

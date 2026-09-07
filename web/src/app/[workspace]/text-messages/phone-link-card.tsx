@@ -40,6 +40,41 @@ export function PhoneLinkCard({
         </p>
       </div>
 
+      {!linkedPhoneNumber && (
+        <div className="border-border bg-surface flex flex-col gap-2 rounded-lg border p-3 text-sm">
+          <p className="text-foreground font-medium">SMS consent</p>
+          <p className="text-foreground-weak">
+            By sending the one-time link command, you agree to receive
+            request-initiated customer-care texts from this number and other
+            workspace numbers you text, including acknowledgements, agent
+            results, help, and service messages. We do not send marketing
+            texts. Message frequency varies based on your use; each request
+            typically produces an acknowledgement and one result. Message and
+            data rates may apply. Consent is not a condition of purchase. Reply
+            STOP to opt out from that number, START to resubscribe, or HELP for
+            help.
+          </p>
+          <p className="text-foreground-muted flex flex-wrap gap-x-3 gap-y-1">
+            <a
+              href="https://www.tembo.io/privacy/privacy-policy"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-2"
+            >
+              Privacy Policy
+            </a>
+            <a
+              href="https://www.tembo.io/terms"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline underline-offset-2"
+            >
+              Terms
+            </a>
+          </p>
+        </div>
+      )}
+
       {linkedPhoneNumber ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-foreground text-sm">
