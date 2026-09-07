@@ -44,15 +44,19 @@ export function PhoneLinkCard({
         <div className="border-border bg-surface flex flex-col gap-2 rounded-lg border p-3 text-sm">
           <p className="text-foreground font-medium">SMS consent</p>
           <p className="text-foreground-weak">
-            By sending the one-time link command, you agree to receive
-            request-initiated customer-care texts from this number and other
-            workspace numbers you text, including acknowledgements, agent
-            results, help, and service messages. We do not send marketing
-            texts. Message frequency varies based on your use; each request
-            typically produces an acknowledgement and one result. Message and
-            data rates may apply. Consent is not a condition of purchase. Reply
-            STOP to opt out from that number, START to resubscribe, or HELP for
-            help.
+            By sending the one-time LINK command displayed in your Tembo Agent
+            Studio workspace, you expressly agree to receive customer-care and
+            service-related SMS text messages from Tembo at the mobile number
+            from which you send the command. Messages may include phone-link
+            confirmations, request acknowledgements, agent results, help
+            responses, and service notices.
+          </p>
+          <p className="text-foreground-weak">
+            Message frequency varies based on your activity; each agent request
+            typically generates two messages—one acknowledgement and one
+            result. Msg &amp; data rates may apply. Reply STOP to opt out and HELP
+            for help. Consent is not a condition of purchase. Tembo does not
+            send marketing messages.
           </p>
           <p className="text-foreground-muted flex flex-wrap gap-x-3 gap-y-1">
             <a
