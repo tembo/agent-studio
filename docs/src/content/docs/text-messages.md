@@ -31,13 +31,16 @@ conversation by texting the number they want to use.
 
 ### Consent wording shown to members
 
-> By sending the one-time link command, you agree to receive request-initiated
-> customer-care texts from this number and other workspace numbers you text,
-> including acknowledgements, agent results, help, and service messages. We do
-> not send marketing texts. Message frequency varies based on your use; each
-> request typically produces an acknowledgement and one result. Message and
-> data rates may apply. Consent is not a condition of purchase. Reply STOP to
-> opt out from that number, START to resubscribe, or HELP for help.
+> By sending the one-time LINK command displayed in your Tembo Agent Studio
+> workspace, you expressly agree to receive customer-care and service-related
+> SMS text messages from Tembo at the mobile number from which you send the
+> command. Messages may include phone-link confirmations, request
+> acknowledgements, agent results, help responses, and service notices.
+>
+> Message frequency varies based on your activity; each agent request typically
+> generates two messages—one acknowledgement and one result. Msg & data rates
+> may apply. Reply STOP to opt out and HELP for help. Consent is not a condition
+> of purchase. Tembo does not send marketing messages.
 
 [Privacy Policy](https://www.tembo.io/privacy/privacy-policy) ·
 [Terms](https://www.tembo.io/terms)
