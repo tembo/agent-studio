@@ -15,6 +15,26 @@ In docker, `api/Dockerfile` builds the release binary, bundles the
 `cargo-ai` CLI as a sibling binary, and bundles a Python venv with
 `pydantic-ai` for the passthrough runner.
 
+## Memory integration tests
+
+Build with `cargo build`, install the web dependencies, and start the updated
+Memory API against a disposable PostgreSQL database. From the repository root:
+
+```bash
+STUDIO_MEMORY_TEST_DATABASE_URL=postgres://tembo@127.0.0.1:55439/studio_memory_test \
+MEMORY_TEST_DATABASE_URL=postgres://tembo@127.0.0.1:55439/postgres \
+MEMORY_TEST_URL=http://127.0.0.1:58081 \
+MEMORY_TEST_ADMIN_TOKEN=memory-test-admin \
+node scripts/test-memory-integration.mjs
+```
+
+Both databases must be disposable: the test writes fixtures and restarts its
+own Studio API on port 58084. All service URLs must use `127.0.0.1`. Set
+`MEMORY_TEST_PYTHON` to a Python executable with the runner dependencies to also
+exercise real Pydantic MCP discovery. The test covers outages, encrypted queued
+reports, restart recovery, duplicate delivery, expiring credentials, and shared
+versus isolated workspaces without making model calls.
+
 ## Architecture
 
 - `src/main.rs` — wires axum router, applies migrations, hands the
@@ -27,6 +47,10 @@ In docker, `api/Dockerfile` builds the release binary, bundles the
   only the web container holds the other end.
 - `src/workspace.rs`, `src/crypto.rs` — workspace lookups + AES-GCM
   symmetric encryption for workspace secrets (PATs, API keys).
+- `src/memory/` — optional Memory HTTP client, run-capability MCP bridge,
+  workspace settings, and encrypted report outbox. Runtime clients never receive
+  the Memory admin token. `/memory/mcp` uses a per-run credential, not the broad
+  `/internal` service credential. Settings routes remain under `/internal`.
 
 ## Runners are passthrough
 
@@ -46,6 +70,8 @@ The Pydantic wrapper is split by responsibility:
   native-MCP toolset construction.
 - `scripts/pydantic_scaledown.py` — optional ScaleDown prompt compression.
 - `scripts/pydantic_dry_run.py` — stub declared delivery tools when `TAS_DRY_RUN=1`.
+- `scripts/pydantic_memory.py` — automatically attach managed Memory tools,
+  stable report invocation IDs, optional-read failures, and dry-run suppression.
 
 Keep protocol changes covered in `tests/test_run_pydantic_protocol.py`; those
 tests launch the real wrapper against a loopback provider and exercise the same

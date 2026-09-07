@@ -50,6 +50,62 @@ There's also a built-in **Tembo Agent Studio** native connection (TAS's own MCP
 server) that agents use to read/produce [Tasks Inbox](/agent-studio/tasks-inbox/)
 items and trigger other runs.
 
+### Optional Tembo Memory
+
+An instance admin can connect a Memory server by setting `TAS_MEMORY_URL` (the
+server origin, not `/mcp`) and `TAS_MEMORY_ADMIN_TOKEN` on the **API service only**.
+Leave both unset to disable the integration. The web app and agent subprocesses
+never receive the Memory admin credential. Memory must include workspace APIs and
+short-lived agent keys; use its `MEMORY_BOOTSTRAP_TOKEN` as the controller token.
+
+Every Pydantic agent then receives `memory_ask`, `memory_search`, `memory_entities`,
+and `memory_report` automatically, without a `connections:` entry. Cargo AI is
+unchanged. The managed connection replaces a manually declared `tembo-memory`
+connection; its tool names are reserved for the integration.
+
+Under **Workspace Settings → General → Memory**, an instance admin who belongs to
+the workspace can select its Memory workspace. The default is a dedicated workspace
+created lazily on first upstream use. Selecting an existing one deliberately shares
+its internal knowledge with agents here. Several Studio workspaces can select the
+same Memory workspace. Ordinary workspace admins cannot change this cross-workspace
+sharing boundary. Agent identity includes the originating Studio workspace, stable
+agent name, and acting user, even when the target Memory workspace is shared.
+
+Studio calls Memory's HTTP API through a managed MCP bridge. It obtains one-hour,
+internal-sensitivity agent credentials on the server; it does not grant agents
+Memory admin rights. Credentials are renewed without changing the filing identity.
+Within the selected workspace, agents can read internal claims across account
+scopes, but cannot read higher-sensitivity claims.
+
+#### Outages and queued reports
+
+Memory outages do not fail runs. Reads return an explicit unavailable result, not
+an empty knowledge answer. `memory_report` first commits an encrypted report to
+Studio's Postgres outbox and returns a **queued receipt**. If that commit fails,
+the tool says it was not queued; it never claims a successful save.
+
+A background worker retries delivery automatically with backoff, including after
+Studio restarts and when the original agent never runs again. The original event
+time, source, filing principal and replay identifier are preserved. If Memory accepts
+a report but its response is lost, retry retrieves that same report. Delivered means
+accepted for extraction, not that claims are already available. Payload content is
+removed from the outbox after acknowledgement; receipt metadata remains.
+
+Workspace settings show queue counts and sanitized blocked-item errors. Run pages
+show report status and Memory warnings; refresh to see delivery after a run finishes.
+Instance admins can retry blocked reports after fixing authorization/configuration.
+Removing/demoting the acting user or disabling the integration blocks pending
+delivery. Reports are never silently moved to a different destination when a mapping
+or server URL changes: mapping changes affect new runs, existing receipts retain
+their original target, and changing the server URL blocks old receipts for review.
+
+Dry runs may read Memory but never enqueue or deliver new reports. No prompts or
+routine outputs are copied automatically. Reports are limited to 64 KiB; prefer
+durable facts and source pointers. Use the same `external_id` for retries of the
+same source item. Memory bootstrap credentials, protected workspaces, and sealing
+remain under the Memory administrator's control; sealed workspaces retain pending
+reports until ready.
+
 :::note[Gmail is in Google's Developer Preview]
 The Gmail MCP server (`gmailmcp.googleapis.com`) is gated behind the Google
 Workspace Developer Preview Program — even with the OAuth app + scopes set up,

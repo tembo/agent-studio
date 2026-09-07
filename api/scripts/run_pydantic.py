@@ -81,6 +81,11 @@ from pydantic_dry_run import (  # noqa: E402
     is_dry_run,
     prepare_dry_run,
 )
+from pydantic_memory import (  # noqa: E402
+    MEMORY_INSTRUCTIONS,
+    build_memory_toolset,
+    memory_enabled,
+)
 
 # Sidecar Python tools: the agent's `tools_module:` sibling source, read
 # from the repo by the web layer and handed to us via env. We exec it and
@@ -396,6 +401,8 @@ def build_agent(
     )
     if is_dry_run():
         kwargs["instructions"] = DRY_RUN_NOTICE + "\n\n" + kwargs["instructions"]
+    if memory_enabled():
+        kwargs["instructions"] += "\n\n" + MEMORY_INSTRUCTIONS
     name = spec.get("name")
     if isinstance(name, str) and name.strip():
         kwargs["name"] = name
@@ -579,6 +586,8 @@ async def _run_with_managed_toolsets(
 
 async def run(spec: dict, user_message: str, message_history=None) -> None:
     connections = parse_connections(spec)
+    if memory_enabled():
+        connections = [connection for connection in connections if connection[0] != "tembo-memory"]
     toolsets: list = []
 
     composio_mcp, used_direct_tools = build_composio_toolset(connections)
@@ -587,6 +596,9 @@ async def run(spec: dict, user_message: str, message_history=None) -> None:
 
     native_toolsets = build_native_mcp_toolsets(connections)
     toolsets.extend(native_toolsets)
+    memory_toolset = build_memory_toolset()
+    if memory_toolset is not None:
+        toolsets.append(memory_toolset)
 
     # Agent Skills the agent opts into (`skills:`). Mounted as a local toolset
     # (load_skill / run_skill_script); composes with the connection toolsets

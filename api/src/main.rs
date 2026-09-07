@@ -17,6 +17,7 @@ use tracing_subscriber::EnvFilter;
 
 mod auth;
 mod crypto;
+mod memory;
 mod native_oauth;
 mod native_oauth_allowlist;
 mod pricing;
@@ -36,6 +37,7 @@ pub struct AppState {
     pub db: sqlx::PgPool,
     pub http: reqwest::Client,
     pub encryption_key: Arc<crypto::MasterKey>,
+    pub memory: Arc<memory::Memory>,
     pub run_cancels: RunCancels,
     pub run_concurrency: runs::concurrency::RunConcurrency,
     /// Set once a shutdown signal (SIGTERM from a deploy/restart) arrives, so the
@@ -95,6 +97,7 @@ async fn main() -> anyhow::Result<()> {
         db,
         http,
         encryption_key,
+        memory: memory::Memory::from_env(bind_addr.port()),
         run_cancels: Arc::new(Mutex::new(HashMap::new())),
         run_concurrency,
         draining: Arc::new(AtomicBool::new(false)),
@@ -104,8 +107,17 @@ async fn main() -> anyhow::Result<()> {
     // Pydantic runs from their launch envelope + last acknowledged history;
     // legacy/Cargo AI rows are finalized with an explicit interruption reason.
     runs::runner::recover_orphaned_runs(&state).await;
+    memory::start_worker(state.clone());
 
     let internal_routes = Router::new()
+        .route(
+            "/memory/workspaces/{id}",
+            get(memory::settings::get).put(memory::settings::update),
+        )
+        .route(
+            "/memory/workspaces/{id}/retry",
+            post(memory::settings::retry),
+        )
         .route("/runs", post(runs::handlers::create_run))
         .route("/runs/{id}", get(runs::handlers::get_run))
         .route("/runs/{id}/cancel", post(runs::handlers::cancel_run))
@@ -123,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
     let run_concurrency = state.run_concurrency.clone();
 
     let app = Router::new()
+        .route("/memory/mcp", post(memory::mcp::handle))
         .route("/health", get(routes::health::health))
         .nest("/internal", internal_routes)
         .with_state(state)
