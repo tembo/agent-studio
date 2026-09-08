@@ -19,6 +19,9 @@ def test_runtime_blurb_requires_ask_and_report():
     assert "memory_report — required" in MEMORY_INSTRUCTIONS
     assert "including" in MEMORY_INSTRUCTIONS
     assert "Never report bulk" in MEMORY_INSTRUCTIONS
+    assert "person:<email>" in MEMORY_INSTRUCTIONS
+    assert "kind:name" in MEMORY_INSTRUCTIONS
+    assert "unknown:" in MEMORY_INSTRUCTIONS
 
 
 def test_disabled_has_no_toolset(monkeypatch):

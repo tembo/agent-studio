@@ -64,7 +64,9 @@ unchanged. The managed connection replaces a manually declared `tembo-memory`
 connection; its tool names are reserved for the integration. Agents should
 `memory_ask` before acting on people, accounts, deals, or threads, and
 `memory_report` once per interesting item inspected — including items they do
-not surface to a worklist. Skip bulk, billing, and thanks. Author that into
+not surface to a worklist. Pass `kind:name` entity ids (`person:jane@acme.com`,
+`org:acme`); a bare display name is stored as `unknown:`, not as a person.
+Skip bulk, billing, and thanks. Author that into
 the agent's own procedure; a "produce nothing else" step otherwise skips Memory.
 
 Under **Workspace Settings → General → Memory**, an instance admin who belongs to

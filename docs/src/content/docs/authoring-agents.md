@@ -12,7 +12,9 @@ The generic runtime blurb is not enough: an agent's numbered procedure
 ("produce nothing else") overrides it. Weave Memory into the procedure
 itself — `memory_ask` before acting on a person, account, deal, or thread;
 `memory_report` once per interesting item inspected, including ones not
-surfaced to a worklist. Skip bulk, billing, and thanks. Unavailable reads
+surfaced to a worklist. Entity ids are `kind:name` (`person:jane@acme.com`,
+`org:acme`); prefer `person:<email>` or `{id, email}` for people. A bare
+display name is stored as `unknown:`, not as a person. Skip bulk, billing, and thanks. Unavailable reads
 produce a warning, not an empty-knowledge answer; report writes return
 durable queued receipts for background delivery. See
 [Connections](/agent-studio/connections/#optional-tembo-memory) for workspace
