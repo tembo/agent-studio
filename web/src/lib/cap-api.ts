@@ -191,7 +191,23 @@ function buildGuidancePointerBlock(framework: Framework): string {
     "",
     "Trust the on-disk content. Don't refresh or overwrite these files;",
     "they're maintained out-of-band.",
+    "",
+    ...memoryAuthoringDirective(),
   ].join("\n");
+}
+
+function memoryAuthoringDirective(): string[] {
+  return [
+    "**Tembo Memory (TAS runtime).** On this TAS instance, Memory tools",
+    "(`memory_ask`, `memory_report`, `memory_search`, `memory_entities`)",
+    "are auto-injected at run time when Memory is enabled — do not add a",
+    "`tembo-memory` connection. An agent's numbered procedure overrides the",
+    "generic runtime blurb, so weave Memory into the procedure itself:",
+    "`memory_ask` before acting on a person, account, deal, or thread;",
+    "`memory_report` once per interesting item inspected (including ones not",
+    "surfaced to a worklist). Skip bulk, billing, and thanks. If Memory tools",
+    "are absent at run time, skip them. Classify-only evals still call no tools.",
+  ];
 }
 
 function tasInstanceUrlFromToolsBase(baseUrl: string | undefined): string | null {
@@ -355,6 +371,8 @@ export function buildCreateAgentPrompt(args: {
     `- \`${GUIDANCE_ADDITIONAL_PATH}\` — any customer-specific overrides (read if present)`,
     "",
     `The agent's \`name:\` field must be exactly \`${args.agentName}\` (it matches the filename). Also set a \`title:\` field to the human display name "${args.title}" (free text — this is what the UI shows). Don't put the file anywhere other than \`${args.agentPath}\`.`,
+    "",
+    ...memoryAuthoringDirective(),
     "",
     ...evalsDirective(args.includeEvals !== false, args.agentPath),
     ...renderAvailableSlots(args.availableSlots),

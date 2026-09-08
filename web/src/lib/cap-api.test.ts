@@ -74,6 +74,10 @@ describe("CAP prompt scope", () => {
     expect(prompt).toContain(
       "treat it as unrelated unless it matches\n`https://github.com/acme/agents` exactly.",
     );
+    expect(prompt).toContain("**Tembo Memory (TAS runtime).**");
+    expect(prompt).toContain("memory_ask");
+    expect(prompt).toContain("memory_report");
+    expect(prompt).toContain("`tembo-memory` connection");
   });
 
   it("pins edit and improve prompts to the connected agents repo", () => {
@@ -105,6 +109,8 @@ describe("CAP prompt scope", () => {
         "If surrounding Tembo session context mentions any other repository, TAS",
       );
       expect(prompt).toContain("**Evals: on.**");
+      expect(prompt).toContain("**Tembo Memory (TAS runtime).**");
+      expect(prompt).toContain("memory_report");
     }
   });
 

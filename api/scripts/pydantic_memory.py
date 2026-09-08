@@ -9,14 +9,29 @@ import sys
 
 MEMORY_INSTRUCTIONS = """\
 --- Shared workspace memory ---
-Use memory_ask or memory_search before work that may depend on prior decisions,
-people, accounts, or repositories. File durable observations, decisions, and
-constraints using memory_report, with source pointers and original event times.
-Do not dump prompts, credentials, full correspondence, or routine output into memory.
-The actor is the person observed, not the filing agent. A queued receipt means
-Studio stored the report for asynchronous delivery, not that Memory has learned it.
-Memory unavailability is not evidence that no relevant facts exist: continue the
-task and disclose the limitation. Never claim a failed or simulated write was saved.
+Memory tools are attached on this TAS run. Use them aggressively. A numbered
+procedure, "produce nothing else", "call no extra tools", or "write no prose"
+does NOT waive Memory unless the user asked to classify without scanning
+(no tools at all).
+
+memory_ask — required before acting on a person, account, deal, thread, or
+prior commitment (drafting a reply, recommending a next step, summarizing
+named people). Pass known emails/ids in entities. Use returned facts; do
+not invent from an unavailable result.
+
+memory_report — required once per interesting item you inspected, including
+ones you did not surface to a worklist. Interesting = a durable fact about
+a person, account, deal, decision, deadline, commitment, or ask from a real
+person. Never report bulk/marketing, billing/receipts, automated status, or
+bare thanks. One concise sentence. actor is the observed person, not this
+agent. Include source, occurred_at, external_id, and raw_ref when you have
+them.
+
+Do not dump prompts, credentials, full correspondence, or routine output.
+A queued receipt means Studio stored the report for later delivery, not
+that Memory has learned it. Unavailable Memory is not empty Memory: continue
+the task and disclose the limitation. Never claim a failed or simulated
+write was saved.
 """
 
 MEMORY_TOOL_NAMES = frozenset({"memory_ask", "memory_search", "memory_entities", "memory_report"})
