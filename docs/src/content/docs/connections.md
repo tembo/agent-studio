@@ -61,7 +61,11 @@ short-lived agent keys; use its `MEMORY_BOOTSTRAP_TOKEN` as the controller token
 Every Pydantic agent then receives `memory_ask`, `memory_search`, `memory_entities`,
 and `memory_report` automatically, without a `connections:` entry. Cargo AI is
 unchanged. The managed connection replaces a manually declared `tembo-memory`
-connection; its tool names are reserved for the integration.
+connection; its tool names are reserved for the integration. Agents should
+`memory_ask` before acting on people, accounts, deals, or threads, and
+`memory_report` once per interesting item inspected — including items they do
+not surface to a worklist. Skip bulk, billing, and thanks. Author that into
+the agent's own procedure; a "produce nothing else" step otherwise skips Memory.
 
 Under **Workspace Settings → General → Memory**, an instance admin who belongs to
 the workspace can select its Memory workspace. The default is a dedicated workspace

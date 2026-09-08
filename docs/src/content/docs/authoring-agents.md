@@ -4,11 +4,17 @@ description: How to create and change agents through chat-to-PR, what's in a Pyd
 ---
 
 When the deployment enables Tembo Memory, Pydantic agents automatically receive
-managed Memory tools and instructions to consult shared workspace knowledge and
-report durable findings. No agent-spec opt-in is needed. Keep `memory_ask`,
-`memory_search`, `memory_entities`, and `memory_report` free of sidecar naming
-collisions. Memory is optional: unavailable reads produce a warning, and report
-writes return durable queued receipts for background delivery. See
+managed Memory tools (`memory_ask`, `memory_search`, `memory_entities`,
+`memory_report`) at run time. No `connections:` entry is needed — do not add
+`tembo-memory`. Keep those tool names free of sidecar collisions.
+
+The generic runtime blurb is not enough: an agent's numbered procedure
+("produce nothing else") overrides it. Weave Memory into the procedure
+itself — `memory_ask` before acting on a person, account, deal, or thread;
+`memory_report` once per interesting item inspected, including ones not
+surfaced to a worklist. Skip bulk, billing, and thanks. Unavailable reads
+produce a warning, not an empty-knowledge answer; report writes return
+durable queued receipts for background delivery. See
 [Connections](/agent-studio/connections/#optional-tembo-memory) for workspace
 sharing, setup, and outage behavior.
 

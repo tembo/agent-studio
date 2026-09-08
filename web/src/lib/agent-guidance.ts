@@ -877,6 +877,30 @@ permalink where one is returned, rather than hand-templating an ID into a URL
 path (a wrong slug/id form silently resolves to the provider's default list
 view).
 
+### Tembo Memory (auto-injected at run time)
+
+When this TAS instance has Memory enabled, every Pydantic run receives
+\`memory_ask\`, \`memory_search\`, \`memory_entities\`, and \`memory_report\`
+automatically. Do **not** add a \`tembo-memory\` connection. Do **not**
+rely on the generic runtime blurb — an agent's numbered procedure
+("produce nothing else", "call no extra tools") overrides it. Weave
+Memory into the procedure itself:
+
+- **\`memory_ask\`** before acting on a person, account, deal, thread,
+  or prior commitment (drafting a reply, choosing a next step). Pass
+  known emails/ids in \`entities\`. Use returned facts; do not invent
+  from an unavailable result.
+- **\`memory_report\`** once per interesting item inspected —
+  including ones you do not surface to a worklist. The worklist is
+  scarce; Memory is not. Interesting = a durable fact about a person,
+  account, deal, decision, deadline, commitment, or ask. Never report
+  bulk/marketing, billing/receipts, automated status, or bare thanks.
+  One concise sentence. \`actor\` is the observed person, not this
+  agent. Include \`source\`, \`occurred_at\`, \`external_id\`, \`raw_ref\`.
+- Unavailable Memory is not empty Memory: continue the task.
+- Classify-only / no-tools evals still call no tools (including Memory).
+- If Memory tools are absent at run time, skip them silently.
+
 ### retries
 
 Integer or struct. Default behavior is provider-determined. Set
@@ -930,6 +954,9 @@ for production agents.
   \`trigger_run\`, \`get_run\`) that fans out to focused, reusable
   sub-agents and merges their structured output. See "Orchestration"
   above — prefer this over one agent holding every source's tools.
+- **Inbox / worklist agent** → weave \`memory_ask\` before every draft
+  and \`memory_report\` for interesting items even when not surfaced.
+  See "Tembo Memory" above.
 
 ## Quick reference: minimal valid file
 
