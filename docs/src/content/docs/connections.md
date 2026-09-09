@@ -154,9 +154,16 @@ connections:
 ## Authorizing and reconnecting
 
 Authorize and manage connections under **Connections**. Native MCP OAuth tokens
-refresh automatically shortly before they expire. Rotating refresh tokens are
+refresh before agent runs, **Refresh tools**, and native MCP inbox actions when
+they are near expiry. Rotating refresh tokens are
 stored atomically, and temporary authorization-service failures are retried
 without requiring you to reconnect.
+
+If refresh fails and the access token has already expired, it is not passed to
+the agent or used for the web action. Retry after the authorization service
+recovers; a temporary failure does not require reconnecting. Running agents
+still use the token captured at startup: renewal during a long-running agent
+execution is not yet supported.
 
 When a refresh is temporarily unavailable, the connection shows **Retrying**
 and its detail page shows when another attempt is allowed. If consent was

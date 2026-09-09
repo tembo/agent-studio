@@ -9,7 +9,6 @@ import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import {
   deleteNativeConnection,
   getNativeConnectionById,
-  getNativeConnectionCredentials,
   listNativeConnectionsForUser,
   renameNativeConnection,
   saveNativeConnection,
@@ -22,6 +21,7 @@ import {
 } from "@/lib/mcp-tools";
 import { getMcpProvider, type McpProviderSlug } from "@/lib/mcp-providers";
 import { fetchNativeMcpTools } from "@/lib/native-mcp-tools";
+import { getUsableNativeMcpCredentials } from "@/lib/native-mcp-credentials";
 import { trustedMcpOrigin } from "@/lib/native-oauth-security";
 
 // Server actions for native-MCP connection rows. Read-paths live on
@@ -288,14 +288,8 @@ export async function refreshNativeMcpToolsAction(
     return { error: `Connection is ${row.status}; reconnect first.` };
   }
 
-  let creds;
   try {
-    creds = await getNativeConnectionCredentials(connectionId);
-  } catch {
-    return { error: "Couldn't load stored credentials." };
-  }
-
-  try {
+    const creds = await getUsableNativeMcpCredentials(row);
     const tools = await fetchNativeMcpTools(row.mcpServerUrl, creds.access_token);
     await replaceToolsForConnection({
       workspaceId: workspace.id,
