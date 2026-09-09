@@ -86,7 +86,8 @@ pub async fn list_active_native_connections(
     let rows: Vec<(String, String, Option<String>, Vec<u8>, Option<Vec<u8>>)> = sqlx::query_as(
         "SELECT type, name, mcp_server_url, credentials, aux_secret_ciphertext \
            FROM workspace_connection \
-          WHERE workspace_id = $1 AND user_id = $2 AND status = 'active'",
+          WHERE workspace_id = $1 AND user_id = $2 AND status = 'active' \
+            AND (token_expires_at IS NULL OR token_expires_at > now())",
     )
     .bind(workspace_id)
     .bind(user_id)

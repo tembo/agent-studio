@@ -111,6 +111,10 @@ async fn main() -> anyhow::Result<()> {
 
     let internal_routes = Router::new()
         .route(
+            "/connections/native/{id}/refresh",
+            post(native_oauth::refresh_for_use),
+        )
+        .route(
             "/memory/workspaces/{id}",
             get(memory::settings::get).put(memory::settings::update),
         )

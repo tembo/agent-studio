@@ -1,12 +1,5 @@
-//! Lazy refresh of native-MCP OAuth access tokens, run by the runner
-//! just before it reads tokens for a run.
-//!
-//! The web layer mints tokens at authorize time (and on a manual
-//! "Reconnect") but has no refresh path. Native-MCP access tokens are
-//! short-lived (Attio's are hours), so without this an expired token
-//! reaches the agent and the run dies with a 401 — after which the
-//! existing stale-marking path flips the connection to 'stale' and the
-//! user has to reconnect by hand.
+//! Refresh-before-use for native-MCP OAuth access tokens, shared by
+//! the runner and the internal endpoint used by web MCP actions.
 //!
 //! Providers that support the `offline_access` scope (Attio does, and
 //! TAS requests it) hand back a `refresh_token` at authorize time,
@@ -31,6 +24,96 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Duration as StdDuration;
 
 use crate::crypto::MasterKey;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshForUseRequest {
+    workspace_id: uuid::Uuid,
+    user_id: String,
+}
+
+pub async fn refresh_for_use(
+    axum::extract::State(state): axum::extract::State<crate::AppState>,
+    axum::extract::Path(id): axum::extract::Path<uuid::Uuid>,
+    axum::Json(request): axum::Json<RefreshForUseRequest>,
+) -> Result<StatusCode, (StatusCode, &'static str)> {
+    let auth_type: Option<(String,)> = sqlx::query_as(
+        "SELECT auth_type FROM workspace_connection \
+         WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
+    )
+    .bind(id)
+    .bind(request.workspace_id)
+    .bind(&request.user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Unable to load connection.",
+        )
+    })?;
+    let Some((auth_type,)) = auth_type else {
+        return Err((StatusCode::NOT_FOUND, "Connection not found."));
+    };
+    if auth_type == "oauth2" {
+        refresh_connection(
+            &state.db,
+            &state.encryption_key,
+            &state.http,
+            request.workspace_id,
+            &request.user_id,
+            id,
+            Utc::now() + Duration::seconds(REFRESH_SKEW_SECS),
+        )
+        .await
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Unable to refresh authorization. Retry later.",
+            )
+        })?;
+    }
+    let row: Option<(String, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT status, token_expires_at FROM workspace_connection \
+         WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
+    )
+    .bind(id)
+    .bind(request.workspace_id)
+    .bind(&request.user_id)
+    .fetch_optional(&state.db)
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Unable to load connection.",
+        )
+    })?;
+    let Some((status, expires_at)) = row else {
+        return Err((StatusCode::NOT_FOUND, "Connection not found."));
+    };
+    ensure_usable_token(&status, expires_at, Utc::now())?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+fn ensure_usable_token(
+    status: &str,
+    expires_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Result<(), (StatusCode, &'static str)> {
+    if status != "active" {
+        return Err((
+            StatusCode::CONFLICT,
+            "Authorization is inactive. Reconnect this account.",
+        ));
+    }
+    if expires_at.is_some_and(|expires| expires <= now) {
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Authorization refresh is temporarily unavailable. Retry later.",
+        ));
+    }
+    Ok(())
+}
 
 /// Refresh tokens already expired or within this window of expiring,
 /// so a token can't die mid-run between the sweep and the agent's
@@ -897,6 +980,27 @@ fn is_public_ipv6(ip: Ipv6Addr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn usable_tokens_require_active_status_and_unexpired_credentials() {
+        let now = Utc::now();
+        assert!(ensure_usable_token("active", None, now).is_ok());
+        assert!(ensure_usable_token("active", Some(now + Duration::seconds(1)), now).is_ok());
+        for expires_at in [now, now - Duration::seconds(1)] {
+            assert_eq!(
+                ensure_usable_token("active", Some(expires_at), now)
+                    .unwrap_err()
+                    .0,
+                StatusCode::SERVICE_UNAVAILABLE
+            );
+        }
+        for status in ["stale", "revoked", "expired"] {
+            assert_eq!(
+                ensure_usable_token(status, None, now).unwrap_err().0,
+                StatusCode::CONFLICT
+            );
+        }
+    }
 
     #[test]
     fn blocks_private_and_metadata_ipv4() {

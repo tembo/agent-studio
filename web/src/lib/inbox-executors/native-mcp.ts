@@ -2,11 +2,11 @@ import "server-only";
 
 import {
   getNativeConnection,
-  getNativeConnectionCredentials,
   listNativeConnectionsForUser,
 } from "@/lib/connections";
 import type { McpProviderSlug } from "@/lib/mcp-providers";
 import { callNativeMcpTool } from "@/lib/native-mcp-tools";
+import { getUsableNativeMcpCredentials } from "@/lib/native-mcp-credentials";
 
 import type { InboxExecutor } from "./index";
 
@@ -25,9 +25,7 @@ import type { InboxExecutor } from "./index";
 //       toolArgs: { id: "<task-uuid>" }  # arguments for the tool
 //
 // The call runs against the same per-user OAuth token the agent ran with, so it
-// can only do what that connection's scopes allow. We use the stored token
-// as-is (the Rust runner owns refresh-before-use); an expired token surfaces as
-// an auth error and leaves the item unresolved.
+// can only do what that connection's scopes allow.
 export const nativeMcpExecutor: InboxExecutor = async ({
   workspaceId,
   userId,
@@ -80,7 +78,7 @@ export const nativeMcpExecutor: InboxExecutor = async ({
     }
   }
 
-  const creds = await getNativeConnectionCredentials(conn.id);
+  const creds = await getUsableNativeMcpCredentials(conn);
   if (!creds.access_token) {
     throw new Error(
       `The "${connectionType}" connection has no access token — reconnect it under Connections.`,
