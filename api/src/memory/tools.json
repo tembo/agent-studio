@@ -47,6 +47,18 @@
     }
   },
   {
+    "name": "memory_card",
+    "description": "Read a compact Entity Card before preparing a profile or briefing about a known person, account, or project. Returns overview, goals, owners, decisions, constraints, and open questions with claim-level citations. Discover exact kind:name ids with memory_entities. Memory creates or refreshes the card on demand; missing sections are not proof that no facts exist. Check cited evidence before acting and use memory_ask for specific questions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {"type": "string", "description": "Exact kind:name id returned by memory_entities, e.g. org:acme."}
+      },
+      "required": ["entity_id"],
+      "additionalProperties": false
+    }
+  },
+  {
     "name": "memory_report",
     "description": "Required once per interesting item inspected, including ones not surfaced. File one concise fact with a source pointer. Skip bulk, billing, and thanks. actor is the observed person, not this agent. A queued receipt means Studio stored the report for later delivery, not that Memory has extracted claims. Payload limit is 64 KiB.",
     "inputSchema": {

@@ -19,6 +19,16 @@ prior commitment (drafting a reply, recommending a next step, summarizing
 named people). Pass kind:name ids in entities (person:jane@acme.com,
 org:acme). Use returned facts; do not invent from an unavailable result.
 
+memory_card — use before preparing a profile or briefing about a known person,
+account, or project. Discover its exact entity_id with memory_entities. Cards
+summarize overview, goals, owners, decisions, constraints, and open questions
+with claim-level citations. Read the cited evidence before important actions;
+use memory_ask for specific questions. Empty sections are not proof that facts
+do not exist. Memory creates or refreshes cards on demand; generation can take
+up to two minutes. If unavailable, use memory_ask or memory_search and disclose
+the limitation. Do not repeatedly request the same card within a task unless
+new evidence warrants it.
+
 memory_report — required once per interesting item you inspected, including
 ones you did not surface to a worklist. Interesting = a durable fact about
 a person, account, deal, decision, deadline, commitment, or ask from a real
@@ -36,7 +46,7 @@ the task and disclose the limitation. Never claim a failed or simulated
 write was saved.
 """
 
-MEMORY_TOOL_NAMES = frozenset({"memory_ask", "memory_search", "memory_entities", "memory_report"})
+MEMORY_TOOL_NAMES = frozenset({"memory_ask", "memory_search", "memory_entities", "memory_card", "memory_report"})
 
 
 def memory_report_error(name: str, content) -> str | None:
@@ -99,6 +109,6 @@ def build_memory_toolset():
         connection["url"],
         headers={"Authorization": f"Bearer {connection['token']}"},
         process_tool_call=process_memory_call,
-        read_timeout=40,
+        read_timeout=150,
         id="studio-memory",
     )

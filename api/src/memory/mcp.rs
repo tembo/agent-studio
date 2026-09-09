@@ -119,6 +119,12 @@ async fn call(state: &AppState, access: &RunAccess, name: &str, args: Value) -> 
                 None,
             )
         }
+        "memory_card" => {
+            let Some(path) = card_path(&args) else {
+                return json!({ "status": "invalid", "message": "memory_card requires an entity_id in kind:name format" });
+            };
+            (reqwest::Method::GET, path, None)
+        }
         _ => return json!({ "status": "invalid", "message": "Unknown Memory tool" }),
     };
     match client::agent_request(
@@ -141,6 +147,21 @@ async fn call(state: &AppState, access: &RunAccess, name: &str, args: Value) -> 
     }
 }
 
+fn card_path(args: &Value) -> Option<String> {
+    let entity_id = args["entity_id"].as_str()?;
+    let (kind, name) = entity_id.split_once(':')?;
+    if kind.trim().is_empty() || name.trim().is_empty() {
+        return None;
+    }
+    let mut url = reqwest::Url::parse("http://localhost/v1/entities/").unwrap();
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .push(entity_id)
+        .push("card");
+    Some(url.path().to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -157,6 +178,7 @@ mod tests {
                 "memory_ask",
                 "memory_search",
                 "memory_entities",
+                "memory_card",
                 "memory_report"
             ]
         );
@@ -173,5 +195,29 @@ mod tests {
         assert!(actor.contains("person:<email>"));
         assert!(entities.contains("kind:name"));
         assert!(entities.contains("unknown"));
+    }
+
+    #[test]
+    fn card_route_encodes_entity_as_one_path_segment() {
+        assert_eq!(
+            card_path(&json!({"entity_id": "org:acme"})).unwrap(),
+            "/v1/entities/org:acme/card"
+        );
+        assert_eq!(
+            card_path(&json!({"entity_id": "repo:acme/backend?x=1#part"})).unwrap(),
+            "/v1/entities/repo:acme%2Fbackend%3Fx=1%23part/card"
+        );
+        assert!(card_path(&json!({"entity_id": "org:acme%2Fother"}))
+            .unwrap()
+            .contains("%252F"));
+        for args in [
+            json!({}),
+            json!({"entity_id": 42}),
+            json!({"entity_id": "acme"}),
+            json!({"entity_id": "org:"}),
+            json!({"entity_id": ":acme"}),
+        ] {
+            assert!(card_path(&args).is_none());
+        }
     }
 }
