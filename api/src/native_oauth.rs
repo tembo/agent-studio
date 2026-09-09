@@ -833,10 +833,7 @@ async fn discover_token_endpoint(
     )?;
     assert_public_endpoint_host(&as_base, "authorization server URL").await?;
 
-    let mut as_meta_url = as_base;
-    as_meta_url.set_path("/.well-known/oauth-authorization-server");
-    as_meta_url.set_query(None);
-    as_meta_url.set_fragment(None);
+    let as_meta_url = authorization_server_metadata_url(as_base);
     let asm: AuthServerMeta = http
         .get(as_meta_url)
         .header("Accept", "application/json")
@@ -857,6 +854,17 @@ async fn discover_token_endpoint(
         parse_trusted_oauth_url(&token_endpoint, allowed_oauth_origins, "token endpoint")?;
     assert_public_endpoint_host(&token_endpoint, "token endpoint").await?;
     Ok(token_endpoint)
+}
+
+fn authorization_server_metadata_url(mut issuer: reqwest::Url) -> reqwest::Url {
+    let path = format!(
+        "/.well-known/oauth-authorization-server{}",
+        issuer.path().trim_end_matches('/')
+    );
+    issuer.set_path(&path);
+    issuer.set_query(None);
+    issuer.set_fragment(None);
+    issuer
 }
 
 fn allowed_oauth_origins_for_mcp_origin(origin: &str) -> Option<&'static [&'static str]> {
@@ -980,6 +988,41 @@ fn is_public_ipv6(ip: Ipv6Addr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn authorization_server_discovery_preserves_stripe_issuer_path() {
+        for issuer in [
+            "https://access.stripe.com/mcp",
+            "https://access.stripe.com/mcp/",
+        ] {
+            assert_eq!(
+                authorization_server_metadata_url(reqwest::Url::parse(issuer).unwrap()).as_str(),
+                "https://access.stripe.com/.well-known/oauth-authorization-server/mcp"
+            );
+        }
+    }
+
+    #[test]
+    fn authorization_server_discovery_keeps_root_issuers_at_root() {
+        for issuer in ["https://example.com", "https://example.com/"] {
+            assert_eq!(
+                authorization_server_metadata_url(reqwest::Url::parse(issuer).unwrap()).as_str(),
+                "https://example.com/.well-known/oauth-authorization-server"
+            );
+        }
+    }
+
+    #[test]
+    fn authorization_server_discovery_preserves_nested_encoded_paths_and_origin() {
+        let issuer = reqwest::Url::parse(
+            "https://example.com:8443/tenant/team%20one/?query=ignored#fragment",
+        )
+        .unwrap();
+        assert_eq!(
+            authorization_server_metadata_url(issuer).as_str(),
+            "https://example.com:8443/.well-known/oauth-authorization-server/tenant/team%20one"
+        );
+    }
 
     #[test]
     fn usable_tokens_require_active_status_and_unexpired_credentials() {
