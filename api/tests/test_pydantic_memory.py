@@ -11,6 +11,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 from pydantic_memory import MEMORY_INSTRUCTIONS, build_memory_toolset, process_memory_call
+from pydantic_protocol import steps_payload, tool_calls_payload
+from pydantic_ai.messages import ModelRequest, ModelResponse, ToolCallPart, ToolReturnPart
 
 
 def test_runtime_blurb_requires_ask_and_report():
@@ -64,3 +66,41 @@ async def test_outage_does_not_raise_or_claim_empty_memory():
     result = await process_memory_call(SimpleNamespace(tool_call_id="call-123"), call, "memory_ask", {"question": "What changed?"})
     assert result["status"] == "unavailable"
     assert "secret" not in json.dumps(result)
+
+
+@pytest.mark.parametrize("encode", [lambda value: value, json.dumps])
+@pytest.mark.parametrize("status", ["not_queued", "not_confirmed", "invalid", "unavailable", "blocked"])
+def test_failed_memory_reports_are_failed_in_tool_and_step_history(encode, status):
+    content = encode({
+        "status": status,
+        "reason": "memory_report_invalid_timestamp",
+        "message": "sensitive report must not be stored",
+    })
+    messages = [
+        ModelResponse(parts=[ToolCallPart("memory_report", {}, tool_call_id="call-123")]),
+        ModelRequest(parts=[ToolReturnPart("memory_report", content, tool_call_id="call-123")]),
+    ]
+    calls = tool_calls_payload(messages)
+    assert calls[0]["ok"] is False
+    assert "memory_report_invalid_timestamp" in calls[0]["error"]
+    assert "sensitive" not in json.dumps(calls)
+    assert steps_payload(messages)[0]["tool_calls"] == calls
+
+
+@pytest.mark.parametrize("status", ["queued", "delivered", "simulated"])
+def test_successful_memory_reports_remain_ok(status):
+    messages = [
+        ModelResponse(parts=[ToolCallPart("memory_report", {}, tool_call_id="call-123")]),
+        ModelRequest(parts=[ToolReturnPart("memory_report", {"status": status}, tool_call_id="call-123")]),
+    ]
+    assert tool_calls_payload(messages)[0]["ok"] is True
+    assert steps_payload(messages)[0]["tool_calls"][0]["ok"] is True
+
+
+def test_failure_classifier_does_not_expose_unknown_reasons_or_affect_other_tools():
+    from pydantic_memory import memory_report_error
+
+    result = {"status": "not_queued", "reason": "private database URL", "message": "private report"}
+    assert "private" not in memory_report_error("memory_report", result)
+    assert memory_report_error("another_tool", result) is None
+    assert memory_report_error("memory_report", "not JSON") is None

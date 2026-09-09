@@ -13,6 +13,32 @@ traces.
 
 ## Common issues
 
+**"Memory report was not queued" / a Memory write shows Failed.**
+The run's Memory warning includes a safe reason code and an action to take:
+
+- `memory_report_invalid_timestamp`: use an RFC 3339 `occurred_at` with a
+  timezone, such as `2026-09-09T12:00:00Z`, or omit it to use the current time.
+- `memory_report_invalid_external_id`: supply a nonempty string of at most
+  512 bytes, or omit it to let Studio generate an identifier.
+- `memory_report_forbidden_identity`: remove `principal_id`, `filed_by`,
+  `tenant_id`, `workspace_id`, and `report_id`; Studio supplies identity.
+- `memory_report_payload_too_large`: shorten the report to fit within 64 KiB.
+- `memory_report_invalid_arguments`: pass a JSON object as tool arguments.
+- `memory_report_invalid_invocation`: ask an administrator to check the Studio
+  runner integration; the model should not invent an invocation ID.
+- `memory_report_encryption_failed` or `memory_report_storage_failed`: ask an
+  administrator to check encryption configuration or database availability and
+  migrations, respectively. API logs include the run ID and safe reason code,
+  not report contents or raw database errors.
+
+A failed Memory write does not fail the whole agent run or undo a successful
+Slack post. The run transcript and **Tool uses** mark unsuccessful Memory writes
+as **Failed**, even when the tool returned normally. This does not trigger
+automatic model retries. Queued receipts and simulated dry-run writes are not
+failures; queued still means awaiting asynchronous delivery, not extracted.
+Older runs retain their original generic warning and tool outcome; Studio
+cannot reconstruct a discarded error from those records.
+
 **A run stays queued while other agents are running.**
 The instance has reached its execution limit. It starts automatically when a
 slot opens. Instance admins can raise the caps under

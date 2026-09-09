@@ -15,6 +15,8 @@ import yaml
 from pydantic_ai import ModelMessagesTypeAdapter
 from pydantic_ai.usage import RunUsage
 
+from pydantic_memory import memory_report_error
+
 
 USAGE_SENTINEL = "__TAS_USAGE__:"
 TOOLS_SENTINEL = "__TAS_TOOLS__:"
@@ -46,7 +48,8 @@ def tool_calls_payload(messages) -> list[dict]:
                     "error": str(content)[:MAX_TOOL_ERROR_CHARS],
                 }
             elif kind.endswith("tool-return"):
-                outcomes.setdefault(cid, {"ok": True, "error": None})
+                error = memory_report_error(name, getattr(part, "content", None))
+                outcomes.setdefault(cid, {"ok": error is None, "error": error})
     out: list[dict] = []
     for cid, name in calls[:200]:
         outcome = outcomes.get(cid)
@@ -96,7 +99,10 @@ def steps_payload(messages) -> list[dict]:
                     "error": str(content)[:MAX_TOOL_ERROR_CHARS],
                 }
             elif kind.endswith("tool-return"):
-                outcomes.setdefault(cid, {"ok": True, "error": None})
+                error = memory_report_error(
+                    getattr(part, "tool_name", None), getattr(part, "content", None)
+                )
+                outcomes.setdefault(cid, {"ok": error is None, "error": error})
 
     steps: list[dict] = []
     index = 0
@@ -251,6 +257,11 @@ def make_stream_handler(message_history=None):
                         if (not ok and result_kind == "retry-prompt")
                         else None
                     )
+                    if ok:
+                        error = memory_report_error(
+                            getattr(result, "tool_name", None), getattr(result, "content", None)
+                        )
+                        ok = error is None
                     if call_id:
                         _emit_stream_line(
                             PROGRESS_SENTINEL,

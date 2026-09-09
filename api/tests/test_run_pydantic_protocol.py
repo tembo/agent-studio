@@ -425,6 +425,38 @@ tools = [echo]
     assert "echoed: hello" in json.dumps(server.requests[1])
 
 
+def test_failed_memory_write_is_reported_without_failing_or_retrying_run() -> None:
+    tools_module = '''
+def memory_report(message: str) -> dict:
+    """Return a failed Memory queue receipt for the protocol test."""
+    return {"status": "not_queued", "reason": "memory_report_invalid_timestamp"}
+
+tools = [memory_report]
+'''
+    spec = {**BASE_SPEC, "tools_module": "agent_tools.py"}
+    with FakeAnthropic(
+        [
+            ResponsePlan(body=_tool_call_stream().replace(b'"name": "echo"', b'"name": "memory_report"')),
+            ResponsePlan(body=_text_stream("Report was not saved; continuing.")),
+        ]
+    ) as server:
+        result = _run_wrapper(
+            spec,
+            base_url=server.base_url,
+            extra_env={"TAS_TOOLS_MODULE_CONTENT": tools_module},
+        )
+
+    assert result.returncode == 0, result.stderr
+    assert len(server.requests) == 2
+    calls = _payloads(result.lines, TOOLS)[0]
+    assert calls[0]["name"] == "memory_report"
+    assert calls[0]["ok"] is False
+    assert "memory_report_invalid_timestamp" in calls[0]["error"]
+    assert _payloads(result.lines, STEPS)[0][0]["tool_calls"] == calls
+    progress = _payloads(result.lines, PROGRESS)
+    assert any(event.get("kind") == "tool_result" and event.get("ok") is False for event in progress)
+
+
 def test_provider_error_is_exit_one_with_diagnostic() -> None:
     error = {
         "type": "error",
