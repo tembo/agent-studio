@@ -59,7 +59,7 @@ never receive the Memory admin credential. Memory must include workspace APIs an
 short-lived agent keys; use its `MEMORY_BOOTSTRAP_TOKEN` as the controller token.
 
 Every Pydantic agent then receives `memory_ask`, `memory_search`, `memory_entities`,
-and `memory_report` automatically, without a `connections:` entry. Cargo AI is
+`memory_card`, and `memory_report` automatically, without a `connections:` entry. Cargo AI is
 unchanged. The managed connection replaces a manually declared `tembo-memory`
 connection; its tool names are reserved for the integration. Agents should
 `memory_ask` before acting on people, accounts, deals, or threads, and
@@ -68,6 +68,26 @@ not surface to a worklist. Pass `kind:name` entity ids (`person:jane@acme.com`,
 `org:acme`); a bare display name is stored as `unknown:`, not as a person.
 Skip bulk, billing, and thanks. Author that into
 the agent's own procedure; a "produce nothing else" step otherwise skips Memory.
+
+Use `memory_card` with an exact `entity_id` from `memory_entities` when preparing
+a person, customer, or project briefing. Entity Cards summarize overview, goals,
+owners, decisions, constraints, and open questions with claim-level citations.
+Check those citations before important actions; empty sections do not prove that
+facts do not exist. Use `memory_ask` for targeted questions and `memory_search`
+for supporting claims. If card generation fails, use those tools and disclose
+the limitation rather than treating the entity as unknown.
+
+Memory creates cards on demand and owns their permission-scoped cache and lazy
+refresh after evidence changes or expiry. Studio does not cache card responses.
+Card requests have a 120-second upstream timeout; the managed tool connection
+allows 150 seconds for reads, including credential setup. Other upstream request
+timeouts are unchanged. Avoid fetching the same card repeatedly within a task
+unless new evidence warrants it.
+
+Studio bundles the managed Memory tool catalog with its API; it does not discover
+that catalog from the Memory server or the native-connection tool cache. Deploy
+the updated Studio API and start a new run to pick up card support and guidance.
+No agent-spec edits or native-connection catalog refresh are required.
 
 Under **Workspace Settings → General → Memory**, an instance admin who belongs to
 the workspace can select its Memory workspace. The default is a dedicated workspace

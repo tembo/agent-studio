@@ -44,11 +44,7 @@ pub async fn request(
         .http
         .request(method, format!("{}{}", config.url, path))
         .bearer_auth(token)
-        .timeout(std::time::Duration::from_secs(if path == "/v1/ask" {
-            20
-        } else {
-            5
-        }));
+        .timeout(request_timeout(path));
     if let Some(workspace) = workspace {
         request = request.header("x-memory-workspace", workspace);
     }
@@ -74,6 +70,34 @@ pub async fn request(
         });
     }
     response.json().await.map_err(|_| Failure::unavailable())
+}
+
+fn request_timeout(path: &str) -> std::time::Duration {
+    std::time::Duration::from_secs(
+        if path.starts_with("/v1/entities/") && path.ends_with("/card") {
+            120
+        } else if path == "/v1/ask" {
+            20
+        } else {
+            5
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn card_generation_has_a_longer_bounded_timeout() {
+        assert_eq!(
+            request_timeout("/v1/entities/person:nathan-owen/card").as_secs(),
+            120
+        );
+        assert_eq!(request_timeout("/v1/ask").as_secs(), 20);
+        assert_eq!(request_timeout("/v1/entities").as_secs(), 5);
+        assert_eq!(request_timeout("/v1/reports").as_secs(), 5);
+    }
 }
 
 pub async fn admin_request(

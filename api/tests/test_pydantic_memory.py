@@ -4,13 +4,13 @@ import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from pydantic_memory import MEMORY_INSTRUCTIONS, build_memory_toolset, process_memory_call
+from pydantic_memory import MEMORY_INSTRUCTIONS, MEMORY_TOOL_NAMES, build_memory_toolset, process_memory_call
 from pydantic_protocol import steps_payload, tool_calls_payload
 from pydantic_ai.messages import ModelRequest, ModelResponse, ToolCallPart, ToolReturnPart
 
@@ -29,6 +29,33 @@ def test_runtime_blurb_requires_ask_and_report():
 def test_disabled_has_no_toolset(monkeypatch):
     monkeypatch.delenv("TAS_MEMORY_CONNECTION", raising=False)
     assert build_memory_toolset() is None
+
+
+def test_card_catalog_and_guidance_match_bridge():
+    catalog = json.loads((Path(__file__).resolve().parents[1] / "src/memory/tools.json").read_text())
+    assert {tool["name"] for tool in catalog} == MEMORY_TOOL_NAMES
+    card = next(tool for tool in catalog if tool["name"] == "memory_card")
+    assert card["inputSchema"]["required"] == ["entity_id"]
+    assert "memory_card — use before" in MEMORY_INSTRUCTIONS
+    assert "claim-level citations" in MEMORY_INSTRUCTIONS
+    assert "use memory_ask or memory_search" in MEMORY_INSTRUCTIONS
+
+
+def test_card_read_timeout_exceeds_upstream_timeout(monkeypatch):
+    monkeypatch.setenv("TAS_MEMORY_CONNECTION", json.dumps({"url": "http://localhost/memory/mcp", "token": "run-token"}))
+    with patch("pydantic_ai.mcp.MCPToolset") as factory:
+        build_memory_toolset()
+    assert factory.call_args.kwargs["read_timeout"] == 150
+
+
+@pytest.mark.asyncio
+async def test_card_remains_a_read_in_dry_run(monkeypatch):
+    monkeypatch.setenv("TAS_DRY_RUN", "1")
+    card = {"entity_id": "org:acme", "sections": []}
+    call = AsyncMock(return_value=card)
+    args = {"entity_id": "org:acme"}
+    assert await process_memory_call(SimpleNamespace(tool_call_id=None), call, "memory_card", args) == card
+    call.assert_awaited_once_with("memory_card", args)
 
 
 def test_configured_attaches_without_agent_spec(monkeypatch):
@@ -61,9 +88,10 @@ async def test_dry_run_never_queues(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_outage_does_not_raise_or_claim_empty_memory():
+@pytest.mark.parametrize("name,arguments", [("memory_ask", {"question": "What changed?"}), ("memory_card", {"entity_id": "org:acme"})])
+async def test_outage_does_not_raise_or_claim_empty_memory(name, arguments):
     call = AsyncMock(side_effect=ConnectionError("secret URL must not be surfaced"))
-    result = await process_memory_call(SimpleNamespace(tool_call_id="call-123"), call, "memory_ask", {"question": "What changed?"})
+    result = await process_memory_call(SimpleNamespace(tool_call_id="call-123"), call, name, arguments)
     assert result["status"] == "unavailable"
     assert "secret" not in json.dumps(result)
 
