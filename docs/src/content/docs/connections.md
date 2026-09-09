@@ -159,6 +159,9 @@ they are near expiry. Rotating refresh tokens are
 stored atomically, and temporary authorization-service failures are retried
 without requiring you to reconnect.
 
+Refresh discovery preserves authorization-server issuer paths, including
+Stripe's `/mcp` path, so renewal uses the correct provider metadata endpoint.
+
 If refresh fails and the access token has already expired, it is not passed to
 the agent or used for the web action. Retry after the authorization service
 recovers; a temporary failure does not require reconnecting. Running agents
