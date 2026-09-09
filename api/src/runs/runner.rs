@@ -703,8 +703,7 @@ async fn run_pydantic(
     let native_mcp_connections_json: Option<String> = {
         // Refresh-before-use: mint fresh access tokens for any native
         // connections at/near expiry before we read and hand them to
-        // the wrapper. Best-effort — a failed refresh falls through to
-        // the existing stale-marking path if the token then 401s.
+        // the wrapper. The credential loader excludes expired tokens.
         if let Err(e) = crate::native_oauth::refresh_expiring_native_connections(
             &state.db,
             &state.encryption_key,
@@ -716,7 +715,7 @@ async fn run_pydantic(
         {
             tracing::warn!(
                 ?e,
-                "native MCP refresh sweep errored; proceeding with existing tokens"
+                "native MCP refresh sweep errored; proceeding with unexpired tokens only"
             );
         }
         let rows = list_active_native_connections(
