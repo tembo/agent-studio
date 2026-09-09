@@ -39,6 +39,35 @@ write was saved.
 MEMORY_TOOL_NAMES = frozenset({"memory_ask", "memory_search", "memory_entities", "memory_report"})
 
 
+def memory_report_error(name: str, content) -> str | None:
+    """Classify failed Memory writes without persisting report contents."""
+    if name != "memory_report":
+        return None
+    if isinstance(content, str):
+        try:
+            content = json.loads(content)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(content, dict):
+        return None
+    status = content.get("status")
+    if status not in ("not_queued", "not_confirmed", "invalid", "unavailable", "blocked"):
+        return None
+    reason = content.get("reason")
+    if reason not in (
+        "memory_report_invalid_arguments",
+        "memory_report_invalid_invocation",
+        "memory_report_payload_too_large",
+        "memory_report_forbidden_identity",
+        "memory_report_invalid_external_id",
+        "memory_report_invalid_timestamp",
+        "memory_report_encryption_failed",
+        "memory_report_storage_failed",
+    ):
+        reason = status
+    return f"Memory report failed ({reason}); check the run's Memory warning."
+
+
 def memory_enabled() -> bool:
     return bool(os.environ.get("TAS_MEMORY_CONNECTION"))
 

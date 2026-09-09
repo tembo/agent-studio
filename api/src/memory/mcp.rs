@@ -78,22 +78,19 @@ pub async fn handle(
 }
 
 async fn call(state: &AppState, access: &RunAccess, name: &str, args: Value) -> Value {
-    if !args.is_object() {
-        return json!({ "status": "invalid", "message": "Tool arguments must be an object" });
-    }
     if name == "memory_report" {
         return match outbox::enqueue(state, access, args).await {
             Ok(result) => result,
-            Err(_) => {
-                warn(
-                    state,
-                    access.run_id,
-                    "Memory report was not queued; check the report fields and Studio storage",
-                )
-                .await;
-                json!({ "status": "not_queued", "message": "Report could not be durably queued. Check fields, event time, payload limit, and Studio storage. Do not claim it was saved." })
+            Err(error) => {
+                let message = format!("Memory report was not queued [{}]: {error}", error.code());
+                tracing::warn!(run_id = %access.run_id, reason = error.code(), "Memory report enqueue failed");
+                warn(state, access.run_id, &message).await;
+                json!({ "status": "not_queued", "reason": error.code(), "message": message })
             }
         };
+    }
+    if !args.is_object() {
+        return json!({ "status": "invalid", "message": "Tool arguments must be an object" });
     }
     if state.memory.config.as_ref().map(|config| &config.url) != Some(&access.destination) {
         return json!({ "status": "unavailable", "message": "Memory destination changed or is not configured" });
