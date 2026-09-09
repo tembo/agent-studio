@@ -205,7 +205,8 @@ function memoryAuthoringDirective(): string[] {
     "generic runtime blurb, so weave Memory into the procedure itself:",
     "`memory_ask` before acting on a person, account, deal, or thread;",
     "`memory_report` once per interesting item inspected (including ones not",
-    "surfaced to a worklist). Skip bulk, billing, and thanks. If Memory tools",
+    "surfaced to a worklist). Entity ids are kind:name (`person:jane@acme.com`,",
+    "`org:acme`); a bare name is stored as `unknown:`. Skip bulk, billing, and thanks. If Memory tools",
     "are absent at run time, skip them. Classify-only evals still call no tools.",
   ];
 }

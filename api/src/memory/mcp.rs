@@ -61,7 +61,8 @@ pub async fn handle(
     let result = match body["method"].as_str().unwrap_or("") {
         "initialize" => json!({
             "protocolVersion": "2025-06-18", "capabilities": { "tools": {} },
-            "serverInfo": { "name": "tembo-memory", "version": "1.0.0" }
+            "serverInfo": { "name": "tembo-memory", "version": "1.0.0" },
+            "instructions": "Entities are kind:name ids (person:jane@acme.com, org:acme). Prefer person:<email> or {id, email} for people. Bare names become unknown entities, not people. actor is the observed person, never you. Reuse ids from memory_entities."
         }),
         "ping" => json!({}),
         "tools/list" => json!({ "tools": serde_json::from_str::<Value>(include_str!("tools.json")).expect("valid bundled Memory tool schemas") }),
@@ -162,5 +163,18 @@ mod tests {
                 "memory_report"
             ]
         );
+        let report = catalog
+            .iter()
+            .find(|tool| tool["name"] == "memory_report")
+            .unwrap();
+        let actor = report["inputSchema"]["properties"]["actor"]["description"]
+            .as_str()
+            .unwrap();
+        let entities = report["inputSchema"]["properties"]["entities"]["description"]
+            .as_str()
+            .unwrap();
+        assert!(actor.contains("person:<email>"));
+        assert!(entities.contains("kind:name"));
+        assert!(entities.contains("unknown"));
     }
 }

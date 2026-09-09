@@ -16,16 +16,18 @@ does NOT waive Memory unless the user asked to classify without scanning
 
 memory_ask — required before acting on a person, account, deal, thread, or
 prior commitment (drafting a reply, recommending a next step, summarizing
-named people). Pass known emails/ids in entities. Use returned facts; do
-not invent from an unavailable result.
+named people). Pass kind:name ids in entities (person:jane@acme.com,
+org:acme). Use returned facts; do not invent from an unavailable result.
 
 memory_report — required once per interesting item you inspected, including
 ones you did not surface to a worklist. Interesting = a durable fact about
 a person, account, deal, decision, deadline, commitment, or ask from a real
 person. Never report bulk/marketing, billing/receipts, automated status, or
-bare thanks. One concise sentence. actor is the observed person, not this
-agent. Include source, occurred_at, external_id, and raw_ref when you have
-them.
+bare thanks. One concise sentence. actor is person:<email> or person:<name>
+for the observed person, not this agent. entities must be kind:name ids or
+{id, email} objects — never a bare display name, or Memory stores unknown:
+instead of person:. Include source, occurred_at, external_id, and raw_ref
+when you have them. Call memory_entities to reuse existing ids.
 
 Do not dump prompts, credentials, full correspondence, or routine output.
 A queued receipt means Studio stored the report for later delivery, not

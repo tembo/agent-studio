@@ -888,15 +888,18 @@ Memory into the procedure itself:
 
 - **\`memory_ask\`** before acting on a person, account, deal, thread,
   or prior commitment (drafting a reply, choosing a next step). Pass
-  known emails/ids in \`entities\`. Use returned facts; do not invent
-  from an unavailable result.
+  kind:name ids in \`entities\` (\`person:jane@acme.com\`, \`org:acme\`).
+  Use returned facts; do not invent from an unavailable result.
 - **\`memory_report\`** once per interesting item inspected —
   including ones you do not surface to a worklist. The worklist is
   scarce; Memory is not. Interesting = a durable fact about a person,
   account, deal, decision, deadline, commitment, or ask. Never report
   bulk/marketing, billing/receipts, automated status, or bare thanks.
-  One concise sentence. \`actor\` is the observed person, not this
-  agent. Include \`source\`, \`occurred_at\`, \`external_id\`, \`raw_ref\`.
+  One concise sentence. \`actor\` is \`person:<email>\` or \`person:<name>\`
+  for the observed person, not this agent. \`entities\` must be kind:name
+  ids or \`{id, email}\` objects — a bare display name is stored as
+  \`unknown:\`, not as a person. Include \`source\`, \`occurred_at\`,
+  \`external_id\`, \`raw_ref\`. Call \`memory_entities\` to reuse ids.
 - Unavailable Memory is not empty Memory: continue the task.
 - Classify-only / no-tools evals still call no tools (including Memory).
 - If Memory tools are absent at run time, skip them silently.

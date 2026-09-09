@@ -14,6 +14,12 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+### Fixed
+
+- **Memory person entities from Studio runs.** The managed Memory tools now
+  require `kind:name` ids (`person:jane@acme.com`, `org:acme`) on `actor` and
+  `entities`. Bare display names were stored as `unknown:` instead of people.
+
 ## [v2026.9.2] — Microsoft multi-tenant sign-in fix — shipped 2026-09-03
 
 ### Fixed
