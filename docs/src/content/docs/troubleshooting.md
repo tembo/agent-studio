@@ -61,6 +61,13 @@ or the agent declared a provider/slot nobody has connected. Use the sidebar
 The connection's credential expired or was revoked (the connection is marked
 stale). Reconnect it under [Connections](/agent-studio/connections/).
 
+**A run fails opening a Native MCP session (Stripe, Attio, …) but a rerun works.**
+Hosted MCP handshakes are flaky under load. Studio waits up to 30s for
+initialize and retries transient connect / "connection closed" / 5xx / 429
+errors on handshake and tool calls. A 401 still means reconnect the
+connection. `retries:` on the agent spec is a model-tool retry, not a
+whole-run retry — do not bump it to paper over MCP transport failures.
+
 **An MCP server returns an error while closing a completed run.**
 Agent Studio preserves the completed output and records the session-cleanup
 error as an operator warning. An error while opening the session or while the

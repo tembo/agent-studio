@@ -2,9 +2,111 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
+
+# pydantic-ai's MCPToolset defaults init_timeout to 5s. Hosted MCP servers
+# (Stripe especially) often exceed that on the initialize handshake, which
+# fails the whole run before any tool call. Retry handshake/transport blips
+# here; do not retry the agent run (delivery tools are not idempotent).
+MCP_INIT_TIMEOUT_SECONDS = 30.0
+MCP_READ_TIMEOUT_SECONDS = 300.0
+MCP_CONNECT_ATTEMPTS = 3
+MCP_TOOL_ATTEMPTS = 3
+
+_TRANSIENT_MCP_MARKERS = (
+    "connection closed",
+    "connection reset",
+    "connection aborted",
+    "connect error",
+    "connecterror",
+    "timed out",
+    "timeout",
+    "temporarily unavailable",
+    "server disconnected",
+    "remote protocol error",
+    "closed without response",
+    "session terminated",
+    "not connected",
+    "econnreset",
+    "econnrefused",
+    "503",
+    "502",
+    "429",
+)
+
+_T = TypeVar("_T")
+
+
+def is_transient_mcp_error(exc: BaseException) -> bool:
+    name = type(exc).__name__.lower()
+    if any(
+        part in name
+        for part in ("timeout", "connecterror", "disconnect", "remoteprotocol", "networkerror")
+    ):
+        return True
+    code = getattr(exc, "code", None)
+    if code in (-32000, -32001, -32300, 429, 502, 503):
+        return True
+    msg = str(exc).lower()
+    return any(marker in msg for marker in _TRANSIENT_MCP_MARKERS)
+
+
+async def retry_transient_await(
+    factory: Callable[[], Awaitable[_T]],
+    *,
+    what: str,
+    attempts: int = MCP_CONNECT_ATTEMPTS,
+) -> _T:
+    last: BaseException | None = None
+    for attempt in range(attempts):
+        try:
+            return await factory()
+        except Exception as exc:
+            last = exc
+            if not is_transient_mcp_error(exc) or attempt + 1 >= attempts:
+                raise
+            delay = 0.5 * (2 ** attempt)
+            print(
+                f"[tas] {what} failed ({type(exc).__name__}: {exc}); "
+                f"retrying in {delay:g}s ({attempt + 1}/{attempts})",
+                file=sys.stderr,
+                flush=True,
+            )
+            await asyncio.sleep(delay)
+    assert last is not None
+    raise last
+
+
+async def retry_transient_mcp_call(_ctx, call_tool, name, args):
+    async def _once():
+        return await call_tool(name, args)
+
+    return await retry_transient_await(
+        _once,
+        what=f"MCP tool {name}",
+        attempts=MCP_TOOL_ATTEMPTS,
+    )
+
+
+def _make_mcp_toolset(url: str, *, headers: dict[str, str] | None = None, **kwargs):
+    from pydantic_ai.mcp import MCPToolset
+
+    class RetryingMCPToolset(MCPToolset):
+        async def __aenter__(self):
+            async def _enter():
+                return await super(RetryingMCPToolset, self).__aenter__()
+
+            return await retry_transient_await(_enter, what="MCP initialize")
+
+    kwargs.setdefault("init_timeout", MCP_INIT_TIMEOUT_SECONDS)
+    kwargs.setdefault("read_timeout", MCP_READ_TIMEOUT_SECONDS)
+    kwargs.setdefault("process_tool_call", retry_transient_mcp_call)
+    return RetryingMCPToolset(url, headers=headers, **kwargs)
 
 def _coerce_source(value) -> str:
     """Connection source discriminator:
@@ -221,7 +323,6 @@ def build_composio_toolset(
     # don't pay the import cost (and so a broken composio install
     # doesn't crash agents that don't need it).
     from composio import Composio
-    from pydantic_ai.mcp import MCPToolset
 
     # The Rust runner pre-resolves the workspace's active connections
     # from workspace_composio_connection and ships them as a JSON map
@@ -306,7 +407,7 @@ def build_composio_toolset(
     except Exception as exc:
         _maybe_emit_stale_connection_marker(exc, connections, resolved)
         raise
-    mcp = MCPToolset(
+    mcp = _make_mcp_toolset(
         session.mcp.url,
         headers={"x-api-key": api_key},
     )
@@ -376,10 +477,6 @@ def build_native_mcp_toolsets(
         except json.JSONDecodeError:
             pass
 
-    # Deferred import — agents that don't use native MCP don't pay
-    # the import cost (matches the composio-side pattern).
-    from pydantic_ai.mcp import MCPToolset
-
     toolsets: list = []
     missing: list[str] = []
     for provider, name, tools in native:
@@ -405,7 +502,7 @@ def build_native_mcp_toolsets(
         run_id = os.environ.get("TAS_RUN_ID")
         if provider == "tembo-agent-studio" and run_id:
             headers["X-Tas-Orchestrator-Run"] = run_id
-        mcp = MCPToolset(entry["mcp_url"], headers=headers)
+        mcp = _make_mcp_toolset(entry["mcp_url"], headers=headers)
         if tools:
             # Capture the allowed set in a default-argument so the
             # closure doesn't late-bind to the loop variable. The
