@@ -88,6 +88,13 @@ Confirm either your personal Tembo account or the workspace fallback account is
 connected in [Settings](/agent-studio/settings/). If work appears under the
 fallback account, connect your own Tembo API key before submitting again.
 
+**A newly committed agent 404s or is missing from the Agents list.**
+TAS reads the connected repo on page load. After a commit lands on the default
+branch (Tembo CAP, a direct push, or YOLO mode), reload the Agents list — the
+agent should appear within a few seconds. If it still 404s after a reload, the
+file may not be on the default branch, or its path may not match
+`agents/<framework>/<name>.yaml`.
+
 **The wrong tool slug / tools don't appear.**
 Composio and Native MCP use different slugs for the same provider — make sure the
 agent's `tools:` list matches the connection's `source:`. See

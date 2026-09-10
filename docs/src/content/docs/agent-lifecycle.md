@@ -85,7 +85,8 @@ TAS — the GitHub PR is left alone and remains reachable from Tembo links.
 ### By hand
 
 Commit a spec file directly to the connected repo under
-`agents/pydantic-agentspec/`. TAS picks it up on the next sync.
+`agents/pydantic-agentspec/`. TAS picks it up on the next page load, within
+a few seconds of the commit landing on the default branch.
 
 ## Chat-to-edit
 

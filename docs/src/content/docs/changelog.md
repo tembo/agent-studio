@@ -21,6 +21,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **New agents 404 for minutes after their commit lands.** GitHub Contents
+  reads are pinned to the current HEAD commit instead of a 60s branch-name
+  cache, so an agent file committed outside TAS (Tembo CAP, a push, YOLO
+  mode) shows up on the next page load within a few seconds. Reloading the
+  Agents list or opening the agent URL no longer serves a cached 404.
 - **Memory person entities from Studio runs.** The managed Memory tools now
   require `kind:name` ids (`person:jane@acme.com`, `org:acme`) on `actor` and
   `entities`. Bare display names were stored as `unknown:` instead of people.
