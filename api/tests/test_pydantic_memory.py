@@ -46,6 +46,7 @@ def test_card_read_timeout_exceeds_upstream_timeout(monkeypatch):
     with patch("pydantic_ai.mcp.MCPToolset") as factory:
         build_memory_toolset()
     assert factory.call_args.kwargs["read_timeout"] == 150
+    assert factory.call_args.kwargs["init_timeout"] == 30.0
 
 
 @pytest.mark.asyncio

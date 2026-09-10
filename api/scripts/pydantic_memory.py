@@ -103,12 +103,14 @@ def build_memory_toolset():
     if not memory_enabled():
         return None
     from pydantic_ai.mcp import MCPToolset
+    from pydantic_connections import MCP_INIT_TIMEOUT_SECONDS
 
     connection = json.loads(os.environ["TAS_MEMORY_CONNECTION"])
     return MCPToolset(
         connection["url"],
         headers={"Authorization": f"Bearer {connection['token']}"},
         process_tool_call=process_memory_call,
+        init_timeout=MCP_INIT_TIMEOUT_SECONDS,
         read_timeout=150,
         id="studio-memory",
     )
