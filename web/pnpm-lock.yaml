@@ -24,8 +24,8 @@ importers:
         specifier: 0.4.2
         version: 0.4.2
       '@composio/core':
-        specifier: ^0.14.1
-        version: 0.14.1(zod@4.4.3)
+        specifier: ^0.18.0
+        version: 0.18.0(zod@4.4.3)
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.30.0(zod@4.4.3)
@@ -495,13 +495,15 @@ packages:
   '@composio/client@0.1.0-alpha.76':
     resolution: {integrity: sha512-MXC5JGRVdiQ4EgLricy9o/mqBa1+1T7wHFZ6Q4ZJkrjzZqOMvxTgy21Zlb5J/1oGkB2bg9UDzpH8PkXCp/D4zA==}
 
-  '@composio/core@0.14.1':
-    resolution: {integrity: sha512-MumO81kU9ZwHELrN7b/ju9Ke7il/xz0d65yeSsbtp5V11LA4efLKgE4hKPxif55NK97pApBOj4UkQB+knzue9Q==}
+  '@composio/core@0.18.0':
+    resolution: {integrity: sha512-u8dfSDJV+BYiQYJBxbk6xRI8o8f7O6nb8xE0rJmvC+8zKNJdY/M119R8a30grLh07a6fcLeVFYCJlTRpCjwKyg==}
+    engines: {node: '>=22.22.3'}
     peerDependencies:
       zod: '>=3.25.76 <5'
 
-  '@composio/json-schema-to-zod@0.2.1':
-    resolution: {integrity: sha512-ezIaQoXdqWJXFaI8+gTShpj8YZcRdSnLkA1hgzx1+kn2Bi1SXOtXjghoQDy2ZBYIOCefRXGmyaPl52+idjS9wA==}
+  '@composio/json-schema-to-zod@0.3.1':
+    resolution: {integrity: sha512-ZmDksfKZrkJZj6XCgR+AmjsxqvFnfc4XDEQPfJJZMYxIqhE3MBZ2KimLuPT+YGahO4h9uzT2EYi9asMF4qR4+g==}
+    engines: {node: '>=22.22.3'}
     peerDependencies:
       zod: '>=3.25.76 <5'
 
@@ -3159,6 +3161,9 @@ packages:
     resolution: {integrity: sha512-1pC6N8qWJbWoPtEjgcL2xyhQOP491EQjeUo3qTKcmV8YSDDJrOepfG8pcC7h/QgnQHYSv0mJ3Z/ZWxmatVrysg==}
     engines: {node: '>= 0.4'}
 
+  is-fs-case-sensitive@2.0.0:
+    resolution: {integrity: sha512-JoCsyGITdYPM+pUbeMQ4IiEuQ4wjPdeWORlG7n644isewbcxiQIr+9gmF5k7UabTP/jLBRkbgydEamR7JZBKHA==}
+
   is-fullwidth-code-point@3.0.0:
     resolution: {integrity: sha512-zymm5+u+sCsSWyD9qNaejV3DFvhCKclKdizYaJUuHA83RLjb7nSuGnddCHGv0hk+KY7BMAlsWeK4Ueg6EV6XQg==}
     engines: {node: '>=8'}
@@ -3989,13 +3994,15 @@ packages:
     resolution: {integrity: sha512-7x81NCL719oNbsq/3mh+hVrAWmFuEYUqrq/Iw3kUzH8ReypT9QQ0BLoJS7/G9k6N81XjW4qHWtjWwe/9eLy1EQ==}
     engines: {node: '>=12'}
 
-  openai@6.49.0:
-    resolution: {integrity: sha512-aYCc0C6L864eR6WSYIwQGyXriw/nIyZx0ObvhzOEVuk0zoBDpynjSbrionWI7q65B5H8jJX0DXR9snEzM6bfPg==}
+  openai@7.9.0:
+    resolution: {integrity: sha512-Qfx4qKmPllnilbuP6NgEj5KPUxLShYxrlRPWh3ZRQgNgs5B1V52PrfAdEQbW9MTGq7MquDYFMm+K/KXxiY736w==}
+    engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
       '@smithy/signature-v4': '>=5.4.0 <6'
-      ws: ^8.18.0
+      undici: '>=5 <9'
+      ws: ^8.21.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-node':
@@ -4003,6 +4010,8 @@ packages:
       '@smithy/hash-node':
         optional: true
       '@smithy/signature-v4':
+        optional: true
+      undici:
         optional: true
       ws:
         optional: true
@@ -5498,15 +5507,17 @@ snapshots:
 
   '@composio/client@0.1.0-alpha.76': {}
 
-  '@composio/core@0.14.1(zod@4.4.3)':
+  '@composio/core@0.18.0(zod@4.4.3)':
     dependencies:
       '@composio/client': 0.1.0-alpha.76
-      '@composio/json-schema-to-zod': 0.2.1(zod@4.4.3)
+      '@composio/json-schema-to-zod': 0.3.1(zod@4.4.3)
       '@types/json-schema': 7.0.15
-      openai: 6.49.0(zod@4.4.3)
+      is-fs-case-sensitive: 2.0.0
+      openai: 7.9.0(undici@7.29.0)(zod@4.4.3)
       picocolors: 1.1.1
       pusher-js: 8.6.0
       semver: 7.8.5
+      undici: 7.29.0
       zod: 4.4.3
       zod-to-json-schema: 3.25.2(zod@4.4.3)
     transitivePeerDependencies:
@@ -5515,7 +5526,7 @@ snapshots:
       - '@smithy/signature-v4'
       - ws
 
-  '@composio/json-schema-to-zod@0.2.1(zod@4.4.3)':
+  '@composio/json-schema-to-zod@0.3.1(zod@4.4.3)':
     dependencies:
       zod: 4.4.3
 
@@ -8223,6 +8234,8 @@ snapshots:
     dependencies:
       call-bound: 1.0.4
 
+  is-fs-case-sensitive@2.0.0: {}
+
   is-fullwidth-code-point@3.0.0: {}
 
   is-generator-function@1.1.2:
@@ -9151,8 +9164,9 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.49.0(zod@4.4.3):
+  openai@7.9.0(undici@7.29.0)(zod@4.4.3):
     optionalDependencies:
+      undici: 7.29.0
       zod: 4.4.3
 
   optionator@0.9.4:
