@@ -15,7 +15,6 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "Tembo Agent Studio",
-      tagline: "Self-hosted control room for AI agents",
       favicon: "/favicon.svg",
       customCss: ["./src/styles/custom.css"],
       // Extend the header social icons with a build-time GitHub star count.
