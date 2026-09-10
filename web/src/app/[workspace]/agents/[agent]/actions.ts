@@ -110,9 +110,8 @@ export async function deleteAgentAction(
   revalidatePath(`/${slug}/settings`);
   // ?deleted=<name> gives the agents grid two affordances: render a
   // "Deleted {name}" confirmation banner, and defensively filter
-  // the named agent out of the listing in case the GitHub fetch
-  // cache hasn't propagated the deletion yet (60s TTL on listAgents
-  // reads — fine for normal usage, jarring for a just-deleted row).
+  // the named agent out of the listing in case a replica still has
+  // a few-second-old HEAD sha.
   redirect(`/${slug}?deleted=${encodeURIComponent(agentName)}`);
 }
 

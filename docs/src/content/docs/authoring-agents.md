@@ -39,8 +39,9 @@ before Promote. Uncheck it to skip; agents without an eval file are not gated.
 See [Agent evals](/agent-studio/agent-evals/).
 
 If the description names a recurring cadence, TAS shows it as a suggested
-schedule after submitting the agent. It does not create an automation. Wait for
-the agent to appear, test and verify it, then use **Create suggested
+schedule after submitting the agent. It does not create an automation. After
+the commit lands, reload the **Agents** list (it should appear within a few
+seconds), test and verify it, then use **Create suggested
 automation** to save the schedule in a disabled state. Enable it from the
 agent's **Automation** tab only when the agent is ready to run unattended.
 

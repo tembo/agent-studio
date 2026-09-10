@@ -129,25 +129,114 @@ const GITHUB_HEADERS = (token: string) => ({
 
 export type RepoRef = { owner: string; name: string; branch: string };
 
-// Next.js fetch cache key — every read of this repo's tree shares
-// the same tag, so a single revalidateTag call after a write
-// invalidates everything cached for that repo. The branch is part
-// of the tag because reads include a `?ref=` querystring and a
-// branch switch should not see stale content from the old branch.
+// Next.js fetch cache key — every Contents read of this repo shares
+// the same tag, so a single updateTag after a TAS write invalidates
+// cached blobs. The branch is part of the tag because a branch
+// switch should not see stale content from the old branch.
 //
-// Caching read calls (and not writes) cuts the GitHub round trip
-// for listAgents from "every workspace page load" to "once per 60s
-// per repo per process", which is what the sidebar missing-
-// connections scan needs to be cheap.
+// Contents URLs are pinned to the current HEAD sha (see
+// resolveHeadSha). Caching those sha-keyed reads — and not writes —
+// keeps listAgents cheap on sidebar-heavy page loads without serving
+// a tree from before an external commit (Tembo CAP / a push outside
+// TAS). A 60s TTL on the *branch name* used to do that; it also
+// cached 404s, so a new agent 404'd for minutes after its commit
+// was already on GitHub (#493).
 export function repoCacheTag(ref: RepoRef): string {
   return `gh:${ref.owner}/${ref.name}@${ref.branch}`;
 }
 
-// 60s is the cache TTL we apply to read-side fetches. Short enough
-// that drift after a manual repo edit is bounded; long enough that
-// sidebar-rendering on every page load doesn't pay one round trip
-// per agent per page.
-const READ_CACHE_TTL_SECONDS = 60;
+// Sha-keyed Contents are immutable, so this can be generous. The
+// freshness bound is resolveHeadSha, not this TTL.
+const READ_CACHE_TTL_SECONDS = 300;
+
+// Debounce HEAD lookups on one replica so layout + listAgents +
+// getAgentByName on the same request (and rapid navigations) share
+// one GitHub round trip. Hard TTL, not SWR — after this window the
+// next read sees a newly-pushed commit.
+const HEAD_SHA_TTL_MS = 5_000;
+
+type HeadShaResult =
+  | { ok: true; sha: string }
+  | { ok: false; error: GitHubFileError; detail?: string };
+
+const headShaByRepo = new Map<string, { sha: string; at: number }>();
+const headShaInflight = new Map<string, Promise<HeadShaResult>>();
+
+function rememberHeadSha(ref: RepoRef, sha: string): void {
+  headShaByRepo.set(repoCacheTag(ref), { sha, at: Date.now() });
+}
+
+function bustRepoReads(ref: RepoRef, headSha?: string): void {
+  if (headSha) rememberHeadSha(ref, headSha);
+  else headShaByRepo.delete(repoCacheTag(ref));
+  updateTag(repoCacheTag(ref));
+}
+
+export function resetGithubHeadCacheForTests(): void {
+  headShaByRepo.clear();
+  headShaInflight.clear();
+}
+
+async function fetchHeadSha(
+  token: string,
+  ref: RepoRef,
+): Promise<HeadShaResult> {
+  const url = `https://api.github.com/repos/${ref.owner}/${ref.name}/commits/${encodeURIComponent(ref.branch)}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: GITHUB_HEADERS(token),
+      cache: "no-store",
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      error: "network",
+      detail: err instanceof Error ? err.message : String(err),
+    };
+  }
+  if (res.status === 401) return { ok: false, error: "invalid-token" };
+  if (res.status === 404) return { ok: false, error: "not-found" };
+  if (res.status === 403 && res.headers.get("x-ratelimit-remaining") === "0") {
+    return { ok: false, error: "rate-limited" };
+  }
+  if (!res.ok) {
+    return { ok: false, error: "network", detail: `GitHub returned ${res.status}` };
+  }
+  const body = (await res.json()) as { sha?: string };
+  if (!body.sha) {
+    return { ok: false, error: "network", detail: "GitHub commit response missing sha" };
+  }
+  return { ok: true, sha: body.sha };
+}
+
+async function resolveHeadSha(
+  token: string,
+  ref: RepoRef,
+): Promise<HeadShaResult> {
+  const key = repoCacheTag(ref);
+  const cached = headShaByRepo.get(key);
+  if (cached && Date.now() - cached.at < HEAD_SHA_TTL_MS) {
+    return { ok: true, sha: cached.sha };
+  }
+  const existing = headShaInflight.get(key);
+  if (existing) return existing;
+
+  const pending = fetchHeadSha(token, ref)
+    .then((result) => {
+      if (result.ok) rememberHeadSha(ref, result.sha);
+      return result;
+    })
+    .finally(() => {
+      if (headShaInflight.get(key) === pending) headShaInflight.delete(key);
+    });
+  headShaInflight.set(key, pending);
+  return pending;
+}
+
+function contentsUrl(ref: RepoRef, path: string, sha: string): string {
+  return `https://api.github.com/repos/${ref.owner}/${ref.name}/contents/${encodePath(path)}?ref=${encodeURIComponent(sha)}`;
+}
 
 export type GitHubFileError =
   | "invalid-token"
@@ -182,7 +271,9 @@ export async function listDirectory(
   ref: RepoRef,
   path: string,
 ): Promise<ListDirectoryResult> {
-  const url = `https://api.github.com/repos/${ref.owner}/${ref.name}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref.branch)}`;
+  const head = await resolveHeadSha(token, ref);
+  if (!head.ok) return head;
+  const url = contentsUrl(ref, path, head.sha);
   let res: Response;
   try {
     res = await fetch(url, {
@@ -228,7 +319,9 @@ export async function readFile(
   ref: RepoRef,
   path: string,
 ): Promise<ReadFileResult> {
-  const url = `https://api.github.com/repos/${ref.owner}/${ref.name}/contents/${encodePath(path)}?ref=${encodeURIComponent(ref.branch)}`;
+  const head = await resolveHeadSha(token, ref);
+  if (!head.ok) return head;
+  const url = contentsUrl(ref, path, head.sha);
   let res: Response;
   try {
     res = await fetch(url, {
@@ -288,9 +381,11 @@ export async function listFileCommits(
   path: string,
   limit = 30,
 ): Promise<ListFileCommitsResult> {
+  const head = await resolveHeadSha(token, ref);
+  if (!head.ok) return head;
   const url =
     `https://api.github.com/repos/${ref.owner}/${ref.name}/commits` +
-    `?path=${encodePath(path)}&sha=${encodeURIComponent(ref.branch)}` +
+    `?path=${encodePath(path)}&sha=${encodeURIComponent(head.sha)}` +
     `&per_page=${Math.min(Math.max(limit, 1), 100)}`;
   let res: Response;
   try {
@@ -382,12 +477,9 @@ export async function createFile(
     };
   }
   const body = (await res.json()) as { commit: { sha: string } };
-  // Bust any cached reads of this repo so the next listAgents
-  // pageload sees the newly-created file immediately. `updateTag`
-  // is the Next.js 16 read-your-own-writes API; safe outside server
-  // actions too (returns undefined and no-ops if there's nothing to
-  // invalidate).
-  updateTag(repoCacheTag(ref));
+  // Pin subsequent reads at this commit and drop sha-keyed Contents
+  // cache so the next listAgents sees the new file immediately.
+  bustRepoReads(ref, body.commit.sha);
   return { ok: true, commitSha: body.commit.sha };
 }
 
@@ -451,7 +543,7 @@ export async function updateFile(
     };
   }
   const body = (await res.json()) as { commit: { sha: string } };
-  updateTag(repoCacheTag(ref));
+  bustRepoReads(ref, body.commit.sha);
   return { ok: true, commitSha: body.commit.sha };
 }
 
@@ -509,7 +601,7 @@ export async function deleteFile(
     };
   }
   const body = (await res.json()) as { commit: { sha: string } };
-  updateTag(repoCacheTag(ref));
+  bustRepoReads(ref, body.commit.sha);
   return { ok: true, commitSha: body.commit.sha };
 }
 
