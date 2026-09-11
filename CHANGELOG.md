@@ -14,6 +14,12 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+### Added
+
+- **Kernel native MCP provider** (`mcp.onkernel.com`, TAS-managed OAuth).
+  Agents can launch Kernel cloud browsers, run Playwright, and automate web
+  sessions with one Connect click.
+
 ### Fixed
 
 - **New agents 404 for minutes after their commit lands.** GitHub Contents

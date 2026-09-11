@@ -188,6 +188,7 @@ pub(crate) const NATIVE_MCP_OAUTH_ALLOWLIST: &[(&str, &[&str])] = &[
     ("https://mcp.firecrawl.dev", &["https://www.firecrawl.dev"]), // firecrawl
     ("https://mcp.apify.com", &["https://console-backend.apify.com", "https://console.apify.com"]), // apify
     ("https://mcp.brightdata.com", &["https://brightdata.com"]), // brightdata
+    ("https://mcp.onkernel.com", &["https://mcp.onkernel.com"]), // kernel
     ("https://mcp.docusign.com", &["https://account.docusign.com", "https://mcp.docusign.com"]), // docusign
     ("https://mcp.xero.com", &["https://identity.xero.com", "https://login.xero.com"]), // xero
     ("https://mcp.frontapp.com", &["https://app.frontapp.com"]), // front

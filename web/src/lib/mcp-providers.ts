@@ -198,6 +198,7 @@ export type McpProviderSlug =
   | "firecrawl"
   | "apify"
   | "brightdata"
+  | "kernel"
   | "docusign"
   | "xero"
   | "front"
@@ -1748,6 +1749,21 @@ export const MCP_PROVIDERS: Record<McpProviderSlug, McpProvider> = {
     displayName: "Bright Data",
     mcpServerUrl: "https://mcp.brightdata.com/mcp",
     oauthAuthorizationServerOrigins: ["https://brightdata.com"],
+  },
+  kernel: {
+    slug: "kernel",
+    displayName: "Kernel",
+    // Verified (probe): POST https://mcp.onkernel.com/mcp → 401 + WWW-Authenticate
+    // Bearer → path-suffixed protected-resource metadata advertises the auth
+    // server as https://mcp.onkernel.com. Auth-server metadata exposes
+    // registration_endpoint (/register → DCR), PKCE S256, public client (token
+    // auth method "none"), and the refresh_token grant — TAS-managed, like
+    // Attio. Docs: https://www.kernel.sh/docs/reference/mcp-server
+    // scopes_supported is only openid; suppress auto-appended offline_access
+    // (strict validators). Refresh tokens are still advertised via grant type.
+    mcpServerUrl: "https://mcp.onkernel.com/mcp",
+    oauthAuthorizationServerOrigins: ["https://mcp.onkernel.com"],
+    omitOfflineAccess: true,
   },
   // ── Bring-your-own OAuth app (no DCR) ──
   docusign: {
