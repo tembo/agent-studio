@@ -62,6 +62,7 @@ const LOCAL_LOGOS: Record<string, string> = {
   indeed: "/mcp-logos/indeed.png",
   instantdb: "/mcp-logos/instantdb.png",
   ironclad: "/mcp-logos/ironclad.png",
+  kernel: "/mcp-logos/kernel.png",
   knock: "/mcp-logos/knock.png",
   krisp: "/mcp-logos/krisp.png",
   lorikeet: "/mcp-logos/lorikeet.png",
