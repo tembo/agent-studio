@@ -29,6 +29,9 @@ class _Closed(Exception):
 def test_connection_closed_is_transient():
     assert is_transient_mcp_error(_Closed())
     assert is_transient_mcp_error(TimeoutError("timed out"))
+    assert is_transient_mcp_error(OSError("Failed to connect to MCP server"))
+    assert is_transient_mcp_error(ConnectionError("All connection attempts failed"))
+    assert is_transient_mcp_error(OSError("Connection refused"))
     assert not is_transient_mcp_error(ValueError("no active connection for stripe"))
     assert not is_transient_mcp_error(RuntimeError("401 Unauthorized"))
 

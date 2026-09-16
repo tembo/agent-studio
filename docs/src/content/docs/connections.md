@@ -176,7 +176,8 @@ connections:
 Authorize and manage connections under **Connections**. Native MCP OAuth tokens
 refresh before agent runs, **Refresh tools**, and native MCP inbox actions when
 they are near expiry. Rotating refresh tokens are
-stored atomically, and temporary authorization-service failures are retried
+stored atomically, and temporary authorization-service failures (including a
+cold discovery/token endpoint on the first attempt) are retried in the same run
 without requiring you to reconnect.
 
 Refresh discovery preserves authorization-server issuer paths, including
