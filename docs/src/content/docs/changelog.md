@@ -27,6 +27,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Native MCP first-run miss after token expiry.** A cold OAuth discovery or
+  token POST used to omit the connection from that run (the next click
+  succeeded). Refresh now retries discovery and sweeps a second time before the
+  credential loader drops expired tokens, so scheduled Fathom (and other native
+  MCP) runs survive the same blip a manual retry would. MCP handshake retries
+  also treat "failed to connect" as transient.
 - **New agents 404 for minutes after their commit lands.** GitHub Contents
   reads are pinned to the current HEAD commit instead of a 60s branch-name
   cache, so an agent file committed outside TAS (Tembo CAP, a push, YOLO
