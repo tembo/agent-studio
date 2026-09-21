@@ -31,6 +31,7 @@ const SETUP_URLS: Record<string, string> = {
   zoom: "https://developers.zoom.us/docs/guides/tools-and-extensions/mcp/",
   slack: "https://docs.slack.dev/ai/slack-mcp-server",
   gong: "https://mcp.gong.io",
+  zoominfo: "https://docs.zoominfo.com/docs/standard-app",
 };
 
 // Extra provider-specific setup beyond "create an app + register the redirect
@@ -40,6 +41,8 @@ const SETUP_NOTES: Record<string, string> = {
     "In Google Cloud also enable the Gmail API and the Gmail MCP API, set the OAuth consent screen to Internal with the scope https://mail.google.com/ (full Gmail — the MCP tools require it), and choose Web application as the client type.",
   zoom:
     "Create a Zoom OAuth app (General app / user-managed), register the redirect URI shown on this card, and enable the MCP scopes you need (meetings, recordings, Docs, …). Zoom uses client_secret_basic — paste the Client ID and Client Secret from the app credentials page.",
+  zoominfo:
+    "Create a Standard App (Authorization Code + PKCE) in the ZoomInfo Developer Portal or GTM.ai Developer tab. Register the redirect URI, enable MCP scopes (zi_mcp, api:data:mcp), then paste the Client ID and Client Secret. ZoomInfo's public DCR is limited to approved partner vendors, so TAS cannot self-register.",
 };
 
 export const dynamic = "force-dynamic";

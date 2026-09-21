@@ -899,11 +899,17 @@ export const MCP_PROVIDERS: Record<McpProviderSlug, McpProvider> = {
   zoominfo: {
     slug: "zoominfo",
     displayName: "ZoomInfo",
+    // DCR exists but is partner-allowlisted (Cursor, Claude, VS Code, ChatGPT).
+    // TAS is not an approved vendor — registration returns 400
+    // "Vendor with name Tembo Agent Studio was not found in approved vendors".
+    // Auth server is confidential-only (client_secret_basic/post, no "none").
+    // Admins create a Standard App in the ZoomInfo Developer Portal.
     mcpServerUrl: "https://mcp.zoominfo.com/mcp",
     oauthAuthorizationServerOrigins: [
       "https://mcp.zoominfo.com",
       "https://okta-login.zoominfo.com",
     ],
+    authMode: "manual",
   },
   lusha: {
     slug: "lusha",
