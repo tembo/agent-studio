@@ -27,12 +27,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
-- **Native MCP first-run miss after token expiry.** A cold OAuth discovery or
-  token POST used to omit the connection from that run (the next click
-  succeeded). Refresh now retries discovery and sweeps a second time before the
-  credential loader drops expired tokens, so scheduled Fathom (and other native
-  MCP) runs survive the same blip a manual retry would. MCP handshake retries
-  also treat "failed to connect" as transient.
+- **ZoomInfo native MCP connect.** ZoomInfo's OAuth DCR is partner-allowlisted
+  and rejects TAS, which failed Connect with HTTP 400. ZoomInfo is now a
+  bring-your-own OAuth app: an admin creates a Standard App in the ZoomInfo
+  Developer Portal, then members Connect.
 - **New agents 404 for minutes after their commit lands.** GitHub Contents
   reads are pinned to the current HEAD commit instead of a 60s branch-name
   cache, so an agent file committed outside TAS (Tembo CAP, a push, YOLO
