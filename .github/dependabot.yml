@@ -13,6 +13,11 @@ updates:
     directory: /docs
     patterns: ['*']
     multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     groups:
       npm-security:
         applies-to: security-updates
@@ -22,6 +27,11 @@ updates:
     directory: /web
     patterns: ['*']
     multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     ignore:
       # eslint 10 dropped context.getFilename(), which eslint-plugin-react
       # (pulled in by eslint-config-next) still calls — it crashes the lint
@@ -37,6 +47,11 @@ updates:
     directory: /api
     patterns: ['*']
     multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     groups:
       cargo-security:
         applies-to: security-updates
@@ -46,6 +61,8 @@ updates:
     directory: /
     patterns: ['*']
     multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
     groups:
       actions-security:
         applies-to: security-updates
