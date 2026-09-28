@@ -80,7 +80,10 @@ impl Memory {
 }
 
 pub fn digest(value: &str) -> String {
-    format!("{:x}", Sha256::digest(value.as_bytes()))
+    Sha256::digest(value.as_bytes())
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 
 pub fn principal_id(workspace_id: Uuid, agent_name: &str, user_id: &str) -> String {
@@ -172,6 +175,18 @@ pub fn start_worker(state: AppState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn digest_preserves_lowercase_zero_padded_sha256() {
+        assert_eq!(
+            digest(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            digest("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
 
     #[test]
     fn configuration_is_optional_and_rejects_ambiguous_urls() {
