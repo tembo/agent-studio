@@ -18,8 +18,13 @@ Workspace membership has three roles, enforced at the API layer:
 | Role          | Can do                                                           |
 | ------------- | --------------------------------------------------------------- |
 | **Admin**     | Manage members, settings, and connections; everything operators can do. |
-| **Operator**  | Author, run, and improve agents; authorize their own connections. |
+| **Operator**  | Author, run, and improve agents; upload custom skill bundles; authorize their own connections. |
 | **Viewer**    | Read agents, runs, and dashboards.                              |
+
+**Skill ownership:** admins can assign any skill to a workspace member. A skill's
+current owner can transfer it to another member, even with the viewer role;
+this does not grant permission to upload or remove skills. Ownership transfers
+are recorded in the audit log. See [Skills](/agent-studio/skills/#skill-owners).
 
 Manage members and their roles under **Settings → Members**. Workspace admins
 can open a [member detail view](/agent-studio/dashboard-and-runs/#member-detail-admins)

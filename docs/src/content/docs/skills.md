@@ -33,8 +33,40 @@ your repo:
   Skills API into the repo. Needs an Anthropic API key in
   [Settings → LLM Providers](/agent-studio/settings/).
 
-Installing and removing skills is a workspace-admin action and is recorded in
-the [audit log](/agent-studio/audit-and-roles/).
+**Operators and workspace admins** can upload custom skill bundles through
+**Skills → New skill → Upload a custom skill**, without needing an admin to
+upload on their behalf. Skills are shared across the workspace; uploading a
+bundle with an existing skill name updates that skill's files.
+
+Installing from GitHub or skills.sh, importing from the Claude API, and removing
+skills still require a **workspace admin**. Viewers cannot upload, install, or
+remove skills. Successful installs, uploads, and removals are recorded with the acting
+team member in the [audit log](/agent-studio/audit-and-roles/).
+
+## Skill owners
+
+The first team member to successfully upload or install a skill is recorded as
+its **owner**. Uploading or installing updates preserves the existing owner.
+Removing a skill clears its ownership, so a new installation gets a new owner.
+
+The Skills list includes an **Owner** column and an **Owner** filter. Choose a
+team member to see their skills, **Unassigned** to find skills without an owner,
+or **All owners** to reset the filter. The skill detail page also shows its owner.
+Workspace admins can change the owner of any skill (including unassigned
+skills) from its detail page. The current owner can also transfer their skill
+to **another workspace member**, even if they are not an admin. Other members
+cannot reassign it. An admin can assign themselves; a non-admin owner must
+choose someone else. Once transferred, the previous owner can no longer
+reassign the skill unless they are an admin. Ownership changes are audited.
+
+Skills remain shared across the workspace. Ownership does not grant upload,
+install, or removal permissions; the permissions above still apply. An owner
+with the viewer role can transfer ownership, but cannot modify skill content.
+
+Skills installed before ownership tracking was introduced, or added directly
+to the repository, show **Unassigned** until an admin assigns an owner or their
+next successful upload or installation through the app. Deleting an owner's
+user account also leaves their skills unassigned.
 
 ## Opting an agent in
 

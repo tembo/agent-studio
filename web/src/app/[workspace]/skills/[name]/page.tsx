@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { Markdown } from "@/components/markdown";
 import { getServerSession } from "@/lib/session";
+import { listSkillOwners } from "@/lib/skill-owners";
 import {
   getWorkspaceBySlug,
   getWorkspaceRole,
+  listWorkspaceMembers,
 } from "@/lib/workspace";
 import {
   getSkillInstallSource,
@@ -13,6 +15,7 @@ import {
 } from "@/lib/workspace-skills";
 
 import { RemoveSkillForm } from "../skills-forms";
+import { SkillOwnerForm } from "../skill-owner-form";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +32,20 @@ export default async function SkillDetailPage({
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
 
-  const [skill, source, role] = await Promise.all([
+  const [skill, source, role, owners] = await Promise.all([
     readInstalledSkill(workspace.id, name),
     getSkillInstallSource(workspace.id, name),
     getWorkspaceRole(workspace.id, session.user.id),
+    listSkillOwners(workspace.id),
   ]);
-  if (!skill) notFound();
+  if (!skill || !role) notFound();
   const isAdmin = role === "workspace_admin";
+  const owner = owners.get(name);
+  const canChangeOwner = isAdmin || owner?.userId === session.user.id;
+  const members = canChangeOwner ? await listWorkspaceMembers(workspace.id) : [];
+  const ownerOptions = members
+    .filter((member) => isAdmin || member.userId !== session.user.id)
+    .map((member) => ({ userId: member.userId, name: member.name || member.email }));
   const src = describeSource(source);
 
   return (
@@ -62,6 +72,10 @@ export default async function SkillDetailPage({
       <hr className="border-[var(--color-border-weak)]" />
 
       <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[8rem_1fr]">
+        <dt className="text-foreground-muted">Owner</dt>
+        <dd className="text-foreground-weak">
+          {owner?.name ?? "Unassigned"}
+        </dd>
         <dt className="text-foreground-muted">Source</dt>
         <dd className="text-foreground-weak">
           {src ? (
@@ -88,6 +102,15 @@ export default async function SkillDetailPage({
         <dt className="text-foreground-muted">Files</dt>
         <dd className="text-foreground-weak">{skill.fileCount}</dd>
       </dl>
+
+      {canChangeOwner && (
+        <SkillOwnerForm
+          key={owner?.userId ?? "unassigned"}
+          workspaceSlug={slug}
+          skillName={name}
+          members={ownerOptions}
+        />
+      )}
 
       <div className="flex flex-col gap-2">
         <span className="text-foreground text-sm font-medium">SKILL.md</span>
