@@ -121,6 +121,11 @@ fn ensure_usable_token(
 const REFRESH_SKEW_SECS: i64 = 120;
 const MAX_REFRESH_ATTEMPTS: usize = 3;
 const REFRESH_RETRY_BASE_MILLIS: u64 = 150;
+/// A cold authorization server can fail the first discovery/token POST, which
+/// used to omit the connection from the run and look like "not connected".
+/// A second sweep in the same run catches that before the credential loader
+/// drops expired rows. Cheap when nothing is due: the second query returns empty.
+const REFRESH_SWEEP_PASSES: usize = 2;
 
 // The (mcp_server_url origin → allowed OAuth authorization-server origins)
 // allowlist lives in native_oauth_allowlist.rs, GENERATED from the web catalog
@@ -255,25 +260,32 @@ pub async fn refresh_expiring_native_connections(
     user_id: &str,
 ) -> anyhow::Result<()> {
     let threshold = Utc::now() + Duration::seconds(REFRESH_SKEW_SECS);
-    let ids: Vec<(uuid::Uuid,)> = sqlx::query_as(
-        "SELECT id \
-           FROM workspace_connection \
-          WHERE workspace_id = $1 AND user_id = $2 \
-            AND status = 'active' AND auth_type = 'oauth2' \
-            AND token_expires_at IS NOT NULL \
-            AND token_expires_at < $3 \
-            AND (refresh_retry_at IS NULL OR refresh_retry_at <= now() \
-                 OR token_expires_at <= now())",
-    )
-    .bind(workspace_id)
-    .bind(user_id)
-    .bind(threshold)
-    .fetch_all(pool)
-    .await
-    .context("failed to list native connections for refresh")?;
-
-    for (id,) in ids {
-        refresh_connection(pool, key, http, workspace_id, user_id, id, threshold).await?;
+    for pass in 0..REFRESH_SWEEP_PASSES {
+        let ids: Vec<(uuid::Uuid,)> = sqlx::query_as(
+            "SELECT id \
+               FROM workspace_connection \
+              WHERE workspace_id = $1 AND user_id = $2 \
+                AND status = 'active' AND auth_type = 'oauth2' \
+                AND token_expires_at IS NOT NULL \
+                AND token_expires_at < $3 \
+                AND (refresh_retry_at IS NULL OR refresh_retry_at <= now() \
+                     OR token_expires_at <= now())",
+        )
+        .bind(workspace_id)
+        .bind(user_id)
+        .bind(threshold)
+        .fetch_all(pool)
+        .await
+        .context("failed to list native connections for refresh")?;
+        if ids.is_empty() {
+            return Ok(());
+        }
+        if pass > 0 {
+            tokio::time::sleep(retry_delay(pass - 1)).await;
+        }
+        for (id,) in ids {
+            refresh_connection(pool, key, http, workspace_id, user_id, id, threshold).await?;
+        }
     }
     Ok(())
 }
@@ -538,15 +550,38 @@ async fn refresh_one(
         .get("instance_based")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let token_endpoint = discover_token_endpoint(http, mcp_url, instance_based)
-        .await
-        .map_err(|_| {
+    // Discovery is a pair of well-known GETs. A single timeout used to fail
+    // the whole refresh (and therefore the run) even though the next click
+    // succeeded. Retry the same way we retry the token POST.
+    let token_endpoint = {
+        let mut last_err = None;
+        let mut endpoint = None;
+        for attempt in 0..MAX_REFRESH_ATTEMPTS {
+            match discover_token_endpoint(http, mcp_url, instance_based).await {
+                Ok(url) => {
+                    endpoint = Some(url);
+                    break;
+                }
+                Err(e) => {
+                    last_err = Some(e);
+                    if attempt + 1 == MAX_REFRESH_ATTEMPTS {
+                        break;
+                    }
+                    tokio::time::sleep(retry_delay(attempt)).await;
+                }
+            }
+        }
+        endpoint.ok_or_else(|| {
+            let diagnostic = last_err
+                .map(|e| format!("OAuth endpoint discovery failed: {e:#}"))
+                .unwrap_or_else(|| "OAuth endpoint discovery failed".to_string());
             RefreshFailure::temporary(
                 "oauth_discovery_failed",
                 "The authorization service could not be reached. Token refresh will retry automatically.",
-                "OAuth endpoint discovery failed",
+                diagnostic,
             )
-        })?;
+        })?
+    };
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),

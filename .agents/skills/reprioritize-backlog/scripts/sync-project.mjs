@@ -78,6 +78,20 @@ async function getOpenIssues() {
   return issues;
 }
 
+// GitHub's autolink close keywords. Fine-grained PATs cannot read
+// `closingIssuesReferences` ("Resource not accessible by personal access
+// token"), so parse title/body the same way merge-time closing does.
+const CLOSING_ISSUE_RE =
+  /(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:[\w.-]+\/[\w.-]+)?#(\d+)/gi;
+
+function closingIssueNumbers(text) {
+  const numbers = new Set();
+  for (const match of String(text ?? "").matchAll(CLOSING_ISSUE_RE)) {
+    numbers.add(Number(match[1]));
+  }
+  return numbers;
+}
+
 async function getOpenPullRequestIssueNumbers() {
   const numbers = new Set();
   let after = null;
@@ -86,9 +100,7 @@ async function getOpenPullRequestIssueNumbers() {
       `query($owner: String!, $repo: String!, $after: String) {
         repository(owner: $owner, name: $repo) {
           pullRequests(first: 100, after: $after, states: OPEN) {
-            nodes {
-              closingIssuesReferences(first: 50) { nodes { number } }
-            }
+            nodes { title body }
             pageInfo { hasNextPage endCursor }
           }
         }
@@ -96,8 +108,10 @@ async function getOpenPullRequestIssueNumbers() {
       { owner: repoOwner, repo: repoName, after },
     );
     for (const pullRequest of data.repository.pullRequests.nodes) {
-      for (const issue of pullRequest.closingIssuesReferences.nodes) {
-        numbers.add(issue.number);
+      for (const number of closingIssueNumbers(
+        `${pullRequest.title}\n${pullRequest.body ?? ""}`,
+      )) {
+        numbers.add(number);
       }
     }
     if (!data.repository.pullRequests.pageInfo.hasNextPage) break;
@@ -364,7 +378,12 @@ async function ensureVisibleFields(project, fields) {
 }
 
 const openIssues = await getOpenIssues();
-const openPrIssues = await getOpenPullRequestIssueNumbers();
+let openPrIssues = new Set();
+try {
+  openPrIssues = await getOpenPullRequestIssueNumbers();
+} catch (error) {
+  console.warn(`Skipping PR-linked in-progress status: ${error.message}`);
+}
 for (const issue of openIssues) {
   if (openPrIssues.has(issue.number) && desiredStatus(issue) !== "In Progress") {
     await replaceStatusLabel(issue, "status: in progress");
