@@ -16,6 +16,7 @@ describe("automation owner membership", () => {
     expect(query.mock.calls[0]?.[0]).toMatch(
       /a\.enabled = TRUE[\s\S]*EXISTS[\s\S]*workspace_member/,
     );
+    expect(query.mock.calls[0]?.[0]).not.toMatch(/last_fire_error IS NULL/);
   });
 
   it("does not clear current failure health when an automation is edited", async () => {

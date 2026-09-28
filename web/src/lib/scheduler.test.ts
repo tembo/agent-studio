@@ -6,25 +6,20 @@ vi.mock("@/lib/api-v1/actions", () => ({
 vi.mock("@/lib/automations-api", () => ({
   listEnabledAutomations: vi.fn(),
 }));
-vi.mock("@/lib/automation-events", () => ({
+vi.mock("@/lib/automation-events", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/automation-events")>(),
   agentResolutionFailure: vi.fn((error: { kind: string; message: string }) => ({
     code: error.kind,
     summary: error.message,
     recommendation: "Fix it.",
   })),
-  automationServiceConfigurationFailure: vi.fn(),
   pauseAutomationsWithMissingOwners: vi.fn().mockResolvedValue(0),
   recordAutomationFailure: vi.fn(),
   recordAutomationSuccess: vi.fn(),
-  runApiFailure: vi.fn(),
-  unexpectedDispatchFailure: vi.fn(),
 }));
 vi.mock("@/lib/agent-learning-api", () => ({
   listDueLearningConfigs: vi.fn().mockResolvedValue([]),
   setAgentLearned: vi.fn(),
-}));
-vi.mock("@/lib/cron", () => ({
-  hasFiringInWindow: vi.fn().mockReturnValue(true),
 }));
 vi.mock("@/lib/guidance-refresh", () => ({
   runDueGuidanceRefreshes: vi.fn().mockResolvedValue(undefined),
@@ -47,6 +42,7 @@ import { listEnabledAutomations, type Automation } from "@/lib/automations-api";
 import {
   pauseAutomationsWithMissingOwners,
   recordAutomationFailure,
+  recordAutomationSuccess,
 } from "@/lib/automation-events";
 import { isAgentCreatePending } from "@/lib/improvements-api";
 import { runDueGuidanceRefreshes } from "@/lib/guidance-refresh";
@@ -187,5 +183,132 @@ describe("scheduler guidance refresh", () => {
     await vi.waitFor(() =>
       expect(mockRunDueGuidanceRefreshes).toHaveBeenCalledOnce(),
     );
+  });
+});
+
+describe("scheduler dispatch recovery", () => {
+  let current: Automation;
+  const request = vi.fn<typeof fetch>();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-30T09:00:00Z"));
+    vi.stubEnv("INTERNAL_API_TOKEN", "test-token");
+    vi.stubGlobal("fetch", request);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    request.mockReset().mockImplementation(async () => Response.json({ run_id: "run-1" }));
+    current = { ...automation };
+    mockListEnabled.mockImplementation(async () => [{ ...current }]);
+    mockResolveDispatch.mockResolvedValue({
+      ok: true,
+      resolved: {
+        agentName: "daily-report", agentPath: "agents/daily-report.yaml",
+        framework: "pydantic-agentspec", model: "test:model", specContent: "name: daily-report",
+        specFormat: "yaml", versionId: null, versionLabel: "draft", connections: [],
+      },
+    });
+    mockRecordFailure.mockImplementation(async (input) => {
+      current.lastFireError = input.failure.summary;
+      if (input.advanceFiringFloor !== false) current.lastFiredAt = input.occurredAt!;
+    });
+    vi.mocked(recordAutomationSuccess).mockImplementation(async (input) => {
+      current.lastFiredAt = input.occurredAt!;
+      current.lastFireError = null;
+    });
+  });
+
+  afterEach(() => {
+    stopScheduler();
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([429, 500, 502, 503, 504])("recovers from HTTP %s without waiting for the next daily window", async (status) => {
+    request.mockResolvedValueOnce(new Response(null, { status }));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(current.lastFiredAt).toBeNull();
+    expect(current.enabled).toBe(true);
+    expect(mockRecordFailure).toHaveBeenCalledWith(expect.objectContaining({
+      advanceFiringFloor: false,
+      failure: expect.objectContaining({
+        code: "run_api_error", recommendation: expect.stringContaining("retry automatically"),
+      }),
+    }));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(current.lastFireError).toBeNull();
+    expect(recordAutomationSuccess).toHaveBeenCalledWith(expect.objectContaining({ runId: "run-1" }));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("backs off repeated service failures up to fifteen minutes", async () => {
+    request.mockImplementation(async () => new Response(null, { status: 503 }));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+    let attempts = 1;
+    for (const delay of [30_000, 60_000, 120_000, 240_000, 480_000, 900_000, 900_000]) {
+      await vi.advanceTimersByTimeAsync(delay - 30_000);
+      expect(request).toHaveBeenCalledTimes(attempts);
+      await vi.advanceTimersByTimeAsync(30_000);
+      attempts++;
+      expect(request).toHaveBeenCalledTimes(attempts);
+    }
+    expect(current.lastFiredAt).toBeNull();
+    expect(current.enabled).toBe(true);
+  });
+
+  it("retains a due firing across a scheduler restart", async () => {
+    request.mockResolvedValueOnce(new Response(null, { status: 503 }));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+    stopScheduler();
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(current.lastFireError).toBeNull();
+  });
+
+  it("does not rapidly retry configuration failures and still fires the next day", async () => {
+    request.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledOnce();
+    expect(current.enabled).toBe(true);
+    expect(current.lastFireError).not.toBeNull();
+    vi.setSystemTime(new Date("2026-08-31T08:59:30Z"));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(current.lastFireError).toBeNull();
+  });
+
+  it("retries transport failures at the next cron window rather than replaying an ambiguous POST", async () => {
+    request.mockRejectedValueOnce(new TypeError("fetch failed"));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledOnce();
+    expect(mockRecordFailure).toHaveBeenCalledWith(expect.objectContaining({
+      failure: expect.objectContaining({ code: "run_api_unavailable" }),
+    }));
+    expect(current.enabled).toBe(true);
+    vi.setSystemTime(new Date("2026-08-31T08:59:30Z"));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(current.lastFireError).toBeNull();
+  });
+
+  it("keeps an errored automation scheduled across future cron windows", async () => {
+    current.lastFiredAt = new Date("2026-08-29T09:00:00Z");
+    current.lastFireError = "The previous scheduled dispatch failed.";
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).toHaveBeenCalledOnce();
+    vi.setSystemTime(new Date("2026-08-31T08:59:30Z"));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(current.enabled).toBe(true);
   });
 });

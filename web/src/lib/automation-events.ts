@@ -138,12 +138,16 @@ export function agentResolutionFailure(
   }
 }
 
-export function runApiFailure(status: number): AutomationDispatchFailure {
+export function runApiFailure(
+  status: number,
+  retryAutomatically = false,
+): AutomationDispatchFailure {
   return {
     code: "run_api_error",
     summary: "The run could not be queued.",
-    recommendation:
-      "Try again. If the error continues, ask a workspace admin to investigate.",
+    recommendation: retryAutomatically
+      ? "The schedule will retry automatically with backoff. Ask a workspace admin to investigate if the error continues."
+      : "Try again. If the error continues, ask a workspace admin to investigate.",
     diagnosticDetail: `Run API returned HTTP ${status}.`,
   };
 }
