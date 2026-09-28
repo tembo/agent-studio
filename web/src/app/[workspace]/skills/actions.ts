@@ -7,6 +7,7 @@ import { exportAnthropicSkill } from "@/lib/anthropic-skills";
 import { writeAuditEvent } from "@/lib/audit-db";
 import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import { unzipSkillBundle } from "@/lib/skill-bundle";
+import { recordSkillOwner, removeSkillOwner } from "@/lib/skill-owners";
 import { fetchSkillFromGitHub, parseSkillRef } from "@/lib/skillssh";
 import {
   downloadSkillSh,
@@ -42,6 +43,7 @@ async function commitSkill(
 ): Promise<SkillActionState> {
   const res = await installSkillFiles(workspaceId, name, files);
   if (!res.ok) return { error: res.error };
+  await recordSkillOwner(workspaceId, name, userId);
   await writeAuditEvent({
     workspaceId,
     actorUserId: userId,
@@ -163,7 +165,7 @@ export async function uploadSkillAction(
   const slug = String(formData.get("workspace") ?? "");
   const file = formData.get("bundle");
 
-  const auth = await authorizeWorkspace(slug, "workspace_admin");
+  const auth = await authorizeWorkspace(slug, "operator");
   if (!auth.ok) {
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
@@ -204,6 +206,7 @@ export async function removeSkillAction(
 
   const res = await removeSkill(auth.workspace.id, name);
   if (!res.ok) return { error: res.error };
+  await removeSkillOwner(auth.workspace.id, name);
   await writeAuditEvent({
     workspaceId: auth.workspace.id,
     actorUserId: auth.userId,

@@ -84,6 +84,14 @@ result envelope.
 
 ## Migrations
 
+The skill ownership integration test runs against a disposable PostgreSQL
+database and creates/removes its own schema:
+
+```bash
+cd ../web
+SKILL_OWNER_TEST_DATABASE_URL=postgres://user:password@localhost:5432/test pnpm test src/lib/skill-owners.integration.test.ts
+```
+
 See [`../AGENTS.md`](../AGENTS.md) for the repo-wide policy. Specifics
 for this crate:
 

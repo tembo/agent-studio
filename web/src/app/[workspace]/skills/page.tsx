@@ -7,6 +7,7 @@ import {
   getWorkspaceRepo,
 } from "@/lib/workspace";
 import { listInstalledSkills } from "@/lib/workspace-skills";
+import { listSkillOwners } from "@/lib/skill-owners";
 import { IconPlusLarge } from "central-icons";
 
 import { SkillsTable, type SkillRow } from "./skills-table";
@@ -28,9 +29,11 @@ export default async function SkillsPage({
 
   const repo = await getWorkspaceRepo(workspace.id);
   const installed = repo ? await listInstalledSkills(workspace.id) : [];
+  const owners = repo ? await listSkillOwners(workspace.id) : new Map();
   const rows: SkillRow[] = installed.map((s) => ({
     name: s.name,
     description: s.description,
+    owner: owners.get(s.name) ?? null,
     href: `/${slug}/skills/${encodeURIComponent(s.name)}`,
   }));
 
