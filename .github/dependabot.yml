@@ -1,29 +1,37 @@
-# Dependabot version updates. One entry per ecosystem/manifest in this monorepo.
-# Related packages are grouped so an upgrade lands as a single coherent PR —
-# in particular Astro + Starlight must move together (Starlight pins an Astro
-# major as a peer dep; bumping one without the other breaks the docs build).
-
 version: 2
-updates:
-  # Docs site (Astro Starlight). pnpm → npm ecosystem.
-  - package-ecosystem: "npm"
-    directory: "/docs"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    groups:
-      astro:
-        patterns:
-          - "astro"
-          - "@astrojs/*"
-          - "sharp"
 
-  # Web app (Next.js). Group the noisy dev/types/lint churn into one PR.
-  - package-ecosystem: "npm"
-    directory: "/web"
+multi-ecosystem-groups:
+  weekly-dependencies:
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+      interval: weekly
+      day: monday
+      time: '09:00'
+      timezone: Etc/UTC
+
+updates:
+  - package-ecosystem: npm
+    directory: /docs
+    patterns: ['*']
+    multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
+    groups:
+      npm-security:
+        applies-to: security-updates
+        patterns: ['*']
+
+  - package-ecosystem: npm
+    directory: /web
+    patterns: ['*']
+    multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
     ignore:
       # eslint 10 dropped context.getFilename(), which eslint-plugin-react
       # (pulled in by eslint-config-next) still calls — it crashes the lint
@@ -31,26 +39,31 @@ updates:
       - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
     groups:
-      types:
-        patterns:
-          - "@types/*"
-      lint:
-        patterns:
-          - "eslint"
-          - "eslint-*"
-          - "@typescript-eslint/*"
-          - "prettier"
+      npm-security:
+        applies-to: security-updates
+        patterns: ['*']
 
-  # API (Rust).
-  - package-ecosystem: "cargo"
-    directory: "/api"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+  - package-ecosystem: cargo
+    directory: /api
+    patterns: ['*']
+    multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
+    groups:
+      cargo-security:
+        applies-to: security-updates
+        patterns: ['*']
 
-  # GitHub Actions used by the workflows.
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    patterns: ['*']
+    multi-ecosystem-group: weekly-dependencies
+    cooldown:
+      default-days: 7
+    groups:
+      actions-security:
+        applies-to: security-updates
+        patterns: ['*']
