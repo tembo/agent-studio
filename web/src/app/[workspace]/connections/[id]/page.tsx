@@ -185,7 +185,7 @@ export default async function ConnectionDetailPage({
     title = provider.displayName;
     // Same logo CDN as the list view (LinkedIn et al.); glyph fallback on 404.
     logoSlug = provider.slug;
-    rows.push({ label: "Type", value: "Manual credential" });
+    rows.push({ label: "Type", value: "Personal credential" });
     for (const { field, preview } of fields) {
       rows.push({
         label: field.label,
@@ -196,7 +196,7 @@ export default async function ConnectionDetailPage({
         ),
       });
     }
-    if (!view.viewingOther) {
+    if (!view.viewingOther && (view.isAdmin || view.role === "operator")) {
       actions.push(
         <Button key="edit" asChild variant="secondary">
           <Link href={`/${workspace.slug}/connections/new?type=manual&provider=${encodeURIComponent(provider.slug)}`}>

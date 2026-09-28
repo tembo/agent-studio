@@ -2,11 +2,11 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { getSharedSecretConnectionValue } from "@/lib/secret-connections";
+import { getPersonalSecretConnectionValue } from "@/lib/secret-connections";
 
 // Minimal LinkedIn Voyager (internal API) client for the WRITE operations the
 // Inbox executor needs: send a message, archive a conversation. Reads the
-// session from workspace secrets — same unofficial li_at-session approach as
+// session from the acting user's personal secrets — same unofficial li_at-session approach as
 // Unipile/linkedout, just unmanaged (see plan). Voyager is undocumented and
 // changes; the exact endpoints/payloads below follow the long-standing classic
 // messaging shape and may need adjustment against a live session.
@@ -14,7 +14,7 @@ import { getSharedSecretConnectionValue } from "@/lib/secret-connections";
 // Auth model: LinkedIn's CSRF scheme requires the `csrf-token` header to equal
 // the JSESSIONID cookie value, and the User-Agent must match the browser the
 // li_at was minted in (mismatch → session disconnect). All three are stored as
-// workspace secrets.
+// personal secrets.
 
 const SECRET_LI_AT = "linkedin_li_at";
 const SECRET_JSESSIONID = "linkedin_jsessionid";
@@ -24,15 +24,15 @@ const VOYAGER_BASE = "https://www.linkedin.com/voyager/api";
 
 type Session = { liAt: string; jsessionid: string; userAgent: string };
 
-async function loadSession(workspaceId: string): Promise<Session> {
+async function loadSession(workspaceId: string, userId: string): Promise<Session> {
   const [liAt, jsessionid, userAgent] = await Promise.all([
-    getSharedSecretConnectionValue(workspaceId, SECRET_LI_AT),
-    getSharedSecretConnectionValue(workspaceId, SECRET_JSESSIONID),
-    getSharedSecretConnectionValue(workspaceId, SECRET_USER_AGENT),
+    getPersonalSecretConnectionValue(workspaceId, SECRET_LI_AT, userId),
+    getPersonalSecretConnectionValue(workspaceId, SECRET_JSESSIONID, userId),
+    getPersonalSecretConnectionValue(workspaceId, SECRET_USER_AGENT, userId),
   ]);
   if (!liAt || !jsessionid) {
     throw new Error(
-      `LinkedIn session not configured — set the ${SECRET_LI_AT} and ${SECRET_JSESSIONID} secrets under Connections → Secrets.`,
+      "Your LinkedIn session is not configured — connect your own account under Connections → New connection → Manual credential → LinkedIn.",
     );
   }
   return {
@@ -108,10 +108,11 @@ function trackingId(): string {
  */
 export async function sendMessage(
   workspaceId: string,
+  userId: string,
   convId: string,
   text: string,
 ): Promise<void> {
-  const s = await loadSession(workspaceId);
+  const s = await loadSession(workspaceId, userId);
   await voyager(s, "/voyagerMessagingDashMessengerMessages?action=createMessage", {
     method: "POST",
     body: {
@@ -133,9 +134,10 @@ export async function sendMessage(
  */
 export async function archiveConversation(
   workspaceId: string,
+  userId: string,
   convId: string,
 ): Promise<void> {
-  const s = await loadSession(workspaceId);
+  const s = await loadSession(workspaceId, userId);
   await voyager(s, "/voyagerMessagingDashMessengerConversations?action=addCategory", {
     method: "POST",
     body: { conversationUrns: [convId], category: "ARCHIVE" },

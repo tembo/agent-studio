@@ -168,6 +168,8 @@ pub async fn list_workspace_secret_connections(
            FROM workspace_secret_connection \
           WHERE workspace_id = $1 \
             AND (user_id IS NULL OR user_id = $2) \
+            AND NOT (user_id IS NULL AND slug IN \
+                ('linkedin_li_at', 'linkedin_jsessionid', 'linkedin_user_agent')) \
           ORDER BY slug, (user_id IS NOT NULL) DESC",
     )
     .bind(workspace_id)
@@ -215,4 +217,92 @@ pub async fn get_workspace_secret_plaintext(
         &ciphertext,
         crate::crypto::aad::workspace_secret(workspace_id, kind.as_db_str()).as_bytes(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    #[tokio::test]
+    #[ignore = "requires LINKEDIN_TEST_DATABASE_URL and TAS_ENCRYPTION_KEY"]
+    async fn linkedin_secrets_are_private_to_the_acting_user() -> anyhow::Result<()> {
+        let pool = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("LINKEDIN_TEST_DATABASE_URL")?)
+            .await?;
+        sqlx::query(
+            "CREATE TEMP TABLE workspace_secret_connection (
+                workspace_id UUID, slug TEXT, ciphertext BYTEA, user_id TEXT
+            )",
+        )
+        .execute(&pool)
+        .await?;
+        let key = MasterKey::from_env()?;
+        let workspace_id = uuid::Uuid::new_v4();
+        let fields = [
+            "linkedin_li_at",
+            "linkedin_jsessionid",
+            "linkedin_user_agent",
+        ];
+        for slug in fields {
+            for owner in [None, Some("alice")] {
+                let value = format!("{}-{slug}", owner.unwrap_or("legacy-shared"));
+                let aad = crate::crypto::aad::secret_connection(workspace_id, slug, owner);
+                sqlx::query("INSERT INTO workspace_secret_connection VALUES ($1, $2, $3, $4)")
+                    .bind(workspace_id)
+                    .bind(slug)
+                    .bind(key.encrypt_aad(&value, aad.as_bytes())?)
+                    .bind(owner)
+                    .execute(&pool)
+                    .await?;
+            }
+        }
+        for (slug, owner, value) in [
+            ("clay", None, "shared-clay"),
+            ("clay", Some("alice"), "alice-clay"),
+            ("linkedin_li_at", Some("bob"), "bob-session"),
+        ] {
+            let aad = crate::crypto::aad::secret_connection(workspace_id, slug, owner);
+            sqlx::query("INSERT INTO workspace_secret_connection VALUES ($1, $2, $3, $4)")
+                .bind(workspace_id)
+                .bind(slug)
+                .bind(key.encrypt_aad(value, aad.as_bytes())?)
+                .bind(owner)
+                .execute(&pool)
+                .await?;
+        }
+        let alice: BTreeMap<_, _> =
+            list_workspace_secret_connections(&pool, &key, workspace_id, "alice")
+                .await?
+                .into_iter()
+                .collect();
+        for slug in fields {
+            assert_eq!(alice.get(slug), Some(&format!("alice-{slug}")));
+        }
+        assert_eq!(alice.get("clay").map(String::as_str), Some("alice-clay"));
+        let bob: BTreeMap<_, _> =
+            list_workspace_secret_connections(&pool, &key, workspace_id, "bob")
+                .await?
+                .into_iter()
+                .collect();
+        assert_eq!(bob.len(), 2);
+        assert_eq!(
+            bob.get("linkedin_li_at").map(String::as_str),
+            Some("bob-session")
+        );
+        assert_eq!(bob.get("clay").map(String::as_str), Some("shared-clay"));
+        let unrelated = list_workspace_secret_connections(&pool, &key, workspace_id, "eve").await?;
+        assert_eq!(
+            unrelated,
+            vec![("clay".to_owned(), "shared-clay".to_owned())]
+        );
+        assert!(
+            list_workspace_secret_connections(&pool, &key, uuid::Uuid::new_v4(), "alice")
+                .await?
+                .is_empty()
+        );
+        pool.close().await;
+        Ok(())
+    }
 }

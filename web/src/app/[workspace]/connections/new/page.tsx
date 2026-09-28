@@ -95,7 +95,7 @@ export default async function NewConnectionPage({
           <McpProviderLogo slug={provider.slug} label={provider.displayName} size={24} />
         }
       >
-        {isAdmin ? (
+        {isAdmin || role === "operator" ? (
           <>
             <div className="text-foreground-weak text-sm [&_a]:underline [&_code]:text-foreground">
               <Markdown>{provider.instructions}</Markdown>
@@ -107,7 +107,7 @@ export default async function NewConnectionPage({
           </>
         ) : (
           <p className="text-foreground-muted text-sm">
-            Only workspace admins can add credentials.
+            An operator or admin role is required to connect your own account.
           </p>
         )}
       </FormShell>

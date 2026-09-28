@@ -5,6 +5,11 @@ import { aadSecretConnection } from "@/lib/crypto-aad";
 import { db } from "@/lib/db";
 
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]*$/;
+const PERSONAL_ONLY_SECRET_SLUGS = [
+  "linkedin_li_at",
+  "linkedin_jsessionid",
+  "linkedin_user_agent",
+];
 
 export type SecretConnectionScope = "personal" | "workspace";
 
@@ -52,8 +57,9 @@ export async function listSecretConnections(
        FROM workspace_secret_connection
       WHERE workspace_id = $1
         AND (user_id IS NULL OR user_id = $2)
+        AND NOT (user_id IS NULL AND slug = ANY($3::text[]))
       ORDER BY slug, user_id NULLS LAST`,
-    [workspaceId, userId ?? null],
+    [workspaceId, userId ?? null, PERSONAL_ONLY_SECRET_SLUGS],
   );
   return rows.map(preview);
 }
@@ -69,15 +75,16 @@ export async function getSecretConnectionById(
        FROM workspace_secret_connection
       WHERE workspace_id = $1 AND id = $2
         AND (user_id IS NULL OR user_id = $3)
+        AND NOT (user_id IS NULL AND slug = ANY($4::text[]))
       LIMIT 1`,
-    [workspaceId, id, userId ?? null],
+    [workspaceId, id, userId ?? null, PERSONAL_ONLY_SECRET_SLUGS],
   );
   return rows[0] ? preview(rows[0]) : null;
 }
 
 export type UpsertSecretResult =
   | { ok: true; rotated: boolean; id: string }
-  | { ok: false; error: "bad-slug" | "empty-value" };
+  | { ok: false; error: "bad-slug" | "empty-value" | "personal-only" };
 
 /** Insert or rotate one secret in the requested owner scope. */
 export async function upsertSecretConnection(args: {
@@ -91,6 +98,9 @@ export async function upsertSecretConnection(args: {
   const slug = args.slug.trim().toLowerCase();
   if (!isValidSecretSlug(slug)) return { ok: false, error: "bad-slug" };
   if (!args.value) return { ok: false, error: "empty-value" };
+  if (args.ownerUserId === null && PERSONAL_ONLY_SECRET_SLUGS.includes(slug)) {
+    return { ok: false, error: "personal-only" };
+  }
 
   const { rows: existingRows } = await db.query<{ id: string }>(
     `SELECT id FROM workspace_secret_connection
@@ -139,6 +149,9 @@ export async function updateSecretConnection(args: {
   ownerUserId: string | null;
 }): Promise<boolean> {
   if (!args.value) return false;
+  if (args.ownerUserId === null && PERSONAL_ONLY_SECRET_SLUGS.includes(args.slug)) {
+    return false;
+  }
   const ciphertext = encryptSecret(
     args.value,
     aadSecretConnection(args.workspaceId, args.slug, args.ownerUserId),
@@ -174,29 +187,16 @@ export async function deleteSecretConnection(
   return (rowCount ?? 0) > 0;
 }
 
-/** Manual-credential bundles remain workspace-shared and address fields by slug. */
-export async function deleteSharedSecretConnection(
+export async function getPersonalSecretConnectionValue(
   workspaceId: string,
   slug: string,
-): Promise<boolean> {
-  const { rowCount } = await db.query(
-    `DELETE FROM workspace_secret_connection
-      WHERE workspace_id = $1 AND slug = $2 AND user_id IS NULL`,
-    [workspaceId, slug],
-  );
-  return (rowCount ?? 0) > 0;
-}
-
-/** Shared-only plaintext lookup for workspace integrations such as LinkedIn. */
-export async function getSharedSecretConnectionValue(
-  workspaceId: string,
-  slug: string,
+  userId: string,
 ): Promise<string | null> {
   const { rows } = await db.query<{ ciphertext: Buffer }>(
     `SELECT ciphertext FROM workspace_secret_connection
-      WHERE workspace_id = $1 AND slug = $2 AND user_id IS NULL`,
-    [workspaceId, slug],
+      WHERE workspace_id = $1 AND slug = $2 AND user_id = $3`,
+    [workspaceId, slug, userId],
   );
   if (rows.length === 0) return null;
-  return decryptSecret(rows[0].ciphertext, aadSecretConnection(workspaceId, slug));
+  return decryptSecret(rows[0].ciphertext, aadSecretConnection(workspaceId, slug, userId));
 }
