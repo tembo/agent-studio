@@ -1,9 +1,6 @@
 // Catalog of "manual credential" connection providers: services with no OAuth /
 // MCP, connected by pasting a few values (e.g. a session cookie) with setup
-// instructions. Each field is stored as a workspace secret under field.key — so
-// the runtime (sidecar tools via tas_tools.secret, server executors via
-// getSharedSecretConnectionValue) reads them exactly as before; this only adds a
-// grouped, instructions-driven connect UX on top of the existing secret store.
+// instructions. Each field is stored as a personal secret under field.key.
 //
 // Not server-only: the (non-secret) catalog — labels, fields, instructions — is
 // read by client connect/edit forms too. The values never live here.
@@ -31,6 +28,10 @@ export const MANUAL_CREDENTIAL_PROVIDERS: Record<string, ManualCredentialProvide
     slug: "linkedin",
     displayName: "LinkedIn",
     instructions: [
+      "**Private to you:** only your runs and inbox actions can use this account.",
+      "Workspace sharing is not supported for LinkedIn. If you connected before",
+      "personal credentials were introduced, reconnect here; old shared values are ignored.",
+      "",
       "LinkedIn has no official inbox API, so TAS acts as your own logged-in",
       "session. You'll paste three values from a browser where you're signed in.",
       "Use a **desktop** browser (any browser — Chrome/Safari/Firefox/Arc/Dia):",

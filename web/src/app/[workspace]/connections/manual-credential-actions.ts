@@ -6,15 +6,10 @@ import { notFound } from "next/navigation";
 import { authorizeWorkspace, DENIED_MESSAGE } from "@/lib/auth-server";
 import { getManualCredentialProvider } from "@/lib/manual-credential-providers";
 import {
-  deleteSharedSecretConnection,
+  deleteSecretConnection,
   listSecretConnections,
   upsertSecretConnection,
 } from "@/lib/secret-connections";
-
-// Manage a "manual credential" connection (LinkedIn, …). Each provider field is
-// stored as a workspace secret under field.key, so the runtime is unchanged —
-// this just writes/deletes the group atomically with setup instructions. Admin
-// only, like secrets.
 
 export type ManualCredFormState = { error?: string };
 
@@ -25,7 +20,7 @@ export async function setManualCredentialAction(
   const slug = String(formData.get("workspace") ?? "");
   const providerSlug = String(formData.get("provider") ?? "");
 
-  const auth = await authorizeWorkspace(slug, "workspace_admin");
+  const auth = await authorizeWorkspace(slug, "operator");
   if (!auth.ok) {
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
@@ -38,7 +33,9 @@ export async function setManualCredentialAction(
   // Existing field secrets — a blank input on a field that's already set means
   // "keep it" (so re-connecting doesn't force re-pasting every value).
   const existing = new Set(
-    (await listSecretConnections(workspace.id)).map((s) => s.slug),
+    (await listSecretConnections(workspace.id, userId))
+      .filter((secret) => secret.scope === "personal")
+      .map((secret) => secret.slug),
   );
 
   // Validate required fields are satisfied (provided now, or already set).
@@ -58,7 +55,7 @@ export async function setManualCredentialAction(
       value: v,
       description: `${provider.displayName} · ${f.label}`,
       actorUserId: userId,
-      ownerUserId: null,
+      ownerUserId: userId,
     });
     if (!res.ok) {
       return { error: `Couldn't save ${f.label} (${res.error}).` };
@@ -75,18 +72,22 @@ export async function removeManualCredentialAction(
   const slug = String(formData.get("workspace") ?? "");
   const providerSlug = String(formData.get("provider") ?? "");
 
-  const auth = await authorizeWorkspace(slug, "workspace_admin");
+  const auth = await authorizeWorkspace(slug, "operator");
   if (!auth.ok) {
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace } = auth;
+  const { workspace, userId } = auth;
 
   const provider = getManualCredentialProvider(providerSlug);
   if (!provider) return { error: "Unknown provider." };
 
-  for (const f of provider.fields) {
-    await deleteSharedSecretConnection(workspace.id, f.key);
+  const fieldSlugs = new Set(provider.fields.map((field) => field.key));
+  const secrets = await listSecretConnections(workspace.id, userId);
+  for (const secret of secrets) {
+    if (secret.scope === "personal" && fieldSlugs.has(secret.slug)) {
+      await deleteSecretConnection(workspace.id, secret.id, userId);
+    }
   }
 
   redirect(`/${slug}/connections`);

@@ -16,7 +16,9 @@ vi.mock("@/lib/crypto", () => ({
 
 import {
   getSecretConnectionById,
+  getPersonalSecretConnectionValue,
   listSecretConnections,
+  updateSecretConnection,
   upsertSecretConnection,
 } from "./secret-connections";
 
@@ -30,7 +32,7 @@ describe("secret connection scoping", () => {
 
     expect(mocks.query).toHaveBeenCalledWith(
       expect.stringContaining("user_id IS NULL OR user_id = $2"),
-      ["workspace-1", "user-1"],
+      ["workspace-1", "user-1", ["linkedin_li_at", "linkedin_jsessionid", "linkedin_user_agent"]],
     );
   });
 
@@ -43,6 +45,7 @@ describe("secret connection scoping", () => {
       "workspace-1",
       "secret-1",
       null,
+      ["linkedin_li_at", "linkedin_jsessionid", "linkedin_user_agent"],
     ]);
   });
 
@@ -89,5 +92,26 @@ describe("secret connection scoping", () => {
       "shared-value",
       "secret_connection\u{1f}workspace-1\u{1f}clay",
     );
+  });
+
+  it.each(["linkedin_li_at", "linkedin_jsessionid", "linkedin_user_agent"])("rejects workspace-shared %s", async (slug) => {
+    await expect(upsertSecretConnection({
+      workspaceId: "workspace-1", slug, value: "secret", description: null,
+      actorUserId: "admin", ownerUserId: null,
+    })).resolves.toEqual({ ok: false, error: "personal-only" });
+    await expect(updateSecretConnection({
+      workspaceId: "workspace-1", id: "legacy", slug, value: "secret",
+      description: null, ownerUserId: null,
+    })).resolves.toBe(false);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
+
+  it("loads personal plaintext with the owner's AAD and no shared fallback", async () => {
+    const ciphertext = Buffer.from("encrypted");
+    mocks.query.mockResolvedValue({ rows: [{ ciphertext }] });
+    mocks.decryptSecret.mockReturnValue("personal-session");
+    await expect(getPersonalSecretConnectionValue("workspace-1", "linkedin_li_at", "user-1")).resolves.toBe("personal-session");
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining("user_id = $3"), ["workspace-1", "linkedin_li_at", "user-1"]);
+    expect(mocks.decryptSecret).toHaveBeenCalledWith(ciphertext, "secret_connection\u001fworkspace-1\u001flinkedin_li_at\u001fuser-1");
   });
 });

@@ -15,6 +15,19 @@ In docker, `api/Dockerfile` builds the release binary, bundles the
 `cargo-ai` CLI as a sibling binary, and bundles a Python venv with
 `pydantic-ai` for the passthrough runner.
 
+## LinkedIn privacy integration tests
+
+Use a disposable PostgreSQL database to verify both connection visibility and
+the runner's acting-user secret resolution. The web tests create/remove their
+own schema; the Rust test uses a temporary table. From the repository root:
+
+```bash
+export LINKEDIN_TEST_DATABASE_URL=postgres://user:password@127.0.0.1:5432/test
+export TAS_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+(cd web && pnpm test src/lib/linkedin/privacy.integration.test.ts)
+(cd api && cargo test linkedin_secrets_are_private_to_the_acting_user -- --ignored)
+```
+
 ## Memory integration tests
 
 Build with `cargo build`, install the web dependencies, and start the updated

@@ -94,9 +94,11 @@ export async function setSecretConnectionAction(
     if (!result.ok) {
       return {
         error:
-          result.error === "bad-slug"
-            ? "Invalid secret name."
-            : "Enter the secret value.",
+          result.error === "personal-only"
+            ? "LinkedIn credentials must be saved as personal secrets, not workspace secrets."
+            : result.error === "bad-slug"
+              ? "Invalid secret name."
+              : "Enter the secret value.",
       };
     }
     secretId = result.id;

@@ -17,6 +17,32 @@ automation owner's; an event run uses the trigger owner's. If an agent needs a
 service nobody has connected, the sidebar surfaces an **"Action needed"** prompt
 with a **Connect** button.
 
+## LinkedIn: personal credentials only
+
+Connect LinkedIn through **Connections → New connection → Manual credential →
+LinkedIn**. Operators and workspace admins can connect their own account. The
+session cookie, JSESSIONID, and user-agent are stored as **personal secrets**,
+not workspace-shared credentials. Other members cannot see the connection or
+its masked fields, including admins using **View as**.
+
+Runs use only the acting user's LinkedIn credentials. Inbox send/archive
+actions use only the clicking user's credentials. Without a personal session,
+the action fails rather than falling back to someone else's account.
+Schedules and triggers use their configured acting owner, as with other
+per-user connections.
+
+LinkedIn does **not** support workspace sharing. Its `linkedin_li_at`,
+`linkedin_jsessionid`, and `linkedin_user_agent` secrets cannot be saved with
+workspace scope, even by an admin. Other services' explicit workspace-shared
+secrets keep their existing behavior.
+
+:::caution[Reconnect older LinkedIn connections]
+Older LinkedIn setup saved workspace-shared credentials. Those values are now
+ignored by connection pages, runs, and inbox actions. They are not reassigned
+automatically: each account owner must reconnect using their own browser
+session. Deploy the updated web app **and API** to enforce this everywhere.
+:::
+
 ## Three substrates
 
 | Substrate      | When to pick it                                                                                                |
@@ -234,6 +260,8 @@ model.
 - **Use it** in a tool: `tas_tools.secret("clay")` returns the value.
 - **Resolution**: a run uses the acting user's personal value first. When they
   do not have one with that name, it falls back to the shared workspace value.
+  LinkedIn's session secrets are the exception: they are always personal and
+  never fall back to shared values.
   Other members cannot see or manage a personal secret.
 - **Optionally declare it** on the agent so the studio prompts an admin to set a
   missing one:

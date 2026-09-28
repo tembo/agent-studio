@@ -148,7 +148,7 @@ export async function listAllConnections(
   // (below), not as individual secret rows.
   const owned = manualCredentialSecretSlugs();
   const present = new Set(
-    secrets.filter((s) => s.scope === "workspace").map((s) => s.slug),
+    secrets.filter((s) => s.scope === "personal").map((s) => s.slug),
   );
 
   const secretRows: ConnectionRow[] = secrets
@@ -177,7 +177,7 @@ export async function listAllConnections(
       kind: "manual-cred",
       title: p.displayName,
       slot: null,
-      typeLabel: "Manual credential",
+      typeLabel: "Personal credential",
       // Reuse the provider slug against the shared logo CDN (LinkedIn et al.
       // resolve there); McpProviderLogo falls back to a glyph if it 404s.
       logoSlug: p.slug,
@@ -226,8 +226,11 @@ export async function loadConnection(
   if (ref.kind === "manual-cred") {
     const provider = getManualCredentialProvider(ref.key);
     if (!provider) return null;
-    const secrets = await listSecretConnections(workspaceId);
-    const bySlug = new Map(secrets.map((s) => [s.slug, s]));
+    const secrets = await listSecretConnections(workspaceId, personalSecretUserId);
+    const bySlug = new Map(
+      secrets.filter((secret) => secret.scope === "personal")
+        .map((secret) => [secret.slug, secret]),
+    );
     const fields = provider.fields.map((field) => ({
       field,
       preview: bySlug.get(field.key) ?? null,
