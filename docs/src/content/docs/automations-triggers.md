@@ -33,12 +33,27 @@ paused before it can fire. Reassign the owner and re-enable the automation when
 it is ready to run again.
 
 If a schedule cannot start, its status changes to **Error** and it appears under
-**Action needed** in the sidebar. Temporary failures while reading the connected
-GitHub repository are retried with backoff; the scheduled window remains due so
-TAS starts one catch-up run when the repository becomes available again. Errors
-that require configuration changes, such as an invalid repository token or a
-deleted agent, remain visible until a run is successfully queued. Editing or
-resaving an automation does not mark the error resolved.
+**Action needed** in the sidebar. **An error does not disable the schedule.** A
+run that fails after it has been queued also does not stop future scheduled runs.
+Disabled schedules and schedules paused for a missing owner do not fire.
+
+- **Temporary repository failures and run API HTTP 429/5xx responses** retry
+  automatically after 30 seconds, then 1, 2, 4, and 8 minutes, up to a maximum
+  delay of 15 minutes between attempts. The scheduled window remains due until
+  a run is queued. Missed windows are coalesced into one catch-up run rather
+  than replayed individually. Restarting the scheduler preserves the due window
+  but resets its in-memory backoff.
+- **Configuration failures**, such as an invalid repository token, deleted
+  agent, or non-retryable run API response, are checked again at the next natural
+  cron firing. Fix the reported problem; a manual run is not required to restore
+  scheduling.
+- **Run API transport failures** are also retried at the next natural cron
+  firing, not immediately. A lost response may mean the API already queued the
+  run, so TAS does not immediately replay that ambiguous request.
+
+Errors remain visible until a run is successfully queued. Editing or resaving
+an automation does not mark the error resolved. Dispatch history includes the
+failure details and whether the schedule will retry automatically.
 
 Open **Dispatch history** from the Automations page to inspect failures across
 schedules, event triggers, and inbound webhooks. The history keeps the failure

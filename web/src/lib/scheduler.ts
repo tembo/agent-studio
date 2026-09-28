@@ -19,7 +19,7 @@ import "server-only";
 //     the trigger='schedule' + automation_id columns on the run row.
 //   - Permanent failures (bad cron, missing agent file, parse error)
 //     are recorded on the automation row and advance the last_fired_at
-//     floor so they don't retry-storm. Transient repository failures keep
+//     floor so they don't retry-storm. Transient repository and run API failures keep
 //     the window due and retry with bounded exponential backoff.
 
 import { requestAgentChangeSystem } from "@/lib/api-v1/actions";
@@ -34,6 +34,7 @@ import {
   recordAutomationFailure,
   recordAutomationSuccess,
   runApiFailure,
+  runApiRequestFailure,
   unexpectedDispatchFailure,
   type AutomationDispatchFailure,
 } from "@/lib/automation-events";
@@ -55,7 +56,7 @@ import { resolveAgentForDispatch } from "@/lib/workspace-agents";
 import { maybeReconcileToolCaches } from "@/lib/tool-reconcile";
 
 const TICK_MS = 30_000;
-const SOURCE_RETRY_MAX_MS = 15 * 60_000;
+const DISPATCH_RETRY_MAX_MS = 15 * 60_000;
 // Boot reconcile floor — a fresh process re-syncs tool caches unless one ran in
 // the last 10 min. Deploys (minutes+ apart) always run; a crash-looping restart
 // within 10 min doesn't re-storm provider APIs.
@@ -70,7 +71,7 @@ const MAX_LEARNING_CASES = 20;
 
 let started = false;
 let timer: NodeJS.Timeout | null = null;
-const sourceRetries = new Map<
+const dispatchRetries = new Map<
   string,
   { attempts: number; retryAfter: number }
 >();
@@ -117,7 +118,7 @@ export function stopScheduler() {
   if (timer) clearInterval(timer);
   timer = null;
   started = false;
-  sourceRetries.clear();
+  dispatchRetries.clear();
   pendingCreateRetries.clear();
 }
 
@@ -136,7 +137,7 @@ async function tick() {
       await maybeFire(a, now);
     } catch (e) {
       console.error("[scheduler] maybeFire threw", a.id, e);
-      sourceRetries.delete(a.id);
+      dispatchRetries.delete(a.id);
       pendingCreateRetries.delete(a.id);
       await recordAutomationFailure({
         kind: "schedule",
@@ -155,10 +156,8 @@ async function maybeFire(a: Automation, now: Date) {
   const floor = a.lastFiredAt ?? a.createdAt;
   if (!hasFiringInWindow(a.cron, floor, now)) return;
 
-  // Editing an automation clears its persisted error and should also cancel
-  // any in-memory delay left from the previous source failure.
-  if (!a.lastFireError) sourceRetries.delete(a.id);
-  const pendingRetry = sourceRetries.get(a.id);
+  if (!a.lastFireError) dispatchRetries.delete(a.id);
+  const pendingRetry = dispatchRetries.get(a.id);
   if (pendingRetry && pendingRetry.retryAfter > now.getTime()) return;
   const pendingCreateRetry = pendingCreateRetries.get(a.id);
   if (pendingCreateRetry && pendingCreateRetry.retryAfter > now.getTime()) return;
@@ -178,7 +177,7 @@ async function maybeFire(a: Automation, now: Date) {
       const attempts = previousAttempts + 1;
       const delay = Math.min(
         TICK_MS * 2 ** Math.min(attempts - 1, 10),
-        SOURCE_RETRY_MAX_MS,
+        DISPATCH_RETRY_MAX_MS,
       );
       pendingCreateRetries.set(a.id, {
         attempts,
@@ -193,35 +192,12 @@ async function maybeFire(a: Automation, now: Date) {
     }
     pendingCreateRetries.delete(a.id);
     if (dispatch.error.kind === "source-unavailable" && dispatch.error.retryable) {
-      const previousAttempts = sourceRetries.get(a.id)?.attempts ?? 0;
-      const attempts = previousAttempts + 1;
-      const delay = Math.min(
-        TICK_MS * 2 ** Math.min(attempts - 1, 10),
-        SOURCE_RETRY_MAX_MS,
-      );
-      sourceRetries.set(a.id, {
-        attempts,
-        retryAfter: now.getTime() + delay,
-      });
-      console.warn(
-        "[scheduler] transient source failure; retrying",
-        a.id,
-        `in ${delay}ms`,
-        dispatch.error.message,
-      );
-      await recordAutomationFailure({
-        kind: "schedule",
-        id: a.id,
-        occurredAt: now,
-        failure: agentResolutionFailure(dispatch.error),
-        advanceFiringFloor: false,
-      });
+      await recordRetry(a, now, agentResolutionFailure(dispatch.error));
       return;
     }
     await recordSkipAndAdvance(a, now, agentResolutionFailure(dispatch.error));
     return;
   }
-  sourceRetries.delete(a.id);
   pendingCreateRetries.delete(a.id);
   const r = dispatch.resolved;
 
@@ -269,10 +245,17 @@ async function maybeFire(a: Automation, now: Date) {
       agent_version_label: r.versionLabel,
       output_delivery: r.delivery,
     }),
+  }).catch(async (error: unknown) => {
+    await recordSkipAndAdvance(a, now, runApiRequestFailure(error));
+    return null;
   });
 
+  if (!res) return;
   if (!res.ok) {
-    await recordSkipAndAdvance(a, now, runApiFailure(res.status));
+    const retryable = res.status === 429 || res.status >= 500;
+    const failure = runApiFailure(res.status, retryable);
+    if (retryable) await recordRetry(a, now, failure);
+    else await recordSkipAndAdvance(a, now, failure);
     return;
   }
 
@@ -284,6 +267,31 @@ async function maybeFire(a: Automation, now: Date) {
     id: a.id,
     occurredAt: now,
     runId: body?.run_id ?? null,
+  });
+  dispatchRetries.delete(a.id);
+}
+
+async function recordRetry(
+  automation: Automation,
+  now: Date,
+  failure: AutomationDispatchFailure,
+): Promise<void> {
+  const attempts = (dispatchRetries.get(automation.id)?.attempts ?? 0) + 1;
+  const delay = Math.min(
+    TICK_MS * 2 ** Math.min(attempts - 1, 10),
+    DISPATCH_RETRY_MAX_MS,
+  );
+  dispatchRetries.set(automation.id, {
+    attempts,
+    retryAfter: now.getTime() + delay,
+  });
+  console.warn("[scheduler] retry fire", automation.id, failure.code, `in ${delay}ms`);
+  await recordAutomationFailure({
+    kind: "schedule",
+    id: automation.id,
+    occurredAt: now,
+    failure,
+    advanceFiringFloor: false,
   });
 }
 
@@ -297,7 +305,7 @@ async function recordSkipAndAdvance(
   now: Date,
   failure: AutomationDispatchFailure,
 ): Promise<void> {
-  sourceRetries.delete(a.id);
+  dispatchRetries.delete(a.id);
   pendingCreateRetries.delete(a.id);
   console.warn("[scheduler] skip fire", a.id, failure.code, failure.summary);
   await recordAutomationFailure({

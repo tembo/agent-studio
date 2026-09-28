@@ -36,6 +36,11 @@ describe("safe automation diagnostics", () => {
       }),
     );
   });
+
+  it("only promises automatic retry when the dispatcher schedules one", () => {
+    expect(runApiFailure(503, true).recommendation).toContain("retry automatically");
+    expect(runApiFailure(503).recommendation).not.toContain("retry automatically");
+  });
 });
 
 describe("automation dispatch event writes", () => {
