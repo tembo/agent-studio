@@ -70,6 +70,7 @@ TAS ships native MCP support for these providers:
 | --- | --- |
 | Attio, Pylon, Fathom, Dialed, Linear, Amplemarket, Clay, Avoma, Metabase, Notion, Intercom, Atlassian (Jira), Asana, monday.com, Guru, Fireflies, Amplitude, Apollo, PostHog, Stripe, Vercel, Canva, ClickUp, Close, Sentry, Mixpanel, Granola, Dropbox, Webflow, Cloudflare, Neon, Cal.com, Klaviyo, PayPal, Square, Airtable, Railway, Resend, Hex, Pendo, Similarweb, Datadog, Common Room, Outreach, Salesloft, Lusha, Hunter, Instantly, Crossbeam, Harmonic, Chili Piper, Day AI, Clarify, Staircase AI, Zendesk, Help Scout, Gorgias, Plain, Lorikeet, Unthread, Enterpret, Dovetail, Missive, Otter.ai, Grain, Krisp, Circleback, tl;dv, Ramp, Brex, Mercury, Expensify, Navan, Carta, Digits, GoCardless, Mercado Pago, PitchBook, Morningstar, CB Insights, Quartr, Daloopa, Consensus, Gusto, Deel, Ashby, Workable, Metaview, Indeed, Udemy Business, SignNow, Vanta, Drata, Figma, Miro, Lucid, Productboard, Aha!, Shortcut, Todoist, Teamwork, Calendly, Superhuman Mail, Craft, Mem, Gamma, Pitch, Eraser, Jotform, Typeform, SurveyMonkey, Egnyte, Mailchimp, Customer.io, Ahrefs, Semrush, Cloudinary, Contentful, Sanity, Wix, WordPress.com, GitBook, Mintlify, DeepL, GitLab, Supabase, Netlify, Heroku, Buildkite, Grafana, New Relic, Honeycomb, incident.io, Rootly, BugSnag, LaunchDarkly, PlanetScale, Prisma Postgres, InstantDB, Algolia, Statsig, Postman, Semgrep, WorkOS, Stytch, Mux, Knock, Lovable, Retool, Telnyx, Jam, Globalping, Airbyte, MotherDuck, Monte Carlo, Atlan, Hugging Face, Zapier, Make, IFTTT, Exa, Tavily, Firecrawl, Apify, Bright Data, Kernel | **TAS-managed OAuth** — click **Connect**, authorize, done |
 | GitHub, X, Render | **API token** — paste a PAT (GitHub), App-only Bearer (X), or API key (Render) |
+| Maxio (Carefeed) | **TAS-managed OAuth** — Carefeed SSO; confirm the **Analyst** role in Maxio first ([setup below](#maxio-carefeed)) |
 | HubSpot, Gmail, Slack, Gong, Box, PagerDuty, Zoom, ZoomInfo, DocuSign, Xero, Front, Smartsheet, MongoDB Atlas, CircleCI, Chargebee, BigQuery, Ironclad, Harvey, Tableau, Shopify | **Bring-your-own OAuth app** — admin sets up once (below) |
 
 There's also a built-in **Tembo Agent Studio** native connection (TAS's own MCP
@@ -212,8 +213,8 @@ Stripe's `/mcp` path, so renewal uses the correct provider metadata endpoint.
 If refresh fails and the access token has already expired, it is not passed to
 the agent or used for the web action. Retry after the authorization service
 recovers; a temporary failure does not require reconnecting. Running agents
-still use the token captured at startup: renewal during a long-running agent
-execution is not yet supported.
+still use the token captured at startup, except for Maxio's refresh-aware
+Pydantic transport described below.
 
 When a refresh is temporarily unavailable, the connection shows **Retrying**
 and its detail page shows when another attempt is allowed. If consent was
@@ -228,6 +229,40 @@ client instead of consuming another provider registration. If a provider
 rate-limits a first-time connection, wait and retry later.
 
 See [Troubleshooting](/agent-studio/troubleshooting/).
+
+### Maxio (Carefeed)
+
+Choose **Maxio (Carefeed)** in the Native MCP catalog and click **Connect**.
+Sign in through Carefeed's SSO as the user who will own the scheduled runs.
+The connection uses `https://brave-hall-4395.mcp.maxio.com/v3/mcp`; it is specific
+to Carefeed, not a general Maxio tenant selector. No API key is required.
+
+Before connecting, ask the Maxio administrator to enable the MCP connector,
+choose **Custom MCP Client**, and confirm the **Analyst** role. Analyst is the
+read-only role; **Bookkeeper** adds write actions and is not the intended setup.
+The advertised OAuth scope is `all`: it does **not** mean read-only. Maxio's
+selected role enforces access, so Studio cannot turn a Bookkeeper authorization
+into Analyst by requesting a narrower OAuth scope.
+
+The endpoint advertises dynamic client registration, PKCE, and refresh-token
+grants. Studio registers its OAuth client automatically, so a manually supplied
+client ID or secret is not normally needed. If the Maxio administrator needs
+the redirect URI for an allowlist, it is
+`https://<your-studio-host>/api/connections/native/maxio/callback`.
+See [Maxio's connector setup guide](https://docs.maxio.com/configuration/maxio-mcp-server/configure-the-maxio-mcp-connector).
+
+Maxio's one-minute access tokens are refreshed before runs and, for Pydantic
+agents, before MCP requests during the run when fewer than ten seconds remain.
+The run uses a local, capability-protected transport; refresh credentials stay
+in the API and rotated tokens are persisted under the existing connection lock.
+Scheduled runs use the schedule owner's authorization and do not require a new
+interactive sign-in unless consent or the refresh grant expires or is revoked.
+Complete an initial SSO connection and a scheduled run to verify the tenant
+actually issues a reusable refresh grant and has the intended Analyst role.
+
+Declare the connection with `source: native-mcp` and provider `maxio`. Do not
+substitute the Composio Maxio toolkit: this connection deliberately uses Maxio's
+own per-user OAuth rather than an API-key toolkit with write/delete actions.
 
 ### Viewing another member's connections (admins)
 

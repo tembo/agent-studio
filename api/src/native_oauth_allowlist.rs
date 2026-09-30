@@ -24,6 +24,7 @@ pub(crate) const NATIVE_MCP_OAUTH_ALLOWLIST: &[(&str, &[&str])] = &[
     ("https://mcp.linear.app", &["https://mcp.linear.app"]), // linear
     ("https://mcp.amplemarket.com", &["https://app.amplemarket.com"]), // amplemarket
     ("https://api.clay.com", &["https://api.clay.com", "https://app.clay.com"]), // clay
+    ("https://brave-hall-4395.mcp.maxio.com", &["https://brave-hall-4395.mcp.maxio.com"]), // maxio
     ("https://mcp.avoma.com", &["https://prod-api.avoma.com"]), // avoma
     ("https://gmailmcp.googleapis.com", &["https://accounts.google.com", "https://oauth2.googleapis.com"]), // gmail
     ("https://mcp.notion.com", &["https://mcp.notion.com"]), // notion

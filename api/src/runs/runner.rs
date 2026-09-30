@@ -700,6 +700,7 @@ async fn run_pydantic(
     // Python wrapper never holds the encryption key. JSON shape:
     // `{provider: {name: {mcp_url, access_token}}}`. Independent of
     // Composio; an agent can mix both sources in its spec.
+    let native_mcp_proxy;
     let native_mcp_connections_json: Option<String> = {
         // Refresh-before-use: mint fresh access tokens for any native
         // connections at/near expiry before we read and hand them to
@@ -718,7 +719,7 @@ async fn run_pydantic(
                 "native MCP refresh sweep errored; proceeding with unexpired tokens only"
             );
         }
-        let rows = list_active_native_connections(
+        let mut rows = list_active_native_connections(
             &state.db,
             &state.encryption_key,
             ctx.workspace_id,
@@ -726,6 +727,17 @@ async fn run_pydantic(
         )
         .await
         .unwrap_or_default();
+        match super::native_mcp_proxy::NativeMcpProxy::start(
+            state,
+            ctx.workspace_id,
+            &ctx.acting_user_id,
+            &mut rows,
+        )
+        .await
+        {
+            Ok(proxy) => native_mcp_proxy = proxy,
+            Err(error) => return (Err(error), Vec::new(), Vec::new()),
+        }
         if rows.is_empty() {
             None
         } else {
@@ -848,6 +860,7 @@ async fn run_pydantic(
     })
     .await;
 
+    drop(native_mcp_proxy);
     let outcome = result.map(|r| {
         let usage = r.usage.as_ref().and_then(|u| {
             u.input_output().map(|(input, output)| Usage {

@@ -55,6 +55,7 @@ pub async fn list_active_composio_connections(
 /// MCPServerStreamableHTTP transport.
 #[derive(Debug, Clone)]
 pub struct NativeMcpRow {
+    pub id: uuid::Uuid,
     pub provider: String,
     pub name: String,
     pub mcp_url: String,
@@ -83,8 +84,15 @@ pub async fn list_active_native_connections(
     workspace_id: uuid::Uuid,
     user_id: &str,
 ) -> anyhow::Result<Vec<NativeMcpRow>> {
-    let rows: Vec<(String, String, Option<String>, Vec<u8>, Option<Vec<u8>>)> = sqlx::query_as(
-        "SELECT type, name, mcp_server_url, credentials, aux_secret_ciphertext \
+    let rows: Vec<(
+        uuid::Uuid,
+        String,
+        String,
+        Option<String>,
+        Vec<u8>,
+        Option<Vec<u8>>,
+    )> = sqlx::query_as(
+        "SELECT id, type, name, mcp_server_url, credentials, aux_secret_ciphertext \
            FROM workspace_connection \
           WHERE workspace_id = $1 AND user_id = $2 AND status = 'active' \
             AND (token_expires_at IS NULL OR token_expires_at > now())",
@@ -96,7 +104,7 @@ pub async fn list_active_native_connections(
     .context("failed to list workspace_connection")?;
 
     let mut out = Vec::with_capacity(rows.len());
-    for (provider, name, mcp_url, ciphertext, aux_ciphertext) in rows {
+    for (id, provider, name, mcp_url, ciphertext, aux_ciphertext) in rows {
         let mcp_url = match mcp_url {
             Some(u) if !u.is_empty() => u,
             _ => {
@@ -140,6 +148,7 @@ pub async fn list_active_native_connections(
             }
         });
         out.push(NativeMcpRow {
+            id,
             provider,
             name,
             mcp_url,

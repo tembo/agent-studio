@@ -73,14 +73,24 @@ pub async fn refresh_for_use(
             )
         })?;
     }
+    ensure_connection_usable(&state.db, request.workspace_id, &request.user_id, id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn ensure_connection_usable(
+    pool: &PgPool,
+    workspace_id: uuid::Uuid,
+    user_id: &str,
+    id: uuid::Uuid,
+) -> Result<(), (StatusCode, &'static str)> {
     let row: Option<(String, Option<DateTime<Utc>>)> = sqlx::query_as(
         "SELECT status, token_expires_at FROM workspace_connection \
          WHERE id = $1 AND workspace_id = $2 AND user_id = $3",
     )
     .bind(id)
-    .bind(request.workspace_id)
-    .bind(&request.user_id)
-    .fetch_optional(&state.db)
+    .bind(workspace_id)
+    .bind(user_id)
+    .fetch_optional(pool)
     .await
     .map_err(|_| {
         (
@@ -91,8 +101,7 @@ pub async fn refresh_for_use(
     let Some((status, expires_at)) = row else {
         return Err((StatusCode::NOT_FOUND, "Connection not found."));
     };
-    ensure_usable_token(&status, expires_at, Utc::now())?;
-    Ok(StatusCode::NO_CONTENT)
+    ensure_usable_token(&status, expires_at, Utc::now())
 }
 
 fn ensure_usable_token(
@@ -248,6 +257,10 @@ fn classify_refresh_rejection(status: StatusCode, oauth_error: Option<&str>) -> 
     }
 }
 
+fn sweep_threshold(pass: usize, now: DateTime<Utc>) -> DateTime<Utc> {
+    now + Duration::seconds(if pass == 0 { REFRESH_SKEW_SECS } else { 0 })
+}
+
 /// Refresh every active oauth2 native connection for this (workspace, user)
 /// whose token is at/near expiry. Connections are serialized with a
 /// transaction-scoped advisory lock so two simultaneous runs cannot spend the
@@ -259,8 +272,8 @@ pub async fn refresh_expiring_native_connections(
     workspace_id: uuid::Uuid,
     user_id: &str,
 ) -> anyhow::Result<()> {
-    let threshold = Utc::now() + Duration::seconds(REFRESH_SKEW_SECS);
     for pass in 0..REFRESH_SWEEP_PASSES {
+        let threshold = sweep_threshold(pass, Utc::now());
         let ids: Vec<(uuid::Uuid,)> = sqlx::query_as(
             "SELECT id \
                FROM workspace_connection \
@@ -301,7 +314,7 @@ type RefreshRow = (
     Option<DateTime<Utc>>,
 );
 
-async fn refresh_connection(
+pub(crate) async fn refresh_connection(
     pool: &PgPool,
     key: &MasterKey,
     http: &reqwest::Client,
@@ -1153,6 +1166,60 @@ mod tests {
         assert_eq!(merged["client_secret"], "keep-secret");
         assert_eq!(merged["custom"], "keep-custom");
         assert_eq!(expires_at, Some(now + Duration::seconds(3600)));
+    }
+
+    #[test]
+    fn one_minute_tokens_remain_usable_until_the_request_refresh_window() {
+        let now = Utc::now();
+        let (credentials, expiry) = merge_refreshed_credentials(
+            &serde_json::json!({"refresh_token": "old-refresh"}),
+            TokenResponse {
+                access_token: Some("fresh-access".into()),
+                refresh_token: Some("rotated-refresh".into()),
+                expires_in: Some(60),
+                scope: Some("all".into()),
+                token_type: Some("Bearer".into()),
+            },
+            now,
+        )
+        .unwrap();
+        assert_eq!(credentials["refresh_token"], "rotated-refresh");
+        assert!(refresh_is_due(
+            "active",
+            expiry,
+            None,
+            now,
+            sweep_threshold(0, now)
+        ));
+        assert!(!refresh_is_due(
+            "active",
+            expiry,
+            None,
+            now,
+            sweep_threshold(1, now)
+        ));
+        assert!(!refresh_is_due(
+            "active",
+            expiry,
+            None,
+            now,
+            now + Duration::seconds(10)
+        ));
+        let later = now + Duration::seconds(51);
+        assert!(refresh_is_due(
+            "active",
+            expiry,
+            None,
+            later,
+            later + Duration::seconds(10)
+        ));
+        assert!(!refresh_is_due(
+            "revoked",
+            expiry,
+            None,
+            later,
+            later + Duration::seconds(10)
+        ));
     }
 
     #[test]

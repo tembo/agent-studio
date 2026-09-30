@@ -62,7 +62,7 @@ export const CATEGORY_META: Record<ConnectionCategory, CategoryMeta> = {
   helpdesk: { label: "Helpdesk", supported: true, slugs: ["pylon", "zendesk", "intercom", "freshdesk", "front", "helpscout", "gorgias", "plain", "lorikeet", "unthread", "missive"] },
   recorder: { label: "Call recorder", supported: true, slugs: ["avoma", "fathom", "gong", "fireflies", "granola", "zoom", "otter", "grain", "krisp", "circleback", "tldv"] },
   accounting: { label: "Accounting", supported: true, slugs: ["quickbooks", "xero", "netsuite", "digits"] },
-  payments: { label: "Payments", supported: true, slugs: ["stripe", "paypal", "square", "gocardless", "mercadopago", "chargebee"] },
+  payments: { label: "Payments", supported: true, slugs: ["stripe", "paypal", "square", "gocardless", "mercadopago", "chargebee", "maxio"] },
   analytics: { label: "Product analytics", supported: true, slugs: ["metabase", "amplitude", "mixpanel", "posthog", "googleanalytics", "pendo", "hex", "statsig"] },
   warehouse: { label: "Data warehouse", supported: true, slugs: ["metabase", "snowflake", "bigquery", "motherduck"] },
   docs: { label: "Docs / knowledge", supported: true, slugs: ["notion", "guru", "googledocs", "googledrive", "confluence", "coda", "airtable", "canva", "gitbook", "craft", "mem", "sanity"] },
