@@ -60,6 +60,10 @@ versus isolated workspaces without making model calls.
   only the web container holds the other end.
 - `src/workspace.rs`, `src/crypto.rs` — workspace lookups + AES-GCM
   symmetric encryption for workspace secrets (PATs, API keys).
+- `src/runs/native_mcp_proxy.rs` — run-scoped loopback transport for Maxio's
+  short-lived OAuth tokens. It resolves only the acting user's captured
+  connection IDs, refreshes under the existing database lock, and streams MCP
+  responses without exposing refresh credentials to the Python process.
 - `src/memory/` — optional Memory HTTP client, run-capability MCP bridge,
   workspace settings, and encrypted report outbox. Runtime clients never receive
   the Memory admin token. `/memory/mcp` uses a per-run credential, not the broad

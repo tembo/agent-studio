@@ -25,6 +25,7 @@ export type McpProviderSlug =
   | "linear"
   | "amplemarket"
   | "clay"
+  | "maxio"
   | "avoma"
   | "metabase"
   | "gmail"
@@ -408,6 +409,16 @@ export const MCP_PROVIDERS: Record<McpProviderSlug, McpProvider> = {
       "https://api.clay.com",
       "https://app.clay.com",
     ],
+  },
+  maxio: {
+    slug: "maxio",
+    displayName: "Maxio (Carefeed)",
+    mcpServerUrl: "https://brave-hall-4395.mcp.maxio.com/v3/mcp",
+    oauthAuthorizationServerOrigins: [
+      "https://brave-hall-4395.mcp.maxio.com",
+    ],
+    scopeOverride: ["all"],
+    omitOfflineAccess: true,
   },
   avoma: {
     slug: "avoma",
