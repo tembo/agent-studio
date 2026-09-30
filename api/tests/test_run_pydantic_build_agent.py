@@ -52,73 +52,9 @@ def test_build_agent_constructs_provider_models(spec: dict) -> None:
     assert "get_run_datetime" in agent._function_toolset.tools
 
 
-def test_anthropic_adapter_handles_temperature_with_current_sdk() -> None:
-    """Exercise the provider request boundary without calling Anthropic.
-
-    Anthropic 1.0 removed sampling kwargs from `messages.create`; older
-    Pydantic AI adapters raised TypeError before making the request. The current
-    adapter moves them into the request body instead.
-    """
-    import httpx2
-    from anthropic import AsyncAnthropic
-    from pydantic_ai.models import ModelRequestParameters
-    from pydantic_ai.models.anthropic import AnthropicModel
-    from pydantic_ai.providers.anthropic import AnthropicProvider
-
-    async def exercise_request() -> None:
-        request_body: dict = {}
-
-        async def handler(request: httpx2.Request) -> httpx2.Response:
-            request_body.update(json.loads(request.content))
-            return httpx2.Response(
-                200,
-                json={
-                    "id": "msg_test",
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "text", "text": "ok"}],
-                    "model": "claude-sonnet-4-5",
-                    "stop_reason": "end_turn",
-                    "stop_sequence": None,
-                    "usage": {"input_tokens": 1, "output_tokens": 1},
-                },
-                headers={"x-request-id": "req_test"},
-            )
-
-        async with httpx2.AsyncClient(
-            transport=httpx2.MockTransport(handler)
-        ) as http_client:
-            client = AsyncAnthropic(
-                api_key="test-anthropic-key",
-                http_client=http_client,
-                max_retries=0,
-            )
-            model = AnthropicModel(
-                "claude-sonnet-4-5",
-                provider=AnthropicProvider(anthropic_client=client),
-            )
-            await model.request(
-                [ModelRequest(parts=[UserPromptPart("hello")])],
-                {"temperature": 0.2, "timeout": 300.0},
-                ModelRequestParameters(),
-            )
-
-        assert request_body["temperature"] == 0.2
-
-    asyncio.run(exercise_request())
-
-
-def test_wrapper_streams_anthropic_request_over_real_tcp(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Run a wrapper-built agent through the SDK's real network transport.
-
-    MockTransport-based tests never call httpcore's TCP backend, so they could
-    not catch the `httpx.Timeout` passed into Anthropic's `httpx2` client. A
-    loopback server exercises the same connect + streaming path as production
-    without sending credentials or traffic outside the test process.
-    """
-    stream_body = b"""event: message_start
+@pytest.fixture
+def anthropic_text_stream() -> bytes:
+    return b"""event: message_start
 data: {"type":"message_start","message":{"id":"msg_test","type":"message","role":"assistant","content":[],"model":"claude-sonnet-4-5","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":1,"output_tokens":0}}}
 
 event: content_block_start
@@ -138,6 +74,74 @@ data: {"type":"message_stop"}
 
 """
 
+
+def test_anthropic_adapter_handles_temperature_with_current_sdk(
+    anthropic_text_stream: bytes,
+) -> None:
+    """Exercise the provider request boundary without calling Anthropic.
+
+    Anthropic 1.0 removed sampling kwargs from `messages.create`; older
+    Pydantic AI adapters raised TypeError before making the request. The current
+    adapter moves them into the request body instead.
+    """
+    import httpx2
+    from anthropic import AsyncAnthropic
+    from pydantic_ai.models import ModelRequestParameters
+    from pydantic_ai.models.anthropic import AnthropicModel
+    from pydantic_ai.providers.anthropic import AnthropicProvider
+
+    async def exercise_request() -> None:
+        request_body: dict = {}
+
+        async def handler(request: httpx2.Request) -> httpx2.Response:
+            request_body.update(json.loads(request.content))
+            return httpx2.Response(
+                200,
+                content=anthropic_text_stream,
+                headers={
+                    "content-type": "text/event-stream",
+                    "x-request-id": "req_test",
+                },
+            )
+
+        async with httpx2.AsyncClient(
+            transport=httpx2.MockTransport(handler)
+        ) as http_client:
+            client = AsyncAnthropic(
+                api_key="test-anthropic-key",
+                http_client=http_client,
+                max_retries=0,
+            )
+            model = AnthropicModel(
+                "claude-sonnet-4-5",
+                provider=AnthropicProvider(anthropic_client=client),
+            )
+            response = await model.request(
+                [ModelRequest(parts=[UserPromptPart("hello")])],
+                {"temperature": 0.2, "timeout": 300.0},
+                ModelRequestParameters(),
+            )
+
+        assert request_body["temperature"] == 0.2
+        assert request_body["stream"] is True
+        assert response.parts == [TextPart("ok")]
+        assert response.usage.input_tokens == 1
+        assert response.usage.output_tokens == 1
+
+    asyncio.run(exercise_request())
+
+
+def test_wrapper_streams_anthropic_request_over_real_tcp(
+    monkeypatch: pytest.MonkeyPatch,
+    anthropic_text_stream: bytes,
+) -> None:
+    """Run a wrapper-built agent through the SDK's real network transport.
+
+    MockTransport-based tests never call httpcore's TCP backend, so they could
+    not catch the `httpx.Timeout` passed into Anthropic's `httpx2` client. A
+    loopback server exercises the same connect + streaming path as production
+    without sending credentials or traffic outside the test process.
+    """
     async def exercise_stream() -> None:
         request_bodies: list[dict] = []
 
@@ -158,9 +162,9 @@ data: {"type":"message_stop"}
             response = (
                 b"HTTP/1.1 200 OK\r\n"
                 b"Content-Type: text/event-stream\r\n"
-                + f"Content-Length: {len(stream_body)}\r\n".encode()
+                + f"Content-Length: {len(anthropic_text_stream)}\r\n".encode()
                 + b"Connection: close\r\n\r\n"
-                + stream_body
+                + anthropic_text_stream
             )
             writer.write(response)
             await writer.drain()
