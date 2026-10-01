@@ -127,5 +127,11 @@ configured in Studio. Studio stops before creating a session when it cannot
 resolve the connected repository.
 
 `TEMBO_API_URL` defaults to `https://api.tembo.io`. For a self-hosted Tembo
-API, set it to `https://<deployment-origin>/api/public-api`; Studio appends
-`/v1/repositories` and `/v1/sessions` to that base for authoring.
+API mounted under `/api`, set it to `https://<deployment-origin>/api` (an
+explicit `/api/public-api` suffix also works). Studio adds `/public-api`
+unless already present, then uses `/auth/context` to validate accounts and
+`/v1/repositories` and `/v1/sessions` for authoring.
+
+If an active personal key is rejected by an older Studio version, upgrade:
+account validation now uses `/auth/context` and reads `organizationId` from
+its response. The former `/public-api/me` route is no longer available.

@@ -95,7 +95,8 @@ Generate each with `openssl rand -base64 32`:
     instance admin. **This is what lets the first person in**; sign-up is
     invite-only by default (it gates email/password sign-up too).
   - `TEMBO_API_URL` — leave the default `https://api.tembo.io` unless targeting a
-    staging environment.
+    staging environment. TAS appends `/public-api` unless the URL already
+    ends with it, and preserves any deployment path prefix.
 - [ ] **Set the OAuth provider's redirect URI** to match your origin *(skip if
   using email/password)*:
   - Google: `${BETTER_AUTH_URL}/api/auth/callback/google`
