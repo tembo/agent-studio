@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { memberChoice } from "@/lib/member-choice";
+import { getWorkspaceMemberChoice } from "@/lib/workspace-member-search";
 import { BackLink } from "@/components/back-link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,10 +18,7 @@ import { toolkitLabel } from "@/lib/composio-label";
 import { getMcpProvider } from "@/lib/mcp-providers";
 import { meetsMinRole } from "@/lib/rbac";
 import { isTemboConfiguredForUser } from "@/lib/tembo-credentials";
-import {
-  getWorkspaceRole,
-  listWorkspaceMembers,
-} from "@/lib/workspace";
+import { getWorkspaceRole } from "@/lib/workspace";
 
 import {
   AgentConnectionIcons,
@@ -49,33 +48,20 @@ export default async function AgentLayout({
   const { session, workspace, repo, agent, raw, canonicalName, locked } =
     await loadAgentContext(slug, agentName);
 
-  const [currentUserRole, temboConfigured, stable, owner, allMembers] =
+  const [currentUserRole, temboConfigured, stable, owner] =
     await Promise.all([
       getWorkspaceRole(workspace.id, session.user.id),
       isTemboConfiguredForUser(workspace.id, session.user.id),
       getStableVersion(workspace.id, canonicalName),
       getAgentOwner(workspace.id, canonicalName),
-      listWorkspaceMembers(workspace.id),
     ]);
 
   const canEdit = meetsMinRole(currentUserRole, "operator");
   const isAdmin = currentUserRole === "workspace_admin";
-  const runAsMembers = isAdmin
-    ? allMembers.map((m) => ({ userId: m.userId, name: m.name, email: m.email }))
-    : undefined;
-
-  // Disambiguate display names by email when two members share a name.
-  const nameCounts = new Map<string, number>();
-  for (const m of allMembers) {
-    if (m.name) nameCounts.set(m.name, (nameCounts.get(m.name) ?? 0) + 1);
-  }
-  const nameFor = (userId: string): string => {
-    const m = allMembers.find((x) => x.userId === userId);
-    if (!m) return "unknown";
-    if (!m.name) return m.email;
-    return (nameCounts.get(m.name) ?? 0) > 1 ? `${m.name} (${m.email})` : m.name;
-  };
-  const ownerLabel = owner ? nameFor(owner.ownerUserId) : null;
+  const ownerMember = owner
+    ? await getWorkspaceMemberChoice(workspace.id, owner.ownerUserId)
+    : null;
+  const ownerLabel = owner ? ownerMember?.label ?? "unknown" : null;
   const pendingDraft = agent.ok
     ? pendingDraftFromContent({
         agentName: canonicalName,
@@ -214,8 +200,8 @@ export default async function AgentLayout({
               <RunNowButton
                 workspaceSlug={workspace.slug}
                 agentName={canonicalName}
-                members={runAsMembers}
-                currentUserId={session.user.id}
+                canRunAsOthers={isAdmin}
+                currentMember={memberChoice(session.user.id, session.user.name, session.user.email)}
                 stableVersion={stable?.versionNumber}
                 hasDraft={pendingDraft !== null && stable !== null}
                 dryRunUnavailableReason={

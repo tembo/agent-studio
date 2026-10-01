@@ -19,6 +19,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { MemberPicker } from "@/components/member-picker";
+import type { MemberChoice } from "@/lib/member-choice";
 import { Button } from "@/components/ui/button";
 
 import { runNowAction, type RunNowFormState } from "./actions";
@@ -29,10 +31,8 @@ const INITIAL: RunNowFormState = {};
 type Props = {
   workspaceSlug: string;
   agentName: string;
-  /** Provided for workspace admins → a "Run as" picker. Members run as
-   *  themselves and don't get this. */
-  members?: { userId: string; name: string | null; email: string }[];
-  currentUserId: string;
+  canRunAsOthers: boolean;
+  currentMember: MemberChoice;
   /** When the agent has a stable version, offer it when a pending draft exists. */
   stableVersion?: number;
   /** True when the live file differs from the current stable snapshot. */
@@ -44,8 +44,8 @@ type Props = {
 export function RunNowButton({
   workspaceSlug,
   agentName,
-  members,
-  currentUserId,
+  canRunAsOthers,
+  currentMember,
   stableVersion,
   hasDraft,
   dryRunUnavailableReason = null,
@@ -60,11 +60,10 @@ export function RunNowButton({
   const defaultRunVersion =
     versionChoice === "stable-only" ? "stable" : "draft";
   const [userMessage, setUserMessage] = useState("");
-  const [runAs, setRunAs] = useState(currentUserId);
+  const [runAs, setRunAs] = useState(currentMember);
   const [runVersion, setRunVersion] =
     useState<"stable" | "draft">(defaultRunVersion);
   const [dryRun, setDryRun] = useState(false);
-  const showRunAs = members !== undefined && members.length > 1;
   const dryRunAvailable = !dryRunUnavailableReason;
 
   return (
@@ -75,7 +74,7 @@ export function RunNowButton({
           setOpen(next);
           if (!next) {
             setUserMessage("");
-            setRunAs(currentUserId);
+            setRunAs(currentMember);
             setRunVersion(defaultRunVersion);
             setDryRun(false);
           }
@@ -166,32 +165,10 @@ export function RunNowButton({
                   "Blocks this agent's declared delivery (email, Slack, inbox, …). Other tools may still make changes. Recorded on this agent with a Dry run badge and excluded from success-rate metrics."}
               </p>
             </label>
-            {showRunAs && (
+            {canRunAsOthers && (
               <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="run-as"
-                  className="text-foreground-weak text-sm"
-                >
-                  Run as
-                </label>
-                <select
-                  id="run-as"
-                  name="run_as"
-                  value={runAs}
-                  onChange={(e) => setRunAs(e.target.value)}
-                  disabled={pending}
-                  className="bg-input text-foreground hover:bg-input-hover focus:bg-input-active focus-visible:shadow-focus-ring disabled:bg-input-disabled rounded-lg px-3 py-2 text-sm leading-6 shadow-[0_0_0_1px_var(--color-border)] transition-[background-color,box-shadow,color] duration-150 focus:outline-none"
-                >
-                  {members!.map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {(m.name ?? m.email) +
-                        (m.userId === currentUserId ? " (you)" : "")}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-foreground-muted text-sm">
-                  The run uses this member&apos;s connections.
-                </p>
+                <MemberPicker workspaceSlug={workspaceSlug} name="run_as" value={runAs} onChange={setRunAs} disabled={pending} />
+                <p className="text-foreground-muted text-sm">The run uses this member&apos;s connections.</p>
               </div>
             )}
             <textarea

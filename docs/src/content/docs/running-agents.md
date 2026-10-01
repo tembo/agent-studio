@@ -107,3 +107,16 @@ a truncated response — are covered in
 If a run is wrong, use **Improve the Agent** to describe what should change. TAS
 turns the feedback into a pull request via Tembo and correlates the merged PR
 back to your submission. See [Improvements](/agent-studio/improvements/).
+
+### Finding a Run as member
+
+Workspace admins can choose another member in the **Run now → Run as** picker.
+It initially shows the current user. Enter a name or email and choose **Search**,
+then select the member from the results. Search loads at most 25 choices; narrow
+the query with an email address when more members match. Labels include email
+addresses to distinguish people with the same name. The selected member stays
+selected when you search again or a search fails.
+
+Member options load only when requested, rather than loading the whole directory
+when opening an agent. Existing admin and membership checks still apply when a
+run is submitted.

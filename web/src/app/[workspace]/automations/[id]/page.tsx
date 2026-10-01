@@ -3,10 +3,11 @@ import { notFound } from "next/navigation";
 import { BackLink } from "@/components/back-link";
 import { RunHistoryList } from "@/components/run-history-list";
 import { Section } from "@/components/section";
+import { getWorkspaceMemberChoice } from "@/lib/workspace-member-search";
 import { getAutomation } from "@/lib/automations-api";
 import { listRecentRunsForAutomation } from "@/lib/run-history-db";
 import { getServerSession } from "@/lib/session";
-import { getWorkspaceBySlug, listWorkspaceMembers } from "@/lib/workspace";
+import { getWorkspaceBySlug } from "@/lib/workspace";
 import { listAgents } from "@/lib/workspace-agents";
 
 import { AutomationForm } from "../automation-form";
@@ -30,18 +31,14 @@ export default async function EditAutomationPage({
   const automation = await getAutomation(id);
   if (!automation || automation.workspaceId !== workspace.id) notFound();
 
-  const [result, memberRows, recentRuns] = await Promise.all([
+  const [result, owner, recentRuns] = await Promise.all([
     listAgents(workspace.id),
-    listWorkspaceMembers(workspace.id),
+    getWorkspaceMemberChoice(workspace.id, automation.ownerUserId),
     listRecentRunsForAutomation(workspace.id, automation.id, 10),
   ]);
   const agents = result.ok
     ? result.agents.filter((a) => a.ok).map((a) => ({ name: a.spec.name }))
     : [];
-  const members = memberRows.map((m) => ({
-    id: m.userId,
-    label: m.name ?? m.email,
-  }));
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8">
@@ -57,8 +54,7 @@ export default async function EditAutomationPage({
       <AutomationForm
         workspaceSlug={slug}
         agents={agents}
-        members={members}
-        currentUserId={session.user.id}
+        initialOwner={owner ?? { id: automation.ownerUserId, label: "Former member — choose a current member" }}
         defaults={{
           id: automation.id,
           name: automation.name,
@@ -66,7 +62,6 @@ export default async function EditAutomationPage({
           cron: automation.cron,
           inputMessage: automation.inputMessage,
           enabled: automation.enabled,
-          ownerUserId: automation.ownerUserId,
           useDraft: automation.useDraft,
         }}
         mode="edit"
