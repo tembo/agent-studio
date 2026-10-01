@@ -16,6 +16,12 @@ import type { CommitMode } from "@/lib/commit-mode-constants";
 
 const DEFAULT_TEMBO_API_URL = "https://api.tembo.io";
 
+function temboPublicApiUrl(): string {
+  const baseUrl = (process.env.TEMBO_API_URL ?? DEFAULT_TEMBO_API_URL).replace(/\/+$/, "");
+  // Custom hosts do not have api.tembo.io's automatic /public-api rewrite.
+  return baseUrl.endsWith("/public-api") ? baseUrl : `${baseUrl}/public-api`;
+}
+
 export interface CreateTaskInput {
   // The plain-English prompt describing what should change in the
   // agent file. We build this from the run context + the user's
@@ -51,10 +57,10 @@ export type TemboAccountResult =
 export async function validateTemboApiKey(
   apiKey: string,
 ): Promise<TemboAccountResult> {
-  const baseUrl = process.env.TEMBO_API_URL ?? DEFAULT_TEMBO_API_URL;
+  const baseUrl = temboPublicApiUrl();
   let res: Response;
   try {
-    res = await fetch(`${baseUrl}/public-api/me`, {
+    res = await fetch(`${baseUrl}/auth/context`, {
       headers: { Authorization: `Bearer ${apiKey}` },
       cache: "no-store",
     });
@@ -76,12 +82,12 @@ export async function validateTemboApiKey(
 
   const body = (await res.json().catch(() => null)) as {
     userId?: unknown;
-    orgId?: unknown;
+    organizationId?: unknown;
   } | null;
-  if (typeof body?.userId !== "string" || typeof body.orgId !== "string") {
+  if (typeof body?.userId !== "string" || typeof body.organizationId !== "string") {
     return { ok: false, error: "invalid" };
   }
-  return { ok: true, userId: body.userId, orgId: body.orgId };
+  return { ok: true, userId: body.userId, orgId: body.organizationId };
 }
 
 async function capRequest<T>(
@@ -126,7 +132,7 @@ export async function createTemboTask(args: {
   apiKey: string;
   input: CreateTaskInput;
 }): Promise<{ ok: true; result: CreateTaskResult } | { ok: false; error: CapError }> {
-  const baseUrl = (process.env.TEMBO_API_URL ?? DEFAULT_TEMBO_API_URL).replace(/\/+$/, "");
+  const baseUrl = temboPublicApiUrl();
   const normalizeRepoUrl = (url: string) => url.replace(/\/+$/, "").replace(/\.git$/, "");
   let repositoryId: string | undefined;
   let cursor: string | null = null;

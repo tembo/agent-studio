@@ -54,7 +54,9 @@ New-agent chat, chat-to-edit, and
 [improvements](/agent-studio/improvements/) then create Tembo Coding Agent
 sessions under that member's Tembo identity. When their Tembo account has
 GitHub connected, Tembo also uses that GitHub identity to open the resulting
-pull request.
+pull request. TAS validates the key against Tembo’s authenticated user and
+organization before saving it. A key from a different organization than the
+workspace fallback account is rejected.
 
 The **Workspace fallback account** preserves shared setup: when a member has no
 personal key, TAS uses this workspace-level Tembo API key instead. If neither is

@@ -117,7 +117,7 @@ environments (Production, Preview, Development) unless noted.
 | `INSTANCE_ADMIN_EMAILS` | **Required to bootstrap.** Comma-separated instance-admin emails. Sign-up is invite-only by default — only these admins can sign in to a fresh deployment and create workspaces / invite others. |
 | `TAS_INSTANCE_NAME` | Optional brand label shown on the login screen. |
 | `TAS_SIGNUP_POLICY` / `TAS_SIGNUP_ALLOWED_DOMAINS` | Optional. Default invite-only. See [Instance administration](/agent-studio/instance-admin/#sign-up-policy). |
-| `TEMBO_API_URL` | Defaults to `https://api.tembo.io`. Override for staging. |
+| `TEMBO_API_URL` | Defaults to `https://api.tembo.io`. Override with a staging or self-hosted API base URL; TAS appends `/public-api` unless already present. |
 
 For the Google OAuth client, set the authorized redirect URI to:
 
