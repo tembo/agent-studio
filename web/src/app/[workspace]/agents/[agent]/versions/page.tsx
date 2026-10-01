@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { redirect } from "next/navigation";
 
 import { LocalTime } from "@/components/local-time";
@@ -28,6 +30,7 @@ import {
 import { PromoteButton } from "../promote-button";
 import { VersionsSection } from "../versions-section";
 import { VersionsSourceTabs } from "./versions-source-tabs";
+import { InlineFileEditor } from "./inline-file-editor";
 import {
   SpecVersionViewer,
   type SpecVersionItem,
@@ -120,11 +123,34 @@ export default async function AgentVersionsPage({
     agent.ok ? agent.spec.framework : undefined,
   );
   const draftDiffers = stable ? stable.specContent !== raw : versions.length > 0;
+  function editableFile(
+    kind: "spec" | "eval",
+    source: string,
+    originalContent: string,
+    block: ReactNode,
+  ) {
+    if (!canEdit || !repo || !agent.ok) return block;
+    return (
+      <InlineFileEditor
+        key={`${kind}:${source}`}
+        workspaceSlug={workspace.slug}
+        agentName={canonicalName}
+        kind={kind}
+        source={source}
+        originalContent={originalContent}
+      >
+        {block}
+      </InlineFileEditor>
+    );
+  }
   const specItems: SpecVersionItem[] = [
     {
       id: "draft",
       label: draftDiffers ? "Draft (current file)" : "Draft",
-      block: <HighlightedSpec source={raw} language={specLanguage} />,
+      block: editableFile(
+        "spec", raw, raw,
+        <HighlightedSpec source={raw} language={specLanguage} />,
+      ),
       source: raw,
     },
     ...versions.map((v) => ({
@@ -133,8 +159,8 @@ export default async function AgentVersionsPage({
         stable?.versionNumber === v.versionNumber
           ? `v${v.versionNumber} · stable`
           : `v${v.versionNumber}`,
-      block: (
-        <HighlightedSpec source={v.specContent} language={specLanguage} />
+      block: editableFile("spec", v.specContent, raw,
+        <HighlightedSpec source={v.specContent} language={specLanguage} />,
       ),
       source: v.specContent,
     })),
@@ -250,12 +276,14 @@ export default async function AgentVersionsPage({
           {
             id: "eval-file",
             label: "Eval file",
-            content: evalContent && evalPath ? (
+            content: evalContent !== null && evalPath ? (
               <Section
                 title="Eval file"
                 description={`${evalPath} · ${evalLanguage.toUpperCase()} · ${countSourceLines(evalContent)} lines.`}
               >
-                <HighlightedSpec source={evalContent} language={evalLanguage} />
+                {editableFile("eval", evalContent, evalContent,
+                  <HighlightedSpec source={evalContent} language={evalLanguage} />,
+                )}
               </Section>
             ) : (
               <Section
