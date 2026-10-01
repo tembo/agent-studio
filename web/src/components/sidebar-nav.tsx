@@ -87,10 +87,12 @@ export function SidebarNav({
   home,
   inboxCount,
   isInstanceAdmin,
+  textMessagesEnabled = false,
 }: {
   home: string;
   inboxCount?: number;
   isInstanceAdmin?: boolean;
+  textMessagesEnabled?: boolean;
 }) {
   const inboxBadge = useLiveInboxCount(home, inboxCount);
 
@@ -115,11 +117,11 @@ export function SidebarNav({
           label: "Slack apps",
           icon: <IconSlack />,
         },
-        {
+        ...(textMessagesEnabled ? [{
           href: `${home}/text-messages`,
           label: "Text messages",
           icon: <IconPhone />,
-        },
+        }] : []),
         {
           href: `${home}/improvements`,
           label: "Improvements",
