@@ -13,6 +13,7 @@ import { getMcpProvider } from "@/lib/mcp-providers";
 import { getInstanceName } from "@/lib/instance-settings";
 import { isInstanceAdmin as checkInstanceAdmin } from "@/lib/instance";
 import type { WorkspaceRole } from "@/lib/rbac";
+import { getTextMessagesEnabled } from "@/lib/workspace-features";
 import type { Workspace } from "@/lib/workspace";
 import { IconExclamationTriangle } from "central-icons";
 
@@ -94,6 +95,7 @@ export async function AppShell({
   hasLlmProvider,
   children,
 }: Props) {
+  const textMessagesEnabled = await getTextMessagesEnabled(workspace.id);
   const instanceName = await getInstanceName();
   const isInstanceAdmin = await checkInstanceAdmin(user.email);
   const home = `/${workspace.slug}`;
@@ -145,6 +147,7 @@ export async function AppShell({
           <SidebarNav
             home={home}
             inboxCount={inboxCount}
+            textMessagesEnabled={textMessagesEnabled}
             isInstanceAdmin={isInstanceAdmin}
           />
 

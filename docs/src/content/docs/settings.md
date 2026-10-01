@@ -7,6 +7,16 @@ description: Workspace keys, members, Slack apps, appearance, and destructive op
 needs. Open it from the left sidebar; tabs are listed along the top of the
 settings page.
 
+## Features
+
+Workspace admins can show **Build → Text messages** for all members by turning
+on **Settings → Features → Enable Text Messages** and saving. It defaults off;
+workspaces with existing text numbers keep it enabled when upgrading.
+
+This setting controls navigation visibility only. Existing text numbers,
+incoming SMS, and direct links continue to work when it is off. To pause SMS,
+disable **Accept incoming text messages** on the individual text number.
+
 ## LLM Providers
 
 Add an **Anthropic** and/or **OpenAI** key. At least one is required for agents
