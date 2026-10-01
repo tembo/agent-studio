@@ -62,8 +62,12 @@ Each run records and displays:
   [Tool uses](/agent-studio/tools-and-tool-uses/). When one step makes more than
   five calls, its remaining calls start collapsed with the total and failure
   count visible; expand them to browse the bounded, scrollable list.
-- **Timing & trigger** — when it ran and what triggered it (manual, schedule, or
-  event).
+- **Timing & trigger** — queued, started, and completed timestamps in your local
+  time zone (hover or focus a timestamp to see UTC), plus what triggered the run
+  (manual, schedule, or event). Started appears once recorded, with the queue
+  wait alongside it. Completed appears once the run ends; **Ran for** shows
+  elapsed time when both start and completion are known. A run cancelled before
+  starting shows queued and completed times without a start time or duration.
 - **Environment** — Production or Development, based on the lifecycle rule in
   effect when the run was created. Dry runs also show a **Dry run** badge.
 
