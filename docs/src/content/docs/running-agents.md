@@ -83,13 +83,16 @@ relevant connection, provider, or agent settings when possible. The agent and
 workspace dashboards group failures by these safe summaries instead of by raw
 runtime output.
 
-Workspace admins see the same simple explanation and role-appropriate recovery
-guidance as everyone else, plus a collapsed **Technical details** section for
-investigating the underlying runtime trace. Technical details are not sent to
-viewers or operators through the run page, Runs list, chat, audit timeline, REST
-API, MCP, or Slack failure notifications. Runs created before structured failure
-summaries were introduced show a generic explanation while retaining their
-admin-only diagnostics.
+All workspace members, including viewers and operators, can expand the collapsed
+**Technical details** section on a failed run to inspect and copy its underlying
+runtime trace. The section appears when diagnostics are available, including on
+older runs without a structured failure summary. Recovery guidance and actions
+still follow the member's role. Viewing diagnostics requires access to the run's
+workspace.
+
+This access applies to the run detail page. Runs lists, chat, audit timelines,
+REST API, MCP, and Slack failure notifications continue to use their existing
+failure summaries and diagnostic access rules.
 
 Common causes — a missing provider key, an unauthorized or stale connection, or
 a truncated response — are covered in
