@@ -129,6 +129,12 @@ After completing and verifying any coding task, commit the changes, push the
 branch, and open a pull request. Do not wait for a separate request to open the
 pull request.
 
+## Releases
+
+For release requests, follow [`.agents/skills/release-agent-studio/SKILL.md`](./.agents/skills/release-agent-studio/SKILL.md).
+It covers matching the tagged compose defaults to the release, publishing images
+before the GitHub release, and verifying completion of the customer update path.
+
 ## Backlog prioritization
 
 The [Agent Studio Backlog project](https://github.com/orgs/tembo/projects/1)
