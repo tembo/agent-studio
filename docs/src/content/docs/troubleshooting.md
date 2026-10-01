@@ -113,3 +113,19 @@ failure groups, and the [Audit](/agent-studio/audit-and-roles/) timeline for wha
 changed and when. For instance-level problems, see
 [Deploying & operating](/agent-studio/admin-introduction/) and the
 self-hosting guides.
+
+## Agent creation or chat-to-edit returns `session/create` 404
+
+Upgrade Agent Studio to a version using the current Tembo API. Authoring uses
+`POST /v1/sessions` with the prompt in `description` and repository IDs resolved
+from `GET /v1/repositories`; the old `/public-api/session/create` route is no
+longer supported. See the [Tembo API reference](https://docs.tembo.io/api/v1/sessions/create-a-session).
+
+If Studio reports that the workspace repository is unavailable, connect that
+repository in Tembo's **Source Control** settings using the same Tembo account
+configured in Studio. Studio stops before creating a session when it cannot
+resolve the connected repository.
+
+`TEMBO_API_URL` defaults to `https://api.tembo.io`. For a self-hosted Tembo
+API, set it to `https://<deployment-origin>/api/public-api`; Studio appends
+`/v1/repositories` and `/v1/sessions` to that base for authoring.

@@ -22,6 +22,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Agent creation and chat-to-edit returning 404.** Authoring now uses the
+  current Tembo `/v1/sessions` API, resolves the connected repository to its
+  API ID, and reads the new session status response.
+
 - **ZoomInfo native MCP connect.** ZoomInfo's OAuth DCR is partner-allowlisted
   and rejects TAS, which failed Connect with HTTP 400. ZoomInfo is now a
   bring-your-own OAuth app: an admin creates a Standard App in the ZoomInfo

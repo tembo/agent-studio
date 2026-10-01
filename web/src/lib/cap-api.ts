@@ -10,15 +10,9 @@ import {
 import type { Framework } from "@/lib/agent-framework";
 import type { CommitMode } from "@/lib/commit-mode-constants";
 
-// Thin client for the Tembo Coding Agent Platform task API. The task
-// endpoints live under the **/public-api** namespace and authenticate
-// with the workspace's Tembo API key as `Authorization: Bearer`. POSTs
-// a free-text prompt + repo URL to POST /public-api/session/create and
-// returns a task record with an htmlUrl the user can follow; the task
-// is what opens the PR. CAP renamed the mount from /public-api/task to
-// /public-api/session with no alias (tembo/monorepo#9519, 2026-07-16);
-// the old path falls through to a catch-all that 400s with
-// {"error":{"message":"invalid request path"}}.
+// Session creation follows https://docs.tembo.io/api/v1/sessions/create-a-session.
+// Resolve the connected repository URL to its API ID before dispatching so the
+// session stays scoped to the workspace repository.
 
 const DEFAULT_TEMBO_API_URL = "https://api.tembo.io";
 
@@ -28,7 +22,7 @@ export interface CreateTaskInput {
   // improvement request. CAP supports file tagging in the prompt.
   prompt: string;
   // Public GitHub URL of the workspace repo, e.g.
-  // "https://github.com/owner/name". CAP locates the repo by URL.
+  // "https://github.com/owner/name". Resolved through GET /v1/repositories.
   repositoryUrl: string;
   // Default branch to open the PR against (typically "main").
   targetBranch?: string;
@@ -46,7 +40,8 @@ export interface CreateTaskResult {
 
 export type CapError =
   | { kind: "missing_tembo_key" }
-  | { kind: "http"; status: number; body: string; url: string }
+  | { kind: "repository_not_found" }
+  | { kind: "http"; status: number; body: string; url: string; method: string }
   | { kind: "network"; message: string };
 
 export type TemboAccountResult =
@@ -89,36 +84,33 @@ export async function validateTemboApiKey(
   return { ok: true, userId: body.userId, orgId: body.orgId };
 }
 
-export async function createTemboTask(args: {
-  apiKey: string;
-  input: CreateTaskInput;
-}): Promise<{ ok: true; result: CreateTaskResult } | { ok: false; error: CapError }> {
-  const baseUrl = process.env.TEMBO_API_URL ?? DEFAULT_TEMBO_API_URL;
-
-  const body = {
-    prompt: args.input.prompt,
-    repositories: [args.input.repositoryUrl],
-    ...(args.input.targetBranch ? { targetBranch: args.input.targetBranch } : {}),
-    ...(args.input.branchName ? { branchName: args.input.branchName } : {}),
-    queueRightAway: true,
-  };
-
-  const url = `${baseUrl}/public-api/session/create`;
-  // Breadcrumb only — never log `body`: it embeds the prompt (run input/output,
-  // user data) and would leak to plaintext container logs / aggregators (#44).
-  console.log("[cap] POST", url);
-
-  let res: Response;
+async function capRequest<T>(
+  apiKey: string,
+  url: string,
+  body?: object,
+): Promise<{ ok: true; result: T } | { ok: false; error: CapError }> {
+  const method = body ? "POST" : "GET";
+  // Never log prompts or response bodies: either can contain user data (#44).
+  console.log("[cap]", method, url);
   try {
-    res = await fetch(url, {
-      method: "POST",
+    const res = await fetch(url, {
+      method,
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${args.apiKey}`,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+        Authorization: `Bearer ${apiKey}`,
       },
       cache: "no-store",
-      body: JSON.stringify(body),
+      ...(body ? { body: JSON.stringify(body) } : {}),
     });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.log("[cap] ←", res.status);
+      return {
+        ok: false,
+        error: { kind: "http", status: res.status, body: text, url, method },
+      };
+    }
+    return { ok: true, result: (await res.json()) as T };
   } catch (e) {
     return {
       ok: false,
@@ -128,28 +120,53 @@ export async function createTemboTask(args: {
       },
     };
   }
+}
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    // Status only — the response body can echo submitted content (#44). The
-    // full body is still returned to the caller for handling, just not logged.
-    console.log("[cap] ←", res.status);
-    return { ok: false, error: { kind: "http", status: res.status, body: text, url } };
-  }
+export async function createTemboTask(args: {
+  apiKey: string;
+  input: CreateTaskInput;
+}): Promise<{ ok: true; result: CreateTaskResult } | { ok: false; error: CapError }> {
+  const baseUrl = (process.env.TEMBO_API_URL ?? DEFAULT_TEMBO_API_URL).replace(/\/+$/, "");
+  const normalizeRepoUrl = (url: string) => url.replace(/\/+$/, "").replace(/\.git$/, "");
+  let repositoryId: string | undefined;
+  let cursor: string | null = null;
+  do {
+    const query = new URLSearchParams({ limit: "100" });
+    if (cursor) query.set("cursor", cursor);
+    const page = await capRequest<{
+      items: { id: string; url: string }[];
+      nextCursor: string | null;
+    }>(args.apiKey, `${baseUrl}/v1/repositories?${query}`);
+    if (!page.ok) return page;
+    repositoryId = page.result.items.find(
+      (repo) => normalizeRepoUrl(repo.url) === normalizeRepoUrl(args.input.repositoryUrl),
+    )?.id;
+    cursor = page.result.nextCursor;
+  } while (!repositoryId && cursor);
 
-  const json = (await res.json()) as {
+  if (!repositoryId) return { ok: false, error: { kind: "repository_not_found" } };
+
+  const session = await capRequest<{
     id: string;
     title: string;
-    status: string;
+    state: { current?: string };
     htmlUrl: string;
-  };
+  }>(args.apiKey, `${baseUrl}/v1/sessions`, {
+    description: args.input.prompt,
+    codeRepositoryIds: [repositoryId],
+    autoDetectRepositories: false,
+    ...(args.input.targetBranch ? { targetBranch: args.input.targetBranch } : {}),
+    ...(args.input.branchName ? { branchName: args.input.branchName } : {}),
+    queueRightAway: true,
+  });
+  if (!session.ok) return session;
   return {
     ok: true,
     result: {
-      taskId: json.id,
-      title: json.title,
-      status: json.status,
-      htmlUrl: json.htmlUrl,
+      taskId: session.result.id,
+      title: session.result.title,
+      status: session.result.state.current ?? "queued",
+      htmlUrl: session.result.htmlUrl,
     },
   };
 }
