@@ -51,7 +51,7 @@ triggers a run, writes an automation, or kicks off the coding agent needs
 | `GET /agents` | List agents in the connected repo (valid + invalid). | viewer |
 | `GET /agents/{name}` | One agent, including the raw spec text. | viewer |
 | `POST /agents/validate` | Parse a spec without writing it. | viewer |
-| `GET /runs` | List runs (`?status=`, `?agent=`, `?trigger=`, `?environment=`, `?limit=`, `?before=`). | viewer |
+| `GET /runs` | List runs (`?status=`, `?agent=`, `?trigger=`, `?environment=`, `?limit=`, `?cursor=`, `?before=`). | viewer |
 | `POST /runs` | Trigger a run → `202 { run_id }`. | operator |
 | `GET /runs/{id}` | Full run incl. output, safe failure guidance, tokens, and cost. Workspace admins additionally receive `errorDetails`. | viewer |
 | `GET /tools` | Your cached tool catalog (slugs for `connections:`). | viewer |
@@ -160,3 +160,17 @@ curl -s https://your-tas-host/api/v1/evals/<eval_id> \
 - **Connections are per-user.** A run triggered with your key uses the
   connections *you* authorized. If `POST /runs` returns a 422 about a missing
   connection, authorize it under Connections first.
+
+### Run history pagination
+
+`GET /api/v1/runs` returns at most 50 runs, newest first, ordered by timestamp
+and run ID. Pass the response's opaque `next_cursor` as `?cursor=` to fetch the
+next page, keeping filters unchanged. Stop when `runs` is empty and
+`next_cursor` is `null`; a full or partial final page may require one empty
+request to confirm completion. Do not build a cursor from a displayed timestamp:
+the cursor preserves database microseconds and distinguishes runs created at the
+same instant. Newer runs arriving after the first page appear on a fresh listing.
+
+The existing `before` timestamp parameter remains available as a strict time
+filter, but it cannot traverse runs sharing a timestamp. Use `cursor` for complete
+pagination. Supplying both parameters, or an invalid cursor, returns HTTP 400.

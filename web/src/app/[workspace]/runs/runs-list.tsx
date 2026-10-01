@@ -122,7 +122,7 @@ export function RunsList({
           search: activeSearch || undefined,
           dryRun: dryRun || undefined,
         },
-        beforeIso: last.createdAt,
+        cursor: last.cursor,
       });
       setRows((prev) => [...prev, ...next]);
       setMore(next.length >= PAGE_SIZE);
