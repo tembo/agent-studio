@@ -11,7 +11,7 @@ import { SecretKeyForm } from "../secret-key-form";
 export const dynamic = "force-dynamic";
 
 // LLM Providers: the model API keys agents *run* on. An agent's
-// `model:` field (anthropic:* / openai:*) selects which key the runtime
+// `model:` field (anthropic:* / openai:* / fireworks:*) selects which key the runtime
 // uses. Each key is its own form so rotating one doesn't touch the
 // other's preview state.
 export default async function ProvidersPage({
@@ -23,9 +23,10 @@ export default async function ProvidersPage({
   const workspace = await getWorkspaceBySlug(slug);
   if (!workspace) notFound();
 
-  const [anthropicPreview, openaiPreview, scaledownPreview] = await Promise.all([
+  const [anthropicPreview, openaiPreview, fireworksPreview, scaledownPreview] = await Promise.all([
     getWorkspaceSecretPreview(workspace.id, "anthropic_api_key"),
     getWorkspaceSecretPreview(workspace.id, "openai_api_key"),
+    getWorkspaceSecretPreview(workspace.id, "fireworks_api_key"),
     getWorkspaceSecretPreview(workspace.id, "scaledown_api_key"),
   ]);
 
@@ -70,6 +71,29 @@ export default async function ProvidersPage({
                 ? {
                     last4: openaiPreview.last4,
                     updatedAt: openaiPreview.updatedAt.toISOString(),
+                  }
+                : null
+            }
+          />
+        </Section>
+      </div>
+
+      <div className="py-6">
+        <Section
+          title="Fireworks API key"
+          description="Required for any agent that uses an fireworks:* model."
+        >
+          <SecretKeyForm
+            workspaceSlug={workspace.slug}
+            kind="fireworks_api_key"
+            label="Fireworks API key"
+            placeholder="Your Fireworks API key"
+            maskedPrefix=""
+            preview={
+              fireworksPreview
+                ? {
+                    last4: fireworksPreview.last4,
+                    updatedAt: fireworksPreview.updatedAt.toISOString(),
                   }
                 : null
             }

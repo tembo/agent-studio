@@ -24,10 +24,24 @@ disable **Accept incoming text messages** on the individual text number.
 
 ## LLM Providers
 
-Add an **Anthropic** and/or **OpenAI** key. At least one is required for agents
+Add an **Anthropic**, **OpenAI**, or **Fireworks** key. At least one is required for agents
 to run; until one is set, the sidebar shows an **"LLM provider needed"** prompt.
 
-A third, optional key lives here too: a **ScaleDown API key**
+For Fireworks, create an API key in the [Fireworks console](https://fireworks.ai/),
+then save it under **Settings → LLM Providers → Fireworks API key**. In a Pydantic
+AgentSpec, use the full model ID from Fireworks, prefixed with `fireworks:`:
+
+```yaml
+model: fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct
+```
+
+Choose a model available to your Fireworks account that supports the agent's
+required tools and output format. A Fireworks key alone is sufficient to run
+Fireworks agents; OpenAI and Anthropic agents still require their own keys.
+Keys are encrypted at rest and can be rotated or removed here. Fireworks is
+supported by the Pydantic runner; the legacy Cargo AI runner remains OpenAI-only.
+
+An optional key lives here too: a **ScaleDown API key**
 ([scaledown.ai](https://scaledown.ai)) enables prompt compression to cut
 frontier-model token usage. Setting the key does nothing on its own — each agent
 opts in via the `scaledown:` field in its spec. See

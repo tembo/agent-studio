@@ -147,6 +147,8 @@ pub struct PydanticArgs<'a> {
     pub openai_api_key: Option<&'a str>,
     /// Workspace's Anthropic API key, if set.
     pub anthropic_api_key: Option<&'a str>,
+    /// Workspace's Fireworks API key, exposed as FIREWORKS_API_KEY.
+    pub fireworks_api_key: Option<&'a str>,
     /// Workspace's Composio API key, if set. Surfaced to the Python
     /// wrapper as `TAS_COMPOSIO_API_KEY`; the wrapper only uses it
     /// when the agent's spec declares `connections:`.
@@ -302,6 +304,9 @@ async fn spawn_and_wait(args: &PydanticArgs<'_>) -> anyhow::Result<std::process:
     // to — pydantic-ai's own dispatch handles that.
     if let Some(k) = args.openai_api_key {
         cmd.env("OPENAI_API_KEY", k);
+    }
+    if let Some(k) = args.fireworks_api_key {
+        cmd.env("FIREWORKS_API_KEY", k);
     }
     if let Some(k) = args.anthropic_api_key {
         cmd.env("ANTHROPIC_API_KEY", k);
