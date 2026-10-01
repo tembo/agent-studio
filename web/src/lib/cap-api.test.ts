@@ -257,3 +257,22 @@ describe("CAP prompt scope", () => {
     expect(prompt).not.toContain("**Evals: on.**");
   });
 });
+
+
+describe("exact inline edits", () => {
+  it("keeps delivery instructions without generating or forbidding eval edits", () => {
+    const prompt = buildChatEditPrompt({
+      agentPath: "agents/pydantic-agentspec/hello.yaml",
+      improvement: "Write this exact file",
+      improvementMarker: "TAS-Improvement-ID: inline",
+      commitMode: "pull_request",
+      defaultBranch: "main",
+      repositoryUrl: "https://github.com/acme/agents",
+      exactFileEdit: true,
+    });
+    expect(prompt).toContain("Write this exact file");
+    expect(prompt).toContain("TAS-Improvement-ID: inline");
+    expect(prompt).not.toContain("**Evals: on.**");
+    expect(prompt).not.toContain("**Evals: off.**");
+  });
+});

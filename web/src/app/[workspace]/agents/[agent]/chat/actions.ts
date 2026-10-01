@@ -2,6 +2,8 @@
 
 import { notFound } from "next/navigation";
 
+import { isAgentLocked } from "@/lib/agent-lock";
+import { prepareAgentFileEdit, type AgentFileEdit } from "@/lib/agent-file-edit";
 import {
   authorizeWorkspace,
   DENIED_MESSAGE,
@@ -42,6 +44,7 @@ export async function chatSubmitAction(args: {
   agentName: string;
   message: string;
   includeEvals?: boolean;
+  fileEdit?: AgentFileEdit;
 }): Promise<ChatSubmitResult> {
   const text = args.message.trim();
   if (!text) {
@@ -65,6 +68,22 @@ export async function chatSubmitAction(args: {
     };
   }
   const canonicalName = agent.spec.name;
+  let instruction = text;
+  if (args.fileEdit) {
+    if (await isAgentLocked(workspace.id, canonicalName)) {
+      return { ok: false, error: "This agent is locked." };
+    }
+    const prepared = await prepareAgentFileEdit({
+      workspaceId: workspace.id,
+      agentPath: agent.path,
+      agentName: canonicalName,
+      framework: agent.spec.framework,
+      raw: result.raw,
+      edit: args.fileEdit,
+    });
+    if (!prepared.ok) return prepared;
+    instruction = prepared.instruction;
+  }
 
   const repo = await getWorkspaceRepo(workspace.id);
   if (!repo) {
@@ -99,12 +118,13 @@ export async function chatSubmitAction(args: {
 
   const prompt = buildChatEditPrompt({
     agentPath: agent.path,
-    improvement: text,
+    improvement: instruction,
     improvementMarker: improvementMarker(row.id),
     commitMode: workspace.commitMode,
     defaultBranch: repo.defaultBranch,
     repositoryUrl: `https://github.com/${repo.owner}/${repo.name}`,
     includeEvals: args.includeEvals !== false,
+    exactFileEdit: Boolean(args.fileEdit),
     ...(await buildPromptConnectionContext(
       workspace.id,
       userId,

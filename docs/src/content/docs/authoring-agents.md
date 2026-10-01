@@ -24,6 +24,27 @@ Agents are authored as files and changed through pull requests. You can write
 those files directly, but the usual path is to describe what you want and let
 TAS open the PR for you.
 
+## Editing files from Versions
+
+Operators can edit an agent's spec in **Versions → Definition** or an existing
+sidecar in **Versions → Eval file**. Choose **Edit as draft**, change the text,
+and select **Save draft**. **Cancel** discards the local edits. Selecting an
+older spec snapshot lets you use it as the starting point for a draft change;
+the snapshot itself stays unchanged.
+
+Saving validates the file before submitting an exact replacement through the
+same asynchronous process as chat edits. Follow **View progress** to the task;
+the workspace's PR or direct-commit policy determines how the change lands.
+Reload Versions after it lands to see the new repository draft. This requires
+a connected repository and the same coding-agent credentials as chat editing.
+Saving does not promote a numbered stable version; use **Promote** separately.
+Eval files remain repository sidecars, rather than part of stable snapshots.
+
+Invalid content, changes to the agent's name or framework, and files changed
+since the editor was opened are rejected. A conflict detected by the coding
+task also stops the replacement. Agents without eval files stay unchanged;
+the inline editor does not create one. Locked agents cannot be edited here.
+
 ## Creating an agent from chat
 
 Describe the agent you want — its job, its tone, the services it should use. TAS

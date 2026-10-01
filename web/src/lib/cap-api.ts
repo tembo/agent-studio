@@ -585,6 +585,8 @@ export function buildChatEditPrompt(args: {
   /** Signed token CAP sends as `Authorization: Bearer` to the reference. */
   nativeToolsKey?: string;
   includeEvals?: boolean;
+  /** Already validated inline replacement; do not generate additional evals. */
+  exactFileEdit?: boolean;
 }): string {
   const framework = frameworkFromAgentPath(args.agentPath);
   return [
@@ -596,7 +598,7 @@ export function buildChatEditPrompt(args: {
     "",
     buildGuidancePointerBlock(framework),
     "",
-    ...evalsDirective(args.includeEvals !== false, args.agentPath),
+    ...(args.exactFileEdit ? [] : evalsDirective(args.includeEvals !== false, args.agentPath)),
     "**Step 2 — Delivery**",
     "",
     ...deliveryDirective(
