@@ -9,6 +9,8 @@
 import { useActionState, useMemo, useState } from "react";
 import { useActionToast } from "@/lib/use-action-toast";
 
+import { MemberPicker } from "@/components/member-picker";
+import type { MemberChoice } from "@/lib/member-choice";
 import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,20 +29,10 @@ type AgentChoice = {
   name: string;
 };
 
-type MemberChoice = {
-  /** TAS user id — written into automation.owner_user_id. */
-  id: string;
-  /** Display label (name or email). */
-  label: string;
-};
-
 type CommonProps = {
   workspaceSlug: string;
   agents: AgentChoice[];
-  /** Workspace members for the "Run as" picker. */
-  members: MemberChoice[];
-  /** The current session user — picker defaults to this on Create. */
-  currentUserId: string;
+  initialOwner: MemberChoice;
   defaults?: {
     id?: string;
     name?: string;
@@ -48,7 +40,6 @@ type CommonProps = {
     cron?: string;
     inputMessage?: string;
     enabled?: boolean;
-    ownerUserId?: string;
     useDraft?: boolean;
   };
 };
@@ -56,8 +47,7 @@ type CommonProps = {
 export function AutomationForm({
   workspaceSlug,
   agents,
-  members,
-  currentUserId,
+  initialOwner,
   defaults,
   mode,
 }: CommonProps & { mode: "create" | "edit" }) {
@@ -73,9 +63,7 @@ export function AutomationForm({
   const [cron, setCron] = useState(defaults?.cron ?? "0 9 * * 1-5");
   const [inputMessage, setInputMessage] = useState(defaults?.inputMessage ?? "");
   const [enabled, setEnabled] = useState(defaults?.enabled ?? true);
-  const [ownerUserId, setOwnerUserId] = useState(
-    defaults?.ownerUserId ?? currentUserId,
-  );
+  const [owner, setOwner] = useState(initialOwner);
   const [useDraft, setUseDraft] = useState(defaults?.useDraft ?? false);
   const preview = useMemo(() => validateCron(cron), [cron]);
 
@@ -179,25 +167,7 @@ export function AutomationForm({
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="owner_user_id" className="text-sm">
-          Run as
-        </Label>
-        <select
-          id="owner_user_id"
-          name="owner_user_id"
-          required
-          disabled={pending}
-          value={ownerUserId}
-          onChange={(e) => setOwnerUserId(e.target.value)}
-          className="bg-surface border-border text-foreground focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)] rounded-md border px-3 py-2 text-sm leading-6"
-        >
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-              {m.id === currentUserId ? " (you)" : ""}
-            </option>
-          ))}
-        </select>
+        <MemberPicker workspaceSlug={workspaceSlug} name="owner_user_id" value={owner} onChange={setOwner} disabled={pending} />
         <p className="text-foreground-muted text-sm">
           Scheduled runs use this user&apos;s Composio connections. If the
           agent declares a toolkit this user hasn&apos;t authorized, the run

@@ -5,8 +5,9 @@ import type { ReactNode } from "react";
 import { IconCalendarRepeat, IconGlobe, IconLightning } from "central-icons";
 
 import { BackLink } from "@/components/back-link";
+import { memberChoice } from "@/lib/member-choice";
 import { getServerSession } from "@/lib/session";
-import { getWorkspaceBySlug, listWorkspaceMembers } from "@/lib/workspace";
+import { getWorkspaceBySlug } from "@/lib/workspace";
 import { listAgents } from "@/lib/workspace-agents";
 
 import { AutomationForm } from "../automation-form";
@@ -49,15 +50,8 @@ export default async function NewAutomationPage({
 
   // ── Schedule: the cron form ─────────────────────────────────────────
   if (typeParam === "schedule" || (!typeParam && prefillAgent)) {
-    const [names, memberRows] = await Promise.all([
-      agentNames(),
-      listWorkspaceMembers(workspace.id),
-    ]);
+    const names = await agentNames();
     const agents = names.map((name) => ({ name }));
-    const members = memberRows.map((m) => ({
-      id: m.userId,
-      label: m.name ?? m.email,
-    }));
     return (
       <FormShell
         back={backToTypes}
@@ -67,8 +61,7 @@ export default async function NewAutomationPage({
         <AutomationForm
           workspaceSlug={slug}
           agents={agents}
-          members={members}
-          currentUserId={session.user.id}
+          initialOwner={memberChoice(session.user.id, session.user.name, session.user.email)}
           defaults={prefillAgent ? { agentName: prefillAgent } : undefined}
           mode="create"
         />

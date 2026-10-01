@@ -155,3 +155,12 @@ webhook only starts the run.
 Runs fired this way also appear in [Runs](/agent-studio/dashboard-and-runs/) as
 **Event**. Bad/missing token → 401, a disabled webhook → 403, too many in a
 short window → 429.
+
+### Searching scheduled-run identities
+
+Schedule forms show the selected **Run as** identity immediately. Use the name or
+email search to choose a different member; each search returns at most 25 choices.
+If more match, narrow the search using an email address. The selected identity is
+preserved while searching. Saving still checks that the selected user belongs to
+the workspace. A schedule whose previous owner has left requires a current member
+before it can be saved.
