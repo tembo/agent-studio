@@ -10,6 +10,7 @@ use crate::crypto::MasterKey;
 pub enum SecretKind {
     AnthropicApiKey,
     OpenAiApiKey,
+    FireworksApiKey,
     ComposioApiKey,
     ScaleDownApiKey,
 }
@@ -19,6 +20,7 @@ impl SecretKind {
         match self {
             SecretKind::AnthropicApiKey => "anthropic_api_key",
             SecretKind::OpenAiApiKey => "openai_api_key",
+            SecretKind::FireworksApiKey => "fireworks_api_key",
             SecretKind::ComposioApiKey => "composio_api_key",
             SecretKind::ScaleDownApiKey => "scaledown_api_key",
         }

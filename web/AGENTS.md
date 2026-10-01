@@ -65,3 +65,11 @@ Two boundaries so this rule doesn't over-trigger:
 metadata plus exact execution contents. The Rust runtime makes the final reuse
 decision after inheriting parent environment/dry-run settings and records a new
 child run with original-run provenance. Keep credentials out of these hashes.
+
+## Workspace provider secrets
+
+`lib/workspace-secrets.ts` owns provider secret types, encrypted storage, and
+masked previews; `lib/workspace.ts` re-exports these for existing callers.
+`app/[workspace]/settings/secret-actions.ts` owns admin-only key changes and
+audit events. New inference providers also need a database constraint migration,
+Rust secret lookup and runner environment wiring, and the layout's provider check.

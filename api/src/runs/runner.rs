@@ -610,8 +610,8 @@ async fn run_pydantic(
         }
     };
 
-    // Load whichever provider keys the workspace has set. Either
-    // (or both) may be absent; pydantic-ai inside the subprocess
+    // Load whichever provider keys the workspace has set. Any
+    // may be absent; pydantic-ai inside the subprocess
     // looks up the env var matching the agent's `model:` field, and
     // surfaces a clean "missing API key" error if its specific
     // provider isn't wired up. Treating absent keys as None here
@@ -622,6 +622,14 @@ async fn run_pydantic(
         &state.encryption_key,
         ctx.workspace_id,
         SecretKind::OpenAiApiKey,
+    )
+    .await
+    .ok();
+    let fireworks_key = get_workspace_secret_plaintext(
+        &state.db,
+        &state.encryption_key,
+        ctx.workspace_id,
+        SecretKind::FireworksApiKey,
     )
     .await
     .ok();
@@ -806,15 +814,15 @@ async fn run_pydantic(
         .map(|m| serde_json::to_string(m).unwrap_or_default())
         .filter(|s| !s.is_empty());
 
-    if openai_key.is_none() && anthropic_key.is_none() {
+    if openai_key.is_none() && anthropic_key.is_none() && fireworks_key.is_none() {
         // Pydantic-ai would fail inside the subprocess with a less
         // friendly message; intercept here so the run row's error
         // surface tells the customer exactly what to do.
         return (
             Err(anyhow!(
                 "No provider API keys set for this workspace. \
-                 Add either an OpenAI or Anthropic API key under \
-                 Settings → API keys before running an agent."
+                 Add an OpenAI, Anthropic, or Fireworks API key under \
+                 Settings → LLM Providers before running an agent."
             )),
             Vec::new(),
             Vec::new(),
@@ -841,6 +849,7 @@ async fn run_pydantic(
         user_message: &ctx.user_message,
         openai_api_key: openai_key.as_deref(),
         anthropic_api_key: anthropic_key.as_deref(),
+        fireworks_api_key: fireworks_key.as_deref(),
         composio_api_key: composio_key.as_deref(),
         scaledown_api_key: scaledown_key.as_deref(),
         composio_user_id: composio_key.as_ref().map(|_| composio_user_id.as_str()),

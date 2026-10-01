@@ -11,7 +11,7 @@ import {
   removeSecretAction,
   saveSecretAction,
   type SecretFormState,
-} from "./actions";
+} from "./secret-actions";
 
 const INITIAL: SecretFormState = {};
 
@@ -21,6 +21,7 @@ type Props = {
     | "tembo_api_key"
     | "anthropic_api_key"
     | "openai_api_key"
+    | "fireworks_api_key"
     | "scaledown_api_key"
     | "composio_api_key"
     | "composio_webhook_secret";

@@ -267,7 +267,8 @@ output_schema:
 - **\`model\`** (required) — format \`provider:model\`. Examples:
   \`anthropic:claude-fable-5\`, \`anthropic:claude-opus-4-8\`,
   \`anthropic:claude-sonnet-5\`, \`openai:gpt-5.5\`,
-  \`openai:gpt-4o-mini\`. The provider's API key must be set under the
+  \`openai:gpt-4o-mini\`, or \`fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct\`
+  (use the full Fireworks model ID). The provider's API key must be set under the
   workspace's Settings → API keys. See *Choosing a model* below for
   which to pick.
 - **\`description\`** (optional) — one-line summary. Shows in the
@@ -917,7 +918,7 @@ for production agents.
 ## Studio-specific notes
 
 - **API keys come from the workspace, not the file.** Don't put
-  \`openai_api_key\` or \`anthropic_api_key\` in the YAML. The
+  \`openai_api_key\`, \`anthropic_api_key\`, or \`fireworks_api_key\` in the YAML. The
   studio injects whichever workspace secret matches the agent's
   \`model:\` provider.
 - **YAML or JSON both work.** Pick whichever the team finds easier

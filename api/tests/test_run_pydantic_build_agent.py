@@ -19,6 +19,7 @@ from scripts import run_pydantic
 def provider_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("FIREWORKS_API_KEY", "test-fireworks-key")
 
 
 @pytest.mark.parametrize(
@@ -32,6 +33,11 @@ def provider_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
         {
             "name": "openai-basic",
             "model": "openai:gpt-5-mini",
+            "instructions": "Reply briefly.",
+        },
+        {
+            "name": "fireworks-basic",
+            "model": "fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct",
             "instructions": "Reply briefly.",
         },
         {
@@ -465,3 +471,23 @@ def test_checkpoint_round_trips_typed_messages_and_seeds_usage(
     assert usage.requests == 1
     assert usage.input_tokens == 12
     assert usage.output_tokens == 3
+
+
+def test_fireworks_uses_its_own_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY")
+    monkeypatch.delenv("ANTHROPIC_API_KEY")
+    model_id = "accounts/fireworks/models/llama-v3p3-70b-instruct"
+    agent = run_pydantic.build_agent({"model": f"fireworks:{model_id}"})
+    assert agent.model.model_name == model_id
+    assert str(agent.model.client.base_url) == "https://api.fireworks.ai/inference/v1/"
+    assert agent.model.client.api_key == "test-fireworks-key"
+
+
+def test_fireworks_requires_its_own_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pydantic_ai.exceptions import UserError
+
+    monkeypatch.delenv("FIREWORKS_API_KEY")
+    with pytest.raises(UserError, match="FIREWORKS_API_KEY"):
+        run_pydantic.build_agent({
+            "model": "fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct",
+        })

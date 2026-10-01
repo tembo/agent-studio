@@ -94,7 +94,8 @@ Key fields:
   back to `name` when there's no title.
 - **`model`** (required) — `provider:model`, e.g. `anthropic:claude-sonnet-5`,
   `anthropic:claude-opus-4-8`, `anthropic:claude-fable-5`, `openai:gpt-5.5`,
-  `openai:gpt-4o-mini`. The provider's key must be set in
+  `openai:gpt-4o-mini`, or `fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct`.
+  For Fireworks, use the full model ID from its catalog. The provider's key must be set in
   **Settings → LLM Providers**.
 - **`instructions`** (required) — the system prompt, usually a `|` block scalar.
 - **`connections:`** (optional) — external services the agent calls; see

@@ -108,6 +108,7 @@ export default async function WorkspaceLayout({
     erroredAutomations,
     anthropicKey,
     openaiKey,
+    fireworksKey,
     role,
   ] = await Promise.all([
     listWorkspacesForUser(session.user.id),
@@ -121,12 +122,13 @@ export default async function WorkspaceLayout({
       () => null,
     ),
     getWorkspaceSecretPreview(workspace.id, "openai_api_key").catch(() => null),
+    getWorkspaceSecretPreview(workspace.id, "fireworks_api_key").catch(() => null),
     getWorkspaceRole(workspace.id, session.user.id).catch(() => null),
   ]);
-  // Agents run on the workspace's own provider keys; with neither set,
+  // Agents run on the workspace's own provider keys; with none set,
   // every run fails immediately. Surface a sidebar CTA so a new
   // workspace's first job is obvious.
-  const hasLlmProvider = anthropicKey !== null || openaiKey !== null;
+  const hasLlmProvider = anthropicKey !== null || openaiKey !== null || fireworksKey !== null;
   const pendingDrafts = await listPendingAgentDrafts(
     workspace.id,
     agentsListing,
