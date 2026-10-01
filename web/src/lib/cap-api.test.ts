@@ -4,6 +4,7 @@ import {
   buildChatEditPrompt,
   buildCreateAgentPrompt,
   buildImprovePrompt,
+  createTemboTask,
   validateTemboApiKey,
 } from "./cap-api";
 
@@ -47,6 +48,131 @@ describe("validateTemboApiKey", () => {
       ok: false,
       error: "invalid",
     });
+  });
+});
+
+describe("createTemboTask", () => {
+  const input = {
+    prompt: "Create the daily brief agent",
+    repositoryUrl: "https://github.com/acme/agents",
+    targetBranch: "main",
+    branchName: "agent/daily-brief",
+  };
+  const repository = { id: "repo-1", url: input.repositoryUrl };
+  const session = {
+    id: "session-1",
+    title: "Daily brief",
+    state: { current: "inProgress" },
+    htmlUrl: "https://app.tembo.io/sessions/session-1",
+  };
+  const response = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), { status });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("resolves the exact repository across pages and sends the v1 session contract", async () => {
+    vi.stubEnv("TEMBO_API_URL", "https://api.tembo.io");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({
+        items: [{ id: "wrong-repo", url: "https://github.com/other/agents" }],
+        nextCursor: "page-2",
+      }))
+      .mockResolvedValueOnce(response({
+        items: [{ ...repository, url: `${repository.url}.git/` }], nextCursor: null,
+      }))
+      .mockResolvedValueOnce(response(session, 201));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(createTemboTask({ apiKey: "secret-key", input })).resolves.toEqual({
+      ok: true,
+      result: { taskId: session.id, title: session.title, status: "inProgress", htmlUrl: session.htmlUrl },
+    });
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "https://api.tembo.io/v1/repositories?limit=100",
+      "https://api.tembo.io/v1/repositories?limit=100&cursor=page-2",
+      "https://api.tembo.io/v1/sessions",
+    ]);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.headers.Authorization).toBe("Bearer secret-key");
+      expect(init.cache).toBe("no-store");
+    }
+    const post = fetchMock.mock.calls[2][1];
+    expect(post.method).toBe("POST");
+    expect(post.headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(post.body)).toEqual({
+      description: input.prompt,
+      codeRepositoryIds: [repository.id],
+      autoDetectRepositories: false,
+      targetBranch: "main",
+      branchName: "agent/daily-brief",
+      queueRightAway: true,
+    });
+  });
+
+  it("preserves a self-hosted API prefix and omits unspecified branch overrides", async () => {
+    vi.stubEnv("TEMBO_API_URL", "https://tembo.example.com/api/public-api/");
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [repository], nextCursor: null }))
+      .mockResolvedValueOnce(response({ ...session, state: {} }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    const result = await createTemboTask({
+      apiKey: "key", input: { prompt: input.prompt, repositoryUrl: input.repositoryUrl },
+    });
+    expect(result).toMatchObject({ ok: true, result: { status: "queued" } });
+    expect(fetchMock.mock.calls[0][0]).toBe("https://tembo.example.com/api/public-api/v1/repositories?limit=100");
+    expect(fetchMock.mock.calls[1][0]).toBe("https://tembo.example.com/api/public-api/v1/sessions");
+    const body = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(body).not.toHaveProperty("targetBranch");
+    expect(body).not.toHaveProperty("branchName");
+  });
+
+  it("does not dispatch when the connected repository is unavailable", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response({
+      items: [{ id: "wrong-repo", url: `${repository.url}-other` }], nextCursor: null,
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createTemboTask({ apiKey: "key", input })).resolves.toEqual({
+      ok: false, error: { kind: "repository_not_found" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([401, 403, 500])("stops on repository lookup HTTP %s", async (status) => {
+    const fetchMock = vi.fn().mockResolvedValue(response({ error: "lookup failed" }, status));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createTemboTask({ apiKey: "key", input })).resolves.toMatchObject({
+      ok: false, error: { kind: "http", status, method: "GET" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns session errors without logging sensitive response content or retrying", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ items: [repository], nextCursor: null }))
+      .mockResolvedValueOnce(response({ error: input.prompt }, 400));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createTemboTask({ apiKey: "secret-key", input })).resolves.toMatchObject({
+      ok: false, error: { kind: "http", status: 400, method: "POST", body: JSON.stringify({ error: input.prompt }) },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(log.mock.calls)).not.toContain(input.prompt);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("secret-key");
+  });
+
+  it.each(["lookup", "create"])("handles network failures during %s", async (stage) => {
+    const fetchMock = vi.fn();
+    if (stage === "create") fetchMock.mockResolvedValueOnce(response({ items: [repository], nextCursor: null }));
+    fetchMock.mockRejectedValueOnce(new Error("Connection closed"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(createTemboTask({ apiKey: "key", input })).resolves.toEqual({
+      ok: false, error: { kind: "network", message: "Connection closed" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(stage === "create" ? 2 : 1);
   });
 });
 
