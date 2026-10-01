@@ -22,6 +22,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Recover full authoring requests from Improvements.** Expand and copy the
+  original agent creation or change request even when authoring was interrupted
+  before an agent, session, PR, or commit became available.
+
 - **Agent creation and chat-to-edit returning 404.** Authoring now uses the
   current Tembo `/v1/sessions` API, resolves the connected repository to its
   API ID, and reads the new session status response.

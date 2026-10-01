@@ -55,8 +55,10 @@ export default async function ImprovementsPage({
           Improvements
         </h1>
         <p className="text-foreground-weak text-base">
-          Each row is an improvement submission from a run&apos;s
-          &ldquo;Improve the Agent&rdquo; form. Status updates as the Tembo task
+          Track agent creation, chat-to-edit, and run improvement requests.
+          Select &ldquo;View full request&rdquo; to read or copy the original
+          submission, even if the agent hasn&apos;t been created yet.
+          Status updates as the Tembo task
           opens a PR and it&apos;s merged — or, in YOLO mode, as the change is
           committed straight to the default branch.
         </p>
