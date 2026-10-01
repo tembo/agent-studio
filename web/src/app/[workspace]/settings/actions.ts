@@ -68,8 +68,6 @@ async function authorizeWorkspace(
   };
 }
 
-export { saveSecretAction, removeSecretAction, type SecretFormState } from "./secret-actions";
-
 export type DisconnectRepoFormState = {
   message?: string;
 };

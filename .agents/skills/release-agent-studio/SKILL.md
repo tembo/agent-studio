@@ -20,6 +20,10 @@ is published. A successful tag push or a green image job alone is insufficient.
 - Pin the intended release commit. Include all changes it introduces in the
   release notes, including migrations and upgrade ordering. Check its relevant
   CI results; let CI run the full suite rather than running it locally.
+- Verify a production web build for the chosen source before tagging when CI
+  does not include one (`pnpm --dir web build` or the web Docker build). Passing
+  TypeScript and unit tests does not detect every Next.js server-action export
+  error. A source build failure needs a code fix, not a workflow retry.
 - A release request authorizes publishing that release. It does not authorize
   deployments into customer accounts or bypassing branch protections.
 
