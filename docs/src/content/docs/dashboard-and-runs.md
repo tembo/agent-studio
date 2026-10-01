@@ -174,3 +174,11 @@ when those actions are required. Use a fresh result after upstream authorization
 changes that have not been synchronized into Studio, or when current external
 data is essential. Existing historical outputs without an opt-in key are not
 eligible.
+
+### Run history page limits
+
+Workspace and agent run lists load at most 50 rows per page. **Load more** keeps
+the exact timestamp and run ID of the last row so runs with identical timestamps
+remain reachable. Newer runs arriving while you browse appear when you refresh
+the list. Input previews are limited to 200 characters before transfer from the
+database; open a run to read its full input.

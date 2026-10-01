@@ -210,6 +210,7 @@ describe("buildMcpServer", () => {
   it("list_runs forwards filters and serializes rows", async () => {
     mockListRuns.mockResolvedValue([
       {
+        cursor: "test-cursor",
         id: "run-1",
         agentName: "greet",
         status: "succeeded",

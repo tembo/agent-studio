@@ -14,6 +14,7 @@ const runRow = {
   status: "succeeded",
   trigger: "manual",
   automation_id: null,
+  cursor_created_at: "2026-08-30T12:00:00.000123",
   created_at: new Date("2026-08-30T12:00:00Z"),
   started_at: new Date("2026-08-30T12:00:01Z"),
   completed_at: new Date("2026-08-30T12:00:02Z"),

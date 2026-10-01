@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { decodeRunCursor } from "@/lib/run-list-cursor";
 import { authorizeApiRequest } from "@/lib/api-auth";
 import { outputReuseSchema } from "@/lib/output-reuse";
 import { triggerRun } from "@/lib/api-v1/actions";
@@ -17,7 +18,7 @@ import {
 
 // GET /api/v1/runs — paginated run history for the workspace. Filters via query:
 //   ?status=succeeded,failed  ?agent=<name>  ?trigger=manual,schedule
-//   ?limit=50  ?before=<ISO timestamp>   (cursor = createdAt of the last row)
+//   ?limit=50  ?cursor=<next_cursor> (before remains a legacy time filter)
 // Min role viewer. (POST /api/v1/runs to trigger a run is added in P4.)
 
 export const dynamic = "force-dynamic";
@@ -68,6 +69,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return apiError(400, "limit must be a positive integer");
   }
 
+  const cursor = sp.get("cursor");
+  if (cursor !== null) {
+    try {
+      decodeRunCursor(cursor);
+    } catch {
+      return apiError(400, "Invalid run cursor");
+    }
+  }
+  if (cursor !== null && sp.has("before")) {
+    return apiError(400, "Use cursor or before, not both");
+  }
+
   const beforeRaw = sp.get("before");
   let before: Date | undefined;
   if (beforeRaw) {
@@ -80,9 +93,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const runs = await listRunsForWorkspace(auth.workspace.id, filters, {
     ...(limit ? { limit } : {}),
     ...(before ? { before } : {}),
+    ...(cursor ? { cursor } : {}),
   });
 
-  return NextResponse.json({ runs: runs.map(serializeRunListItem) });
+  return NextResponse.json({
+    runs: runs.map(serializeRunListItem),
+    next_cursor: runs.length ? runs[runs.length - 1].cursor : null,
+  });
 }
 
 // POST /api/v1/runs — trigger a run of an agent, acting as the API key's user

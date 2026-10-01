@@ -1,5 +1,6 @@
 import "server-only";
 
+import { decodeRunCursor, encodeRunCursor } from "@/lib/run-list-cursor";
 import { db } from "@/lib/db";
 import type { RunEnvironment } from "@/lib/run-environment";
 import type { RunSummary, RunTrigger } from "@/lib/runs-db";
@@ -17,6 +18,7 @@ export type RunListFilters = {
 };
 
 export type RunListItem = {
+  cursor: string;
   id: string;
   agentName: string;
   status: RunSummary["status"];
@@ -56,12 +58,12 @@ const SEARCH_TEXT_SQL = `(r.agent_name || E'\n' || COALESCE(r.user_message, '') 
 export async function listRunsForWorkspace(
   workspaceId: string,
   filters: RunListFilters,
-  options: { limit?: number; before?: Date } = {},
+  options: { limit?: number; before?: Date; cursor?: string } = {},
 ): Promise<RunListItem[]> {
-  const limit = Math.min(
-    Math.max(1, options.limit ?? LIST_RUNS_MAX_PAGE),
-    LIST_RUNS_MAX_PAGE,
-  );
+  const requestedLimit = options.limit ?? LIST_RUNS_MAX_PAGE;
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(Math.max(1, Math.floor(requestedLimit)), LIST_RUNS_MAX_PAGE)
+    : LIST_RUNS_MAX_PAGE;
   const params: unknown[] = [workspaceId];
   const where: string[] = [`r.workspace_id = $1`];
 
@@ -110,7 +112,11 @@ export async function listRunsForWorkspace(
     }
     where.push(`(${searchClauses.join(" OR ")})`);
   }
-  if (options.before) {
+  if (options.cursor) {
+    const cursor = decodeRunCursor(options.cursor);
+    params.push(cursor.createdAt, cursor.id);
+    where.push(`(r.created_at, r.id) < ($${params.length - 1}::timestamp, $${params.length}::uuid)`);
+  } else if (options.before) {
     params.push(options.before);
     where.push(`r.created_at < $${params.length}`);
   }
@@ -124,6 +130,7 @@ export async function listRunsForWorkspace(
     trigger: RunTrigger;
     automation_id: string | null;
     created_at: Date;
+    cursor_created_at: string;
     started_at: Date | null;
     completed_at: Date | null;
     user_message: string;
@@ -141,7 +148,9 @@ export async function listRunsForWorkspace(
     is_dry_run: boolean;
   }>(
     `SELECT r.id, r.agent_name, r.status, r.trigger, r.automation_id,
-            r.created_at, r.started_at, r.completed_at, r.user_message,
+            r.created_at, r.started_at, r.completed_at,
+            to_char(r.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS cursor_created_at,
+            left(r.user_message, 200) AS user_message,
             r.failure_summary, r.cost_usd, r.agent_version_label,
             r.run_environment, r.is_dry_run,
             u.name AS created_by_name, u.email AS created_by_email,
@@ -155,12 +164,13 @@ export async function listRunsForWorkspace(
        LEFT JOIN sms_delivery smsd ON smsd.run_id = r.id
        LEFT JOIN workspace_sms_channel sc ON sc.id = smsd.sms_channel_id
       WHERE ${where.join(" AND ")}
-      ORDER BY r.created_at DESC
+      ORDER BY r.created_at DESC, r.id DESC
       LIMIT $${params.length}`,
     params,
   );
 
   return rows.map((row) => ({
+    cursor: encodeRunCursor(row.cursor_created_at, row.id),
     id: row.id,
     agentName: row.agent_name,
     status: row.status,

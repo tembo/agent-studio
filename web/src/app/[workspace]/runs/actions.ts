@@ -11,11 +11,7 @@ import { getWorkspaceBySlug, userIsMember } from "@/lib/workspace";
 
 import { toLoaded, type LoadedRun } from "./shape";
 
-// Fetch a page of runs for the workspace given filters + a cursor.
-// The cursor is the createdAt of the last loaded row, sent as an ISO
-// string from the client; we coerce back to Date here. Client uses
-// this for "Load more" — initial render is server-side from
-// /<workspace>/runs/page.tsx so the first paint isn't a spinner.
+// The opaque cursor preserves the database timestamp and ID tie-breaker.
 
 export type LoadRunsArgs = {
   workspaceSlug: string;
@@ -27,7 +23,7 @@ export type LoadRunsArgs = {
     search?: string;
     dryRun?: boolean;
   };
-  beforeIso?: string;
+  cursor?: string;
 };
 
 export async function loadRunsAction(args: LoadRunsArgs): Promise<LoadedRun[]> {
@@ -41,7 +37,7 @@ export async function loadRunsAction(args: LoadRunsArgs): Promise<LoadedRun[]> {
   if (!isMember) notFound();
 
   const rows = await listRunsForWorkspace(workspace.id, args.filters, {
-    before: args.beforeIso ? new Date(args.beforeIso) : undefined,
+    cursor: args.cursor,
   });
 
   return rows.map(toLoaded);

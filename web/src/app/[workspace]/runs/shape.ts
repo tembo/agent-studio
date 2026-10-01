@@ -17,6 +17,7 @@ export type LoadedRun = Omit<
 
 export function toLoaded(r: RunListItem): LoadedRun {
   return {
+    cursor: r.cursor,
     id: r.id,
     agentName: r.agentName,
     status: r.status,
