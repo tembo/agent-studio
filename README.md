@@ -163,6 +163,13 @@ The full zero-to-running checklist lives in
 Pin `TAS_VERSION` in `.env` when using `compose.release.yaml` so upgrades are
 intentional and reproducible.
 
+Release tags publish images and open a PR updating the compose default. Repository
+admins must enable **Settings → Actions → General → Workflow permissions → Allow
+GitHub Actions to create and approve pull requests** (subject to organization
+policy). Merge the version PR after release publication; until then, customers
+using the compose default remain on the previous version. A failed version PR
+fails the release workflow even if the images were published successfully.
+
 ## Local Development
 
 Prerequisites:
