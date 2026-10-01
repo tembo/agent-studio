@@ -59,9 +59,10 @@ export type CreateRunInput = {
   orchestratorRunId?: string;
   /** Manual dry-run: stub declared delivery tools. Default false. */
   isDryRun?: boolean;
+  outputReuse?: { key: string; reportType: string; maxAgeSeconds: number };
 };
 
-export type CreateRunResponse = { runId: string };
+export type CreateRunResponse = { runId: string; reusedFromRunId?: string | null };
 
 export type RunTrigger = "manual" | "schedule" | "event" | "eval";
 
@@ -101,6 +102,8 @@ export type RunRecord = {
   resumeCount: number;
   resumedAt: string | null;
   isDryRun: boolean;
+  reusedFromRunId?: string | null;
+  outputReuseType?: string | null;
 };
 
 type ApiRunRecord = {
@@ -133,6 +136,8 @@ type ApiRunRecord = {
   resume_count: number;
   resumed_at: string | null;
   is_dry_run?: boolean;
+  reused_from_run_id?: string | null;
+  output_reuse_type?: string | null;
 };
 
 function fromApi(r: ApiRunRecord): RunRecord {
@@ -166,6 +171,8 @@ function fromApi(r: ApiRunRecord): RunRecord {
     resumeCount: r.resume_count,
     resumedAt: r.resumed_at,
     isDryRun: r.is_dry_run ?? false,
+    reusedFromRunId: r.reused_from_run_id ?? null,
+    outputReuseType: r.output_reuse_type ?? null,
   };
 }
 
@@ -196,13 +203,18 @@ export async function createRun(input: CreateRunInput): Promise<CreateRunRespons
       orchestrator_run_id: input.orchestratorRunId,
       output_delivery: input.delivery,
       is_dry_run: input.isDryRun ?? false,
+      output_reuse: input.outputReuse ? {
+        key: input.outputReuse.key,
+        report_type: input.outputReuse.reportType,
+        max_age_seconds: input.outputReuse.maxAgeSeconds,
+      } : undefined,
     }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Run API returned ${res.status}: ${text.slice(0, 400)}`);
   }
-  const body = (await res.json()) as { run_id: string };
+  const body = (await res.json()) as { run_id: string; reused_from_run_id?: string | null };
   // First run claims ownership if the agent has none yet (chat-created agents
   // already have an owner; repo-committed ones don't). Best-effort — never let
   // an ownership write fail a run that was just accepted.
@@ -211,7 +223,7 @@ export async function createRun(input: CreateRunInput): Promise<CreateRunRespons
   } catch (e) {
     console.error("claimAgentOwner failed (non-fatal)", e);
   }
-  return { runId: body.run_id };
+  return { runId: body.run_id, reusedFromRunId: body.reused_from_run_id ?? null };
 }
 
 export async function getRun(

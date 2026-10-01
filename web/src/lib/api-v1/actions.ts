@@ -29,10 +29,6 @@ import {
 } from "@/lib/cap-api";
 import { resolveTemboCredential } from "@/lib/tembo-credentials";
 import { buildPromptConnectionContext } from "@/lib/prompt-connections";
-import {
-  findMissingConnections,
-  missingConnectionsMessage,
-} from "@/lib/connection-checks";
 import { validateCron } from "@/lib/cron";
 import {
   createImprovement,
@@ -41,7 +37,7 @@ import {
   setImprovementTask,
   type ImprovementSource,
 } from "@/lib/improvements-api";
-import { createRun, getRun } from "@/lib/runs-api";
+import { getRun } from "@/lib/runs-api";
 import {
   claimInboxItem,
   completeInboxItem,
@@ -63,7 +59,7 @@ import {
   listWorkspaceMembers,
 } from "@/lib/workspace";
 import { setAgentOwner } from "@/lib/agent-versions";
-import { getAgentByName, resolveAgentForDispatch } from "@/lib/workspace-agents";
+import { getAgentByName } from "@/lib/workspace-agents";
 
 // Shared write-action service layer for BOTH the REST API (/api/v1) and the MCP
 // server (/mcp). Each function takes the resolved auth context and returns a
@@ -109,69 +105,7 @@ async function auditApiMutation(
 
 // ── trigger a run ─────────────────────────────────────────────────────
 
-export type TriggerRunInput = {
-  agent: string;
-  message?: string;
-  preferDraft?: boolean;
-  /** The orchestrator run that triggered this sub-agent through /mcp. */
-  orchestratorRunId?: string;
-};
-
-export async function triggerRun(
-  ctx: ApiCtx,
-  input: TriggerRunInput,
-): Promise<{ ok: true; runId: string } | ActionFailure> {
-  const dispatch = await resolveAgentForDispatch(ctx.workspace.id, input.agent, {
-    preferDraft: input.preferDraft ?? false,
-  });
-  if (!dispatch.ok) {
-    const status = dispatch.error.kind === "not-found" ? 404 : 422;
-    return { ok: false, status, error: dispatch.error.message };
-  }
-  const r = dispatch.resolved;
-
-  // Same pre-flight the UI's Run-now uses: block a run the acting user can't
-  // complete (a declared connection they haven't authorized) with an
-  // actionable message rather than a mid-run traceback.
-  const missing = await findMissingConnections(
-    ctx.workspace.id,
-    ctx.userId,
-    r.connections,
-  );
-  if (missing.length > 0) {
-    return { ok: false, status: 422, error: missingConnectionsMessage(missing, true) };
-  }
-
-  try {
-    const res = await createRun({
-      workspaceId: ctx.workspace.id,
-      userId: ctx.userId,
-      agentName: r.agentName,
-      agentPath: r.agentPath,
-      model: r.model,
-      framework: r.framework,
-      specContent: r.specContent,
-      specFormat: r.specFormat,
-      toolsModuleContent: r.toolsModuleContent,
-      skillsContent: r.skillsContent,
-      userMessage: input.message ?? "",
-      trigger: "manual",
-      agentVersionId: r.versionId,
-      agentVersionLabel: r.versionLabel,
-      orchestratorRunId: input.orchestratorRunId,
-      delivery: r.delivery,
-    });
-    // Not audited explicitly: the run row projects into the audit timeline as a
-    // run.* event attributed to ctx.userId (see auditApiMutation note).
-    return { ok: true, runId: res.runId };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 502,
-      error: err instanceof Error ? err.message : "Couldn't queue the run.",
-    };
-  }
-}
+export { triggerRun, type TriggerRunInput } from "./trigger-run";
 
 // ── validate a spec ───────────────────────────────────────────────────
 

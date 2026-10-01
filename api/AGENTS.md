@@ -48,6 +48,17 @@ exercise real Pydantic MCP discovery. The test covers outages, encrypted queued
 reports, restart recovery, duplicate delivery, expiring credentials, and shared
 versus isolated workspaces without making model calls.
 
+## Output reuse checks
+
+`cargo test output_reuse` runs policy checks. To exercise the actual lookup,
+set `OUTPUT_REUSE_TEST_DATABASE_URL` to disposable PostgreSQL and run
+`cargo test output_reuse -- --include-ignored`. With the updated API running
+against that same database, set `OUTPUT_REUSE_TEST_API_URL` to its loopback
+origin and `INTERNAL_API_TOKEN`, then run `node scripts/test-output-reuse.mjs`
+from the repository root. The script creates/removes fixtures and makes no
+model calls. The web authorization snapshot integration test uses that same
+database after migrations: `pnpm test src/lib/output-reuse.integration.test.ts`.
+
 ## Architecture
 
 - `src/main.rs` — wires axum router, applies migrations, hands the

@@ -15,6 +15,7 @@ export type SubAgentRun = {
   createdAt: Date;
   createdByName: string | null;
   createdByEmail: string | null;
+  reusedFromRunId: string | null;
 };
 
 // Distinct tool names invoked across every sub-run an orchestrator run spawned.
@@ -72,9 +73,10 @@ export async function listSubAgentRuns(
     created_at: Date;
     created_by_name: string | null;
     created_by_email: string | null;
+    reused_from_run_id: string | null;
   }>(
     `SELECT r.id, r.agent_name, r.status, r.cost_usd, r.tokens_input,
-            r.tokens_output, r.created_at,
+            r.tokens_output, r.created_at, r.reused_from_run_id,
             u.name AS created_by_name, u.email AS created_by_email
        FROM run r
        LEFT JOIN "user" u ON u.id = r.created_by
@@ -92,5 +94,6 @@ export async function listSubAgentRuns(
     createdAt: r.created_at,
     createdByName: r.created_by_name,
     createdByEmail: r.created_by_email,
+    reusedFromRunId: r.reused_from_run_id,
   }));
 }

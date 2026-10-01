@@ -16,6 +16,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Opt-in output reuse.** REST and MCP callers can reuse a compatible recent
+  production report for the same acting user, with a maximum age or force-fresh
+  control. Each reuse records a child run linked to its original producer;
+  failed, partial, development, and dry-run results stay excluded.
+
 - **Kernel native MCP provider** (`mcp.onkernel.com`, TAS-managed OAuth).
   Agents can launch Kernel cloud browsers, run Playwright, and automate web
   sessions with one Connect click.

@@ -126,3 +126,51 @@ Use this before removing a member to see what still depends on their credentials
 To change connections on their behalf, use the **Viewing** dropdown on the
 [Connections](/agent-studio/connections/) page (rename and refresh only — OAuth
 must still be performed by the member).
+
+### Reusing a recent output
+
+REST `POST /api/v1/runs` and the MCP `trigger_run` tool accept an optional
+`outputReuse` policy. Use it for reports whose previously generated text is
+acceptable instead of executing their tools again:
+
+```json
+{
+  "agent": "daily-report",
+  "message": "Summarize account 123",
+  "outputReuse": { "reportType": "account-summary", "maxAgeSeconds": 300 }
+}
+```
+
+Reuse is off by default. Both the original request and later callers must opt
+in with the same report type. Matching requires the same workspace, acting
+user, authorization scopes, stable agent version, exact input, and execution
+content (including tool modules and skills). Local connection, secret, or
+membership changes invalidate matching. Two API keys for the same acting user
+can share compatible results; two different acting users cannot.
+
+`maxAgeSeconds` is an integer from 0 to 604800 (seven days), measured from the
+original producer's completion. Use `requireFresh: true` or `maxAgeSeconds: 0`
+to execute again; the new successful result can satisfy later requests. Missing,
+expired, or incompatible results run normally. A failed scope or lookup query
+also falls back to normal execution. Concurrent misses may each execute.
+
+Only successful, nonempty production results from stable agents are eligible.
+Failed, partial-delivery, unobserved-delivery, development, evaluation, and
+dry-run results are excluded. This first version has no override for those
+exclusions and does not reuse across agent versions. Parent development and
+dry-run settings still apply to subagents.
+
+A hit creates a new completed run associated with the calling parent, with zero
+new tokens/cost and `reusedFromRunId` linking to the original producer. The run
+page links to that producer, and the parent's sub-run list distinguishes reused
+outputs. MCP `trigger_run` returns `reusedFromRunId`; REST's create response uses
+`reused_from_run_id`. `get_run` and REST run details expose `reusedFromRunId` and
+`outputReuseType`. Poll the returned run ID as usual. Reused runs never extend
+the original output's freshness window.
+
+Reuse returns saved text only: it does **not** repeat tools, deliveries, or other
+side effects, and does not claim that a delivery happened again. Keep reuse off
+when those actions are required. Use a fresh result after upstream authorization
+changes that have not been synchronized into Studio, or when current external
+data is essential. Existing historical outputs without an opt-in key are not
+eligible.
