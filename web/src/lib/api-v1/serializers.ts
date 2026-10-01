@@ -87,6 +87,8 @@ export type SerializedRun = {
   agentVersionLabel: string | null;
   runEnvironment: RunRecord["runEnvironment"];
   isDryRun: boolean;
+  reusedFromRunId: string | null;
+  outputReuseType: string | null;
 };
 
 /** Full run record (output, stream, safe failure copy, tokens). */
@@ -125,6 +127,8 @@ export function serializeRunRecord(
     agentVersionLabel: r.agentVersionLabel,
     runEnvironment: r.runEnvironment,
     isDryRun: r.isDryRun,
+    reusedFromRunId: r.reusedFromRunId ?? null,
+    outputReuseType: r.outputReuseType ?? null,
   };
   if (options.includeDiagnostics && r.status === "failed" && r.errorMessage) {
     serialized.errorDetails = r.errorMessage;

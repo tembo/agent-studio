@@ -5,3 +5,5 @@ pub mod handlers;
 mod native_mcp_proxy;
 pub mod pydantic;
 pub mod runner;
+
+pub mod output_reuse;

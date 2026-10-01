@@ -393,6 +393,16 @@ describe("buildMcpServer", () => {
     );
   });
 
+  it("trigger_run accepts a reuse policy and exposes source provenance", async () => {
+    mockTriggerRun.mockResolvedValue({ ok: true, runId: "reused-child", reusedFromRunId: "original" });
+    const client = await connectedClient();
+    const outputReuse = { reportType: "daily-report", maxAgeSeconds: 300, requireFresh: false };
+    const out = parse(await client.callTool({ name: "trigger_run", arguments: { agent: "greet", outputReuse } }));
+    expect(out).toEqual({ runId: "reused-child", reusedFromRunId: "original" });
+    expect(mockTriggerRun).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ outputReuse }));
+    await client.close();
+  });
+
   it("trigger_run surfaces an action failure as an error result", async () => {
     mockTriggerRun.mockResolvedValue({ ok: false, status: 422, error: "missing connection" });
     const client = await connectedClientFor(makeCtx("operator"));

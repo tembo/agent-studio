@@ -57,3 +57,11 @@ Two boundaries so this rule doesn't over-trigger:
 - **~1,500 lines of logic is the escalation point.** If a module crosses that
   despite boy-scouting, raise it (on #311) for a scheduled split instead of
   ever-larger opportunistic moves.
+
+## Programmatic run dispatch
+
+`lib/api-v1/trigger-run.ts` owns REST/MCP run dispatch, re-exported by `actions.ts`.
+`lib/output-reuse.ts` validates opt-in reuse policy and fingerprints authorization
+metadata plus exact execution contents. The Rust runtime makes the final reuse
+decision after inheriting parent environment/dry-run settings and records a new
+child run with original-run provenance. Keep credentials out of these hashes.

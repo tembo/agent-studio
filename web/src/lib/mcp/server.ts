@@ -39,6 +39,7 @@ import { FAVICON_ASSET_VERSION } from "@/lib/favicon-constants";
 import { listToolsForUser } from "@/lib/mcp-tools";
 import { MCP_OAUTH_WRITE_SCOPE } from "@/lib/mcp-oauth";
 import { meetsMinRole } from "@/lib/rbac";
+import { outputReuseSchema } from "@/lib/output-reuse";
 import { getRun } from "@/lib/runs-api";
 import { listRunsForWorkspace, type RunListFilters } from "@/lib/runs-db";
 import { listSlackApps } from "@/lib/slack-apps";
@@ -365,23 +366,26 @@ export function buildMcpServer(
       description:
         "Run an agent now, acting as this API key's user (so the run uses that " +
         "user's connections). Returns the run id — poll get_run for output. " +
-        "Runs the stable version by default; set preferDraft to run the live file.",
+        "Runs stable by default. Opt into outputReuse with reportType and maxAgeSeconds; " +
+        "requireFresh bypasses lookup. Reuse returns a new completed run linked to its source, without rerunning tools or delivery.",
       inputSchema: {
         agent: z.string().describe("The agent's declared name."),
         message: z.string().optional().describe("Optional user input for the run."),
         preferDraft: z.boolean().optional().describe("Run the live draft instead of stable."),
+        outputReuse: outputReuseSchema.optional(),
       },
     },
-    async ({ agent, message, preferDraft }) => {
+    async ({ agent, message, preferDraft, outputReuse }) => {
       if (!isOperator) return operatorOnly();
       const res = await triggerRun(ctx, {
         agent,
         message,
         preferDraft,
         orchestratorRunId: options.orchestratorRunId,
+        outputReuse,
       });
       if (!res.ok) return errorResult(res.error);
-      return json({ runId: res.runId });
+      return json({ runId: res.runId, reusedFromRunId: res.reusedFromRunId ?? null });
     },
   );
 

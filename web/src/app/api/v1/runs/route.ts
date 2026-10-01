@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { authorizeApiRequest } from "@/lib/api-auth";
+import { outputReuseSchema } from "@/lib/output-reuse";
 import { triggerRun } from "@/lib/api-v1/actions";
 import { apiError, authErrorResponse } from "@/lib/api-v1/http";
 import { serializeRunListItem } from "@/lib/api-v1/serializers";
@@ -91,7 +92,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeApiRequest(request, "operator");
   if (!auth.ok) return authErrorResponse(auth);
 
-  let body: { agent?: unknown; message?: unknown; preferDraft?: unknown };
+  let body: { agent?: unknown; message?: unknown; preferDraft?: unknown; outputReuse?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -101,12 +102,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return apiError(400, "`agent` (string) is required");
   }
 
+  const reuse = outputReuseSchema.optional().safeParse(body.outputReuse);
+  if (!reuse.success) return apiError(400, "Invalid outputReuse: require reportType and maxAgeSeconds (0–604800).");
   const result = await triggerRun(auth, {
     agent: body.agent,
     message: typeof body.message === "string" ? body.message : undefined,
     preferDraft: body.preferDraft === true,
+    outputReuse: reuse.data,
   });
   if (!result.ok) return apiError(result.status, result.error);
 
-  return NextResponse.json({ run_id: result.runId }, { status: 202 });
+  return NextResponse.json({ run_id: result.runId, reused_from_run_id: result.reusedFromRunId ?? null }, { status: 202 });
 }

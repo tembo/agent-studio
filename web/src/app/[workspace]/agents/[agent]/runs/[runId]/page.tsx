@@ -293,6 +293,17 @@ export default async function RunDetailPage({
               )}
             </dd>
           </div>
+          {run.reusedFromRunId && (
+            <div className="flex gap-3">
+              <dt className="text-foreground-weak w-24 shrink-0 font-medium">Output</dt>
+              <dd>
+                Reused from{" "}
+                <Link className="underline" href={`/${workspace.slug}/agents/${encodeURIComponent(run.agentName)}/runs/${run.reusedFromRunId}`}>
+                  original run
+                </Link>. Tools and delivery were not repeated.
+              </dd>
+            </div>
+          )}
           {smsDelivery && (
             <div className="flex gap-3">
               <dt className="text-foreground-weak w-24 shrink-0 font-medium">
@@ -520,6 +531,7 @@ export default async function RunDetailPage({
                           className={`${STATUS_TEXT_TONE[subAgentRun.status]} text-sm`}
                         >
                           {STATUS_LABELS[subAgentRun.status]}
+                          {subAgentRun.reusedFromRunId ? " · Reused output" : " · New execution"}
                         </span>
                       </span>
                       <span className="text-foreground-muted truncate text-xs">

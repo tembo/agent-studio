@@ -93,11 +93,14 @@ pub struct CreateRunRequest {
     /// Manual dry-run: gather and answer, but stub declared delivery tools.
     #[serde(default)]
     pub is_dry_run: Option<bool>,
+    #[serde(default)]
+    pub output_reuse: Option<super::output_reuse::OutputReuse>,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateRunResponse {
     pub run_id: Uuid,
+    pub reused_from_run_id: Option<Uuid>,
 }
 
 pub async fn create_run(
@@ -171,10 +174,11 @@ pub async fn create_run(
     let mut is_dry_run = req.is_dry_run.unwrap_or(false);
     let run_environment = if let Some(orchestrator_run_id) = req.orchestrator_run_id {
         let parent: OrchestratorMeta = sqlx::query_as(
-            "SELECT run_environment, is_dry_run FROM run WHERE id = $1 AND workspace_id = $2",
+            "SELECT run_environment, is_dry_run FROM run WHERE id = $1 AND workspace_id = $2 AND created_by = $3",
         )
         .bind(orchestrator_run_id)
         .bind(req.workspace_id)
+        .bind(&acting_user_id)
         .fetch_optional(&state.db)
         .await
         .map_err(|e| {
@@ -198,6 +202,47 @@ pub async fn create_run(
         return Err((StatusCode::BAD_REQUEST, message));
     }
 
+    if req
+        .output_reuse
+        .as_ref()
+        .is_some_and(|reuse| !reuse.validate())
+    {
+        return Err((StatusCode::BAD_REQUEST, "invalid output_reuse".into()));
+    }
+    let reused = if !is_dry_run
+        && trigger != "eval"
+        && run_environment == "production"
+        && lifecycle_environment == "production"
+    {
+        if let (Some(reuse), Some(version_id)) = (&req.output_reuse, req.agent_version_id) {
+            if reuse.max_age_seconds > 0 {
+                match super::output_reuse::lookup(
+                    &state.db,
+                    req.workspace_id,
+                    &acting_user_id,
+                    &req.agent_name,
+                    version_id,
+                    reuse,
+                )
+                .await
+                {
+                    Ok(output) => output,
+                    Err(_) => {
+                        tracing::warn!("output reuse lookup failed; executing normally");
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    let reused_from_run_id = reused.as_ref().map(|source| source.id);
+
     sqlx::query(
         r#"INSERT INTO run
             (id, workspace_id, agent_name, agent_path, model, status,
@@ -207,10 +252,20 @@ pub async fn create_run(
              orchestrator_run_id,
              execution_framework, execution_spec_content,
              execution_spec_format, execution_tools_module_content,
-             execution_skills_content, output_delivery, is_dry_run)
-            VALUES ($1, $2, $3, $4, $5, 'queued', NULL, NULL, NULL,
+             execution_skills_content, output_delivery, is_dry_run,
+             output, reused_from_run_id, output_reuse_key, output_reuse_type,
+             started_at, completed_at, tokens_input, tokens_output, cost_usd, delivery_status)
+            VALUES ($1, $2, $3, $4, $5, $21, NULL, NULL, NULL,
                     $6, $7, $8, $9, $10, $11, $12, $13,
-                    $14, $15, $16, $17, $18, $19, $20)"#,
+                    $14, $15, $16, $17, $18, $19, $20,
+                    $22, $23, $24, $25,
+                    CASE WHEN $23::uuid IS NOT NULL THEN now() END,
+                    CASE WHEN $23::uuid IS NOT NULL THEN now() END,
+                    CASE WHEN $23::uuid IS NOT NULL THEN 0 END,
+                    CASE WHEN $23::uuid IS NOT NULL THEN 0 END,
+                    CASE WHEN $23::uuid IS NOT NULL THEN 0 END,
+                    CASE WHEN $23::uuid IS NOT NULL AND $19::jsonb IS NOT NULL
+                         THEN 'unobserved' ELSE 'undeclared' END)"#,
     )
     .bind(run_id)
     .bind(req.workspace_id)
@@ -232,9 +287,34 @@ pub async fn create_run(
     .bind(skills_json)
     .bind(output_delivery)
     .bind(is_dry_run)
+    .bind(if reused.is_some() {
+        "succeeded"
+    } else {
+        "queued"
+    })
+    .bind(
+        reused
+            .as_ref()
+            .map(|source| source.output.as_str())
+            .unwrap_or(""),
+    )
+    .bind(reused_from_run_id)
+    .bind(req.output_reuse.as_ref().map(|reuse| reuse.key.as_str()))
+    .bind(
+        req.output_reuse
+            .as_ref()
+            .map(|reuse| reuse.report_type.as_str()),
+    )
     .execute(&state.db)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("db insert: {e}")))?;
+
+    if reused_from_run_id.is_some() {
+        return Ok(Json(CreateRunResponse {
+            run_id,
+            reused_from_run_id,
+        }));
+    }
 
     let task_state = state.clone();
     let model = req.model;
@@ -274,7 +354,10 @@ pub async fn create_run(
         .await;
     });
 
-    Ok(Json(CreateRunResponse { run_id }))
+    Ok(Json(CreateRunResponse {
+        run_id,
+        reused_from_run_id: None,
+    }))
 }
 
 // Tolerate either of our two canonical framework strings. Anything
@@ -350,6 +433,8 @@ pub struct RunRecord {
     pub resume_count: i32,
     pub resumed_at: Option<DateTime<Utc>>,
     pub is_dry_run: bool,
+    pub reused_from_run_id: Option<Uuid>,
+    pub output_reuse_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -369,7 +454,7 @@ pub async fn get_run(
                   started_at, completed_at, tokens_input, tokens_output,
                   scaledown_original_tokens, scaledown_compressed_tokens,
                    trigger, automation_id, agent_version_id, agent_version_label,
-                   run_environment, resume_count, resumed_at, is_dry_run
+                   run_environment, resume_count, resumed_at, is_dry_run, reused_from_run_id, output_reuse_type
              FROM run
              WHERE id = $1 AND workspace_id = $2"#,
     )
