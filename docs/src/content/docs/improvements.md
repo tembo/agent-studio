@@ -26,7 +26,15 @@ messages are collapsed by default and can be expanded in place.
 
 ## Tracking
 
-The **Improvements** page lists submissions and their status. TAS correlates the
+The **Improvements** page lists agent creation, chat-to-edit, and run improvement
+submissions and their status. Select **View full request** in a row to read the
+entire original submission, with line breaks preserved, and **Copy request** to
+copy it for another attempt. This works even if creation was interrupted and no
+agent, run, Tembo session, PR, or commit is available. **Hide full request**
+collapses it back to the preview. The links to existing agents, runs, sessions,
+PRs, and commits remain available separately.
+
+TAS correlates the
 merged pull request back to your submission, so you can see whether a fix landed
 without leaving the studio. Statuses are reconciled against GitHub whenever you
 open a page that shows improvements, at most once a minute per workspace — so a

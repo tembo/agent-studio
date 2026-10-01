@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { CopyButton } from "@/components/copy-button";
 import { LocalTime } from "@/components/local-time";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type Column } from "@/components/ui/data-table";
@@ -60,7 +61,23 @@ export function ImprovementsTable({ rows }: { rows: ImprovementRow[] }) {
       key: "text",
       header: "Improvement",
       tdClassName: "max-w-md text-foreground",
-      cell: (r) => <span className="line-clamp-2 leading-5">{r.text}</span>,
+      cell: (r) => (
+        <details className="group" onClick={(event) => event.stopPropagation()}>
+          <summary className="cursor-pointer list-none rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2">
+            <span className="line-clamp-2 leading-5 group-open:hidden">{r.text}</span>
+            <span className="mt-1 inline-block text-sm font-medium underline underline-offset-2">
+              <span className="group-open:hidden">View full request</span>
+              <span className="hidden group-open:inline">Hide full request</span>
+            </span>
+          </summary>
+          <div className="mt-3 flex flex-col items-start gap-3">
+            <CopyButton text={r.text} label="Copy request" ariaLabel={`Copy request for ${r.agentName}`} />
+            <div className="max-h-96 w-full overflow-y-auto whitespace-pre-wrap break-words leading-5 [overflow-wrap:anywhere]">
+              {r.text}
+            </div>
+          </div>
+        </details>
+      ),
     },
     {
       key: "by",
