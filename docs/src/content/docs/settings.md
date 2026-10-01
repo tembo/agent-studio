@@ -7,10 +7,15 @@ description: Workspace keys, members, Slack apps, appearance, and destructive op
 needs. Open it from the left sidebar; tabs are listed along the top of the
 settings page.
 
-## Features
+## General
+
+General contains the workspace name and URL, Memory settings, and Text messages
+settings directly below Memory.
+
+### Text messages
 
 Workspace admins can show **Build → Text messages** for all members by turning
-on **Settings → Features → Enable Text Messages** and saving. It defaults off;
+on **Settings → General → Text messages → Enable Text Messages** and saving. It defaults off;
 workspaces with existing text numbers keep it enabled when upgrading.
 
 This setting controls navigation visibility only. Existing text numbers,
