@@ -349,7 +349,20 @@ export default async function RunDetailPage({
                 Started
               </dt>
               <dd className="text-foreground">
-                {formatRelative(run.createdAt, run.startedAt)}
+                <LocalTime iso={run.startedAt} />
+                <span className="text-foreground-weak">
+                  {" "}({formatRelative(run.createdAt, run.startedAt)})
+                </span>
+              </dd>
+            </div>
+          )}
+          {run.completedAt && (
+            <div className="flex gap-3">
+              <dt className="text-foreground-weak w-24 shrink-0 font-medium">
+                Completed
+              </dt>
+              <dd className="text-foreground">
+                <LocalTime iso={run.completedAt} />
               </dd>
             </div>
           )}
