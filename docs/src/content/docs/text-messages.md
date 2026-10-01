@@ -51,7 +51,7 @@ help, or carrier compliance response explaining how to proceed.
 ## Set up a text number
 
 Only a workspace admin can configure text messages. First turn on
-**Settings → Features → Enable Text Messages** and save to show the navigation
+**Settings → General → Text messages → Enable Text Messages** and save to show the navigation
 item for all workspace members.
 
 1. In Twilio, buy or select an SMS-capable phone number.
