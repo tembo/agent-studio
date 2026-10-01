@@ -196,7 +196,15 @@ jobs:
             -f sha="${FILE_SHA}" \
             -f content="$(printf '%s\n' "$NEW_CONTENT" | base64 -w0)" >/dev/null
 
-          # Create the PR, or no-op if one is already open for this branch.
-          gh pr create --repo "${REPO}" --base main --head "${BRANCH}" --title "${TITLE}" \
-            --body "Automated: keep \`compose.release.yaml\`'s default pin in lockstep with the \`${REF_NAME}\` release, so customers deploying from published images get the matching version out of the box. The api applies DB migrations on boot." \
-            || echo "PR already exists for ${BRANCH}; branch updated."
+          # Only an existing open PR is a successful no-op; API failures must fail the job.
+          PR_URL="$(gh pr list --repo "${REPO}" --base main --head "${BRANCH}" \
+            --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$PR_URL" ]; then
+            echo "Updated existing release PR: ${PR_URL}"
+          else
+            if ! gh pr create --repo "${REPO}" --base main --head "${BRANCH}" --title "${TITLE}" \
+              --body "Automated: keep \`compose.release.yaml\`'s default pin in lockstep with the \`${REF_NAME}\` release, so customers deploying from published images get the matching version out of the box. The api applies DB migrations on boot."; then
+              echo "::error::Could not create the compose version PR. Check repository/organization Actions settings: Allow GitHub Actions to create and approve pull requests."
+              exit 1
+            fi
+          fi
