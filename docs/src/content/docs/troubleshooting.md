@@ -135,3 +135,16 @@ unless already present, then uses `/auth/context` to validate accounts and
 If an active personal key is rejected by an older Studio version, upgrade:
 account validation now uses `/auth/context` and reads `organizationId` from
 its response. The former `/public-api/me` route is no longer available.
+
+## Upgrade reports `SCHEMA_MISMATCH` for `jwks.alg` or `jwks.crv`
+
+The Better Auth JWT schema expects nullable `alg` and `crv` columns. Earlier
+Studio migrations created `jwks` without them. Migration 0097 adds both and
+allows null values if the columns already exist with `NOT NULL` constraints.
+Existing signing keys are preserved; legacy keys use the configured defaults.
+
+Deploy an API image containing migration 0097 and confirm its database migrations
+succeed before starting the updated web image. Studio owns migrations through the
+Rust API; do not run an unpinned `npx auth migrate` against the production database
+as a substitute. If the schema report names additional tables or columns, capture
+the full report and inspect those differences separately.
