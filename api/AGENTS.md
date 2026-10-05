@@ -165,3 +165,11 @@ and `runs-api.ts` — update those too if the column is user-facing.
   runner.
 - It does not know about better-auth sessions. The web layer
   authenticates users; the api trusts the bearer token between them.
+
+## Better Auth schema upgrades
+
+After changing auth schema migrations, install web dependencies and run
+`AUTH_MIGRATION_TEST_DATABASE_URL=postgres://... node scripts/test-auth-migrations.mjs`
+from the repository root against disposable PostgreSQL. It applies the migration
+history in an isolated transaction, checks Better Auth's core/JWT/OAuth schema,
+and verifies legacy identity preservation and provider/account uniqueness.
