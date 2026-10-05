@@ -148,3 +148,16 @@ succeed before starting the updated web image. Studio owns migrations through th
 Rust API; do not run an unpinned `npx auth migrate` against the production database
 as a substitute. If the schema report names additional tables or columns, capture
 the full report and inspect those differences separately.
+
+## Upgrade reports a required `account.issuer` column
+
+Better Auth 1.7.0–1.7.2 used a required `account.issuer` column. Version 1.7.3
+and later identify accounts by `providerId` and `accountId` again and no longer
+write `issuer`. Studio migration 0081 left the old column required, which can
+cause `SCHEMA_MISMATCH` and reject new account inserts after an auth upgrade.
+
+Migration 0098 makes `issuer` nullable and removes the obsolete issuer-based
+unique index. Existing accounts and issuer values are preserved; the original
+unique index on `providerId` and `accountId` remains in place. Deploy an API
+image containing migration 0098 and wait for successful migrations and a healthy
+API deployment before refreshing web. No manual SQL is needed with that release.
