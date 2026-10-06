@@ -136,6 +136,21 @@ If an active personal key is rejected by an older Studio version, upgrade:
 account validation now uses `/auth/context` and reads `organizationId` from
 its response. The former `/public-api/me` route is no longer available.
 
+## Agent creation or chat-to-edit returns `POST /v1/sessions` 400 `Invalid request`
+
+Older Studio versions send the unsupported `autoDetectRepositories` field when
+creating a coding session. The current Tembo API rejects unknown request fields,
+so even a short request such as "test" fails before the coding agent starts. This
+affects Chat to Edit, agent creation, and run improvements in both direct-commit
+and pull-request modes.
+
+Upgrade to a Studio version containing the fix for
+[#579](https://github.com/tembo/agent-studio/issues/579), then resubmit the request.
+Studio still scopes the session to the connected workspace repository using
+`codeRepositoryIds`; removing the obsolete field does not broaden repository
+access. Rotating API keys or changing the request text does not fix this specific
+request-format error.
+
 ## Upgrade reports `SCHEMA_MISMATCH` for `jwks.alg` or `jwks.crv`
 
 The Better Auth JWT schema expects nullable `alg` and `crv` columns. Earlier

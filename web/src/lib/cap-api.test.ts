@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   buildChatEditPrompt,
@@ -84,7 +85,7 @@ describe("createTemboTask", () => {
     targetBranch: "main",
     branchName: "agent/daily-brief",
   };
-  const repository = { id: "repo-1", url: input.repositoryUrl };
+  const repository = { id: "123e4567-e89b-42d3-a456-426614174000", url: input.repositoryUrl };
   const session = {
     id: "session-1",
     title: "Daily brief",
@@ -132,12 +133,56 @@ describe("createTemboTask", () => {
     expect(JSON.parse(post.body)).toEqual({
       description: input.prompt,
       codeRepositoryIds: [repository.id],
-      autoDetectRepositories: false,
       targetBranch: "main",
       branchName: "agent/daily-brief",
       queueRightAway: true,
     });
   });
+
+  it.each(["direct", "pull_request"] as const)(
+    "submits a %s chat edit to the strict session API (#579)",
+    async (commitMode) => {
+      // Supported fields used by Studio, from the public POST /v1/sessions
+      // contract: https://docs.tembo.io/api/v1/sessions/create-a-session.
+      // additionalProperties: false rejects legacy autoDetectRepositories.
+      const sessionRequest = z.strictObject({
+        description: z.string().min(1).max(1_000_000),
+        codeRepositoryIds: z.array(z.uuid()).max(100).optional(),
+        targetBranch: z.string().min(1).max(500).nullable().optional(),
+        branchName: z.string().min(1).max(500).nullable().optional(),
+        queueRightAway: z.boolean().optional(),
+      });
+      const prompt = buildChatEditPrompt({
+        agentPath: "agents/pydantic-agentspec/daily-brief.yaml",
+        improvement: "test",
+        improvementMarker: "TAS-Improvement-ID: edit-579",
+        commitMode,
+        defaultBranch: input.targetBranch,
+        repositoryUrl: input.repositoryUrl,
+      });
+      const fetchMock = vi.fn()
+        .mockResolvedValueOnce(response({ items: [repository], nextCursor: null }))
+        .mockImplementationOnce(async (_url: string, init: RequestInit) => {
+          const parsed = sessionRequest.safeParse(JSON.parse(init.body as string));
+          return parsed.success
+            ? response(session, 201)
+            : response({ error: "Invalid request" }, 400);
+        });
+      vi.stubGlobal("fetch", fetchMock);
+
+      await expect(createTemboTask({
+        apiKey: "key",
+        input: { prompt, repositoryUrl: input.repositoryUrl, targetBranch: input.targetBranch },
+      })).resolves.toMatchObject({ ok: true, result: { taskId: session.id } });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+        description: prompt,
+        codeRepositoryIds: [repository.id],
+        targetBranch: input.targetBranch,
+        queueRightAway: true,
+      });
+    },
+  );
 
   it("preserves a self-hosted API prefix and omits unspecified branch overrides", async () => {
     vi.stubEnv("TEMBO_API_URL", "https://tembo.example.com/api/public-api/");
