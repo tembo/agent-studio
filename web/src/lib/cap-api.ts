@@ -160,7 +160,6 @@ export async function createTemboTask(args: {
   }>(args.apiKey, `${baseUrl}/v1/sessions`, {
     description: args.input.prompt,
     codeRepositoryIds: [repositoryId],
-    autoDetectRepositories: false,
     ...(args.input.targetBranch ? { targetBranch: args.input.targetBranch } : {}),
     ...(args.input.branchName ? { branchName: args.input.branchName } : {}),
     queueRightAway: true,
