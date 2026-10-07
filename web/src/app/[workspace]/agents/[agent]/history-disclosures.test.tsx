@@ -54,7 +54,6 @@ describe("long tool lists", () => {
   it("summarizes excess calls and failures within a run step", () => {
     const markup = renderToStaticMarkup(
       <RunSteps
-        model="openai:gpt-5.5"
         steps={[
           {
             ordinal: 1,

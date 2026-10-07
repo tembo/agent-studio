@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { PricingSnapshot } from "@/lib/pricing";
 import type { AgentDelivery } from "@/lib/agent-format";
 import { claimAgentOwner } from "@/lib/agent-versions";
 import type { RunEnvironment } from "@/lib/run-environment";
@@ -90,6 +91,8 @@ export type RunRecord = {
   completedAt: string | null;
   tokensInput: number | null;
   tokensOutput: number | null;
+  costUsd: number | null;
+  pricingSnapshot: PricingSnapshot | null;
   /** ScaleDown prompt-compression totals (null unless the run compressed). */
   scaledownOriginalTokens: number | null;
   scaledownCompressedTokens: number | null;
@@ -126,6 +129,8 @@ type ApiRunRecord = {
   completed_at: string | null;
   tokens_input: number | null;
   tokens_output: number | null;
+  cost_usd: number | null;
+  pricing_snapshot: PricingSnapshot | null;
   scaledown_original_tokens: number | null;
   scaledown_compressed_tokens: number | null;
   trigger: RunTrigger;
@@ -161,6 +166,8 @@ function fromApi(r: ApiRunRecord): RunRecord {
     completedAt: r.completed_at,
     tokensInput: r.tokens_input,
     tokensOutput: r.tokens_output,
+    costUsd: r.cost_usd ?? null,
+    pricingSnapshot: r.pricing_snapshot ?? null,
     scaledownOriginalTokens: r.scaledown_original_tokens,
     scaledownCompressedTokens: r.scaledown_compressed_tokens,
     trigger: r.trigger,

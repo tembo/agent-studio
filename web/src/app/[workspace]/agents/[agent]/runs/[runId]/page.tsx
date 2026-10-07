@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { isAgentLocked } from "@/lib/agent-lock";
 import { scanImprovementsForPRs } from "@/lib/improvement-scan";
 import { listImprovementsForRun } from "@/lib/improvements-api";
-import { estimateRunCost, formatCurrency, formatTokens } from "@/lib/pricing";
+import { lookupPricing, formatCurrency, formatTokens } from "@/lib/pricing";
 import { getRunExecutionIdentity } from "@/lib/run-history-db";
 import { runEnvironmentLabel } from "@/lib/run-environment";
 import { runIdentityLabel } from "@/lib/run-identity";
@@ -35,6 +35,7 @@ import { CopyOutputButton } from "./copy-output-button";
 import { FailedReason } from "./failed-reason";
 import { ImproveForm } from "./improve-form";
 import { RunPoller } from "./run-poller";
+import { RunPricing } from "./run-pricing";
 import { RunSteps } from "./run-steps";
 import { ToolProviderLogo } from "./tool-provider-logo";
 
@@ -155,10 +156,7 @@ export default async function RunDetailPage({
   const locked = await isAgentLocked(workspace.id, run.agentName);
 
   const agentHref = `/${workspace.slug}/agents/${encodeURIComponent(run.agentName)}`;
-  // Prompt-cache breakdown lives per-step; sum it for the run header so the
-  // cache hit (read 0.1x) vs. write (1.25x) is visible without scanning steps.
-  // Also needed before cost so the header estimate prices cache halves instead
-  // of defaulting them to 0 (which undercounted when prompt caching engaged).
+  // Cache usage is persisted per request.
   const cacheReadTokens = steps.reduce(
     (sum, s) => sum + (s.cacheReadTokens ?? 0),
     0,
@@ -174,19 +172,8 @@ export default async function RunDetailPage({
     run.tokensInput !== null && run.tokensOutput !== null
       ? run.tokensInput + run.tokensOutput + cacheReadTokens + cacheWriteTokens
       : null;
-  // Cache-aware recompute: uncached input @ 1x + cache read @ 0.1x + write @
-  // 1.25x. Passing only in/out (defaulting cache to 0) undercounted the header
-  // whenever prompt caching engaged — the step footer was already correct.
-  const estimatedCost =
-    run.tokensInput !== null && run.tokensOutput !== null
-      ? estimateRunCost(
-          run.model,
-          run.tokensInput,
-          run.tokensOutput,
-          cacheReadTokens,
-          cacheWriteTokens,
-        )
-      : null;
+  const estimatedCost = run.costUsd;
+  const pricing = isLive ? lookupPricing(run.model) : run.pricingSnapshot;
   // ScaleDown prompt compression, if this run used it. original/compressed are
   // the source-block token counts before/after compression.
   const scaledownOrig = run.scaledownOriginalTokens;
@@ -210,7 +197,10 @@ export default async function RunDetailPage({
     0,
   );
   const grandTotalCost =
-    subAgentRuns.length > 0 ? (estimatedCost ?? 0) + subRunsCost : null;
+    subAgentRuns.length > 0 && estimatedCost !== null &&
+    subAgentRuns.every((r) => r.costUsd !== null)
+      ? estimatedCost + subRunsCost
+      : null;
   const grandTotalTokens =
     subAgentRuns.length > 0 ? (totalTokens ?? 0) + subRunsTokens : null;
 
@@ -403,6 +393,12 @@ export default async function RunDetailPage({
               </dd>
             </div>
           )}
+          <RunPricing
+            pricing={pricing}
+            cost={estimatedCost}
+            live={isLive}
+            reused={!!run.reusedFromRunId}
+          />
           {hasCache && (
             <div className="flex gap-3">
               <dt className="text-foreground-weak w-24 shrink-0 font-medium">
@@ -410,15 +406,7 @@ export default async function RunDetailPage({
               </dt>
               <dd className="text-foreground">
                 {formatTokens(cacheReadTokens)} read
-                <span className="text-foreground-weak">
-                  {" "}
-                  (0.1×)
-                </span>{" "}
-                · {formatTokens(cacheWriteTokens)} write
-                <span className="text-foreground-weak">
-                  {" "}
-                  (1.25×)
-                </span>
+                {" · "}{formatTokens(cacheWriteTokens)} write
               </dd>
             </div>
           )}
@@ -493,7 +481,8 @@ export default async function RunDetailPage({
           }
         >
           <RunSteps
-            model={run.model}
+            pricing={pricing}
+            savedCost={estimatedCost}
             steps={steps}
             calls={toolCalls}
             toolProviders={toolProviders}

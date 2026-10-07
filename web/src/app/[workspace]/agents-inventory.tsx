@@ -549,7 +549,7 @@ function LiveInventoryRow({
           <>
             {agent.avgCostUsd30d !== null ? (
               <span
-                title="Average cost per run in the trailing 30 days"
+                title="Average recorded cost per run in the trailing 30 days, across all model and agent versions"
                 aria-label={`Average cost per run: ${formatCurrency(agent.avgCostUsd30d)}`}
               >
                 {formatCurrency(agent.avgCostUsd30d)}
