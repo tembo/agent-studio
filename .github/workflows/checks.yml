@@ -33,6 +33,8 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
+      - name: Backlog sync regression tests (blocking)
+        run: node --test ../.agents/skills/reprioritize-backlog/scripts/sync-project.test.mjs
       - name: Install deps
         run: pnpm install --frozen-lockfile --config.minimum-release-age=0
       - name: Typecheck (blocking)
