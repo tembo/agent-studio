@@ -56,7 +56,7 @@ export default async function NewAutomationPage({
       <FormShell
         back={backToTypes}
         title="New schedule"
-        description="Run an agent on a recurring cadence. The cron is interpreted in UTC; all displayed times use your local timezone."
+        description="Run an agent on a recurring cadence. New schedules use your browser’s timezone and follow its daylight saving changes."
       >
         <AutomationForm
           workspaceSlug={slug}

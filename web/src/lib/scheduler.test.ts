@@ -62,6 +62,7 @@ const automation: Automation = {
   name: "Daily report",
   agentName: "daily-report",
   cron: "0 9 * * *",
+  timezone: "UTC",
   inputMessage: "",
   enabled: true,
   lastFiredAt: null,
@@ -222,6 +223,23 @@ describe("scheduler dispatch recovery", () => {
     vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
+  });
+
+  it.each([
+    ["2026-10-30T12:10:00Z", "2026-11-02T13:09:30Z"],
+    ["2026-03-06T13:10:00Z", "2026-03-09T12:09:30Z"],
+  ])("dispatches at 8:10 Eastern after the DST change from %s", async (lastFire, beforeDue) => {
+    current.cron = "10 8 * * 1-5";
+    current.timezone = "America/New_York";
+    current.lastFiredAt = new Date(lastFire);
+    vi.setSystemTime(new Date(beforeDue));
+    startScheduler();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(request).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(request).toHaveBeenCalledOnce();
   });
 
   it.each([429, 500, 502, 503, 504])("recovers from HTTP %s without waiting for the next daily window", async (status) => {

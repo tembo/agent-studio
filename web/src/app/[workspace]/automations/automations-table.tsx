@@ -35,6 +35,7 @@ export type AutomationRow = {
   /** Where a row click + the row's primary action go. */
   href: string;
   // Per-kind detail shown in the "Trigger" column.
+  timezone?: string;
   cron?: string; // schedule
   toolkitSlug?: string; // trigger
   triggerType?: string; // trigger
@@ -287,16 +288,16 @@ export function AutomationsTable({
 
 function TriggerDetail({ row }: { row: AutomationRow }) {
   if (row.kind === "schedule" && row.cron) {
-    const preview = validateCron(row.cron);
+    const preview = validateCron(row.cron, row.timezone);
     const nextFire =
-      row.enabled && preview.ok ? nextFireAfter(row.cron, new Date()) : null;
+      row.enabled && preview.ok ? nextFireAfter(row.cron, new Date(), row.timezone) : null;
     return (
       <div className="flex flex-col gap-0.5">
         <code className="text-foreground text-sm">{row.cron}</code>
         {preview.ok && (
           <span className="text-foreground-weak text-sm">
             {preview.humanReadable}{" "}
-            <span className="text-foreground-muted">(UTC)</span>
+            <span className="text-foreground-muted">({row.timezone})</span>
           </span>
         )}
         {nextFire && (

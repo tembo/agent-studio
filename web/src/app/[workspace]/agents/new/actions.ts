@@ -21,6 +21,7 @@ import {
   type CapError,
 } from "@/lib/cap-api";
 import { buildPromptConnectionContext } from "@/lib/prompt-connections";
+import { validateCron } from "@/lib/cron";
 import { suggestScheduleFromDescription } from "@/lib/schedule-parse";
 import {
   createImprovement,
@@ -252,12 +253,16 @@ export async function createSuggestedAutomationAction(
     return { error: "That schedule suggestion is no longer available." };
   }
 
+  const timezone = String(formData.get("timezone") ?? "UTC");
+  const validation = validateCron(schedule.cron, timezone);
+  if (!validation.ok) return { error: validation.error };
+
   // Retrying the action (or double-clicking across tabs) should not create a
   // second automation for the same agent and cadence.
   const existing = (await listAutomationsForAgent(
     workspace.id,
     improvement.agentName,
-  )).find((automation) => automation.cron === schedule.cron);
+  )).find((automation) => automation.cron === schedule.cron && automation.timezone === timezone);
   if (existing) {
     return {
       automation: {
@@ -273,6 +278,7 @@ export async function createSuggestedAutomationAction(
     name: `${improvement.agentName} schedule`,
     agentName: improvement.agentName,
     cron: schedule.cron,
+    timezone,
     inputMessage: "",
     enabled: false,
     userId,
@@ -290,6 +296,7 @@ export async function createSuggestedAutomationAction(
     payload: {
       name: created.name,
       cron: created.cron,
+      timezone: created.timezone,
       enabled: created.enabled,
       ownerUserId: userId,
     },

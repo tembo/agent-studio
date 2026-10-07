@@ -31,6 +31,7 @@ type ParsedForm = {
   name: string;
   agentName: string;
   cron: string;
+  timezone: string;
   inputMessage: string;
   enabled: boolean;
   /** Workspace member whose credentials each scheduled run uses. */
@@ -45,6 +46,7 @@ function parseForm(formData: FormData): ParsedForm {
     name: String(formData.get("name") ?? "").trim(),
     agentName: String(formData.get("agent") ?? "").trim(),
     cron: String(formData.get("cron") ?? "").trim(),
+    timezone: String(formData.get("timezone") ?? "UTC"),
     inputMessage: String(formData.get("input_message") ?? ""),
     enabled: formData.get("enabled") === "on",
     ownerUserId: String(formData.get("owner_user_id") ?? "").trim(),
@@ -63,7 +65,7 @@ async function validate(
     const found = await getAgentByName(workspaceId, parsed.agentName);
     if (!found) fieldErrors.agent = "That agent isn't in this workspace.";
   }
-  const cronCheck = validateCron(parsed.cron);
+  const cronCheck = validateCron(parsed.cron, parsed.timezone);
   if (!cronCheck.ok) fieldErrors.cron = cronCheck.error;
   if (Object.keys(fieldErrors).length > 0) return { fieldErrors };
   return null;
@@ -104,6 +106,7 @@ export async function createAutomationAction(
     name: parsed.name,
     agentName: parsed.agentName,
     cron: parsed.cron,
+    timezone: parsed.timezone,
     inputMessage: parsed.inputMessage,
     enabled: parsed.enabled,
     userId,
@@ -122,6 +125,7 @@ export async function createAutomationAction(
     payload: {
       name: parsed.name,
       cron: parsed.cron,
+      timezone: parsed.timezone,
       enabled: parsed.enabled,
       ownerUserId,
     },
@@ -149,6 +153,8 @@ export async function updateAutomationAction(
   const { workspace, userId } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
 
+  // Editing from another browser must never move the schedule.
+  parsed.timezone = existing.timezone;
   const invalid = await validate(workspace.id, parsed);
   if (invalid) return invalid;
 
@@ -182,6 +188,7 @@ export async function updateAutomationAction(
     payload: {
       name: parsed.name,
       cron: parsed.cron,
+      timezone: parsed.timezone,
       enabled: parsed.enabled,
       ownerUserId,
       agentChanged: existing.agentName !== parsed.agentName,

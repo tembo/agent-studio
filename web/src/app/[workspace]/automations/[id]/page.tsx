@@ -60,6 +60,7 @@ export default async function EditAutomationPage({
           name: automation.name,
           agentName: automation.agentName,
           cron: automation.cron,
+          timezone: automation.timezone,
           inputMessage: automation.inputMessage,
           enabled: automation.enabled,
           useDraft: automation.useDraft,

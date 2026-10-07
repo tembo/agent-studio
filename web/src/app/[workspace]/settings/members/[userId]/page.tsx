@@ -140,7 +140,7 @@ export default async function MemberDetailPage({
                   {a.name}
                 </Link>
                 <div className="text-foreground-weak flex items-center gap-3">
-                  <code className="text-sm">{a.cron}</code>
+                  <code className="text-sm">{a.cron} ({a.timezone})</code>
                   <Badge variant={a.enabled ? "green" : "gray"} size="small">
                     {a.enabled ? "Enabled" : "Paused"}
                   </Badge>

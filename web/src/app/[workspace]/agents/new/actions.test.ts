@@ -114,6 +114,7 @@ const automation = {
   name: "daily-pipeline-digest schedule",
   agentName: improvement.agentName,
   cron: "0 9 * * 1-5",
+  timezone: "UTC",
   inputMessage: "",
   enabled: false,
   lastFiredAt: null,
@@ -165,6 +166,7 @@ describe("createSuggestedAutomationAction", () => {
       name: "daily-pipeline-digest schedule",
       agentName: "daily-pipeline-digest",
       cron: "0 9 * * 1-5",
+      timezone: "UTC",
       inputMessage: "",
       enabled: false,
       userId: "creator",
@@ -231,6 +233,26 @@ describe("createSuggestedAutomationAction", () => {
     );
 
     expect(result.error).toMatch(/no longer available/);
+    expect(mockCreateAutomation).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("suggested automation timezone", () => {
+  it("saves the browser timezone and distinguishes the same cron in UTC", async () => {
+    mockListAutomationsForAgent.mockResolvedValue([automation]);
+    const form = suggestedAutomationForm();
+    form.set("timezone", "America/Chicago");
+    await createSuggestedAutomationAction({}, form);
+    expect(mockCreateAutomation).toHaveBeenCalledWith(expect.objectContaining({
+      timezone: "America/Chicago", enabled: false,
+    }));
+  });
+
+  it("rejects invalid timezone input", async () => {
+    const form = suggestedAutomationForm();
+    form.set("timezone", "Not/AZone");
+    expect((await createSuggestedAutomationAction({}, form)).error).toBeTruthy();
     expect(mockCreateAutomation).not.toHaveBeenCalled();
   });
 });
