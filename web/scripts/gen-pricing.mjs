@@ -1,6 +1,8 @@
-// Docker builds api/ and web/ independently; check in the web copy.
+// Docker builds api/ and web/ independently; check in the web copies.
 import { copyFileSync } from "node:fs";
-copyFileSync(
-  new URL("../../api/src/model-pricing.json", import.meta.url),
-  new URL("../src/lib/model-pricing.json", import.meta.url),
-);
+for (const file of ["model-pricing.json", "model-capabilities.json"]) {
+  copyFileSync(
+    new URL("../../api/src/" + file, import.meta.url),
+    new URL("../src/lib/" + file, import.meta.url),
+  );
+}

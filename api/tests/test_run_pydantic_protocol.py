@@ -535,3 +535,14 @@ def test_cancellation_mid_stream_has_no_terminal_summary() -> None:
     assert _payloads(lines, DELTA)
     assert _payloads(lines, STEPS) == []
     assert _payloads(lines, USAGE) == []
+
+
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh", "max", None])
+def test_effort_setting_reaches_anthropic_request(effort: str | None) -> None:
+    spec = {**BASE_SPEC, "model": "anthropic:claude-sonnet-5"}
+    if effort is not None:
+        spec["model_settings"] = {"anthropic_effort": effort}
+    with FakeAnthropic([ResponsePlan(body=_text_stream("done"))]) as server:
+        result = _run_wrapper(spec, base_url=server.base_url)
+    assert result.returncode == 0, result.stderr
+    assert server.requests[0].get("output_config", {}).get("effort") == effort

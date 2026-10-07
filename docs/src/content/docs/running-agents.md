@@ -123,9 +123,9 @@ run is submitted.
 
 ## How cost estimates work
 
-Agent Studio uses a version-specific catalog of public USD token rates, manually
-reviewed against provider pricing and shipped in app releases. It does **not**
-refresh prices automatically. The current catalog was verified October 7, 2026.
+Agent Studio uses a version-specific catalog of public USD token rates. Catalog
+updates are reviewed in pull requests and shipped in app releases; the running
+app does **not** refresh prices automatically. The current catalog was verified October 7, 2026.
 The run's **Pricing** row links to the provider's source and shows the verification
 date and base input/output rates per million tokens.
 

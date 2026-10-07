@@ -491,3 +491,17 @@ def test_fireworks_requires_its_own_key(monkeypatch: pytest.MonkeyPatch) -> None
         run_pydantic.build_agent({
             "model": "fireworks:accounts/fireworks/models/llama-v3p3-70b-instruct",
         })
+
+
+@pytest.mark.parametrize("model,setting,effort", [
+    ("openai:gpt-5.5", "openai_reasoning_effort", "xhigh"),
+    ("openai:gpt-5.5", "openai_reasoning_effort", "none"),
+    ("anthropic:claude-sonnet-5", "anthropic_effort", "medium"),
+])
+def test_build_agent_preserves_explicit_effort(model, setting, effort) -> None:
+    agent = run_pydantic.build_agent({
+        "name": "effort-test", "model": model, "instructions": "Be helpful.",
+        "model_settings": {setting: effort, "max_tokens": 4096},
+    })
+    assert agent.model_settings[setting] == effort
+    assert agent.model_settings["max_tokens"] == 4096

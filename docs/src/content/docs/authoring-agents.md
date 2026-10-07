@@ -317,3 +317,33 @@ keep your day-to-day view tidy:
 
 The optional `<handle>.` prefix is the only place a dot is allowed in an agent
 name — plain names stay kebab-case (`a-z0-9` and hyphens).
+
+## Choosing model effort
+
+Open an agent's **Versions → Definition → Model effort** to see its current
+draft effort and choose a supported level without editing YAML. The agent header
+also shows the **draft** effort, which can differ from the promoted stable version.
+
+**Provider default** leaves effort unset. Defaults vary by model: Sonnet 5 and
+5.5 default to High; Haiku 5.5 and Opus 5.5 default to Medium. On OpenAI models,
+**None** is an explicit value and is separate from Provider default.
+
+Lower effort can reduce token usage and latency; higher effort can improve
+difficult tasks. It does not change the per-token price, and savings depend on
+the task. Compare runs and eval results before promoting an effort change.
+
+**Save effort as draft** follows the same repository update process as chat and
+inline edits. Follow **View progress**, then reload after the change lands.
+Promote the draft separately for schedules, Slack, and other stable runs.
+Editing requires operator access, an unlocked agent, a connected repository,
+and coding-agent credentials. Read-only users can see the configured value.
+
+Options come from a version-specific, verified catalog. For example, Sonnet 4.6
+supports Low, Medium, High, and Maximum; Sonnet 5/5.5 and Haiku 5.5 also support
+Extra high. Models without verified options retain their raw settings and do
+not receive a dropdown. Advanced thinking controls or unrecognized effort values
+are labeled **Custom** and remain editable through **Edit as draft**.
+
+The saved provider settings are `model_settings.anthropic_effort` for Anthropic
+and `model_settings.openai_reasoning_effort` for OpenAI. Other settings and YAML
+comments are preserved; existing agents are not assigned a new effort automatically.
