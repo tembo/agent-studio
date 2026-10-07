@@ -52,7 +52,7 @@ export function setModelEffort(source: string, format: "yaml" | "json", effort: 
   if (effort && !support.levels.includes(effort)) throw new Error("This effort level is not supported by the model.");
   const settings = doc.get("model_settings");
   if (settings == null) {
-    if (effort) doc.set("model_settings", {});
+    if (effort) doc.set("model_settings", doc.createNode({}));
   } else if (!isMap(settings)) {
     throw new Error("model_settings must be an object.");
   }
