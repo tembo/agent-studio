@@ -8,15 +8,30 @@ own — on a clock or in response to something happening.
 
 ## Automations (schedules)
 
-An **automation** runs an agent on a cron schedule. Create and manage them from
+An **automation** runs an agent on a recurring schedule. Create and manage them from
 the **Automations** page. You pick the agent, the schedule, an optional input
 message, and an **owner** — the automation runs as that owner, so it uses the
 owner's [connection](/agent-studio/connections/) credentials. You can also choose
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
+Use the **Schedule** picker to choose **Daily**, **Weekdays**, **Weekly**,
+**Monthly**, or **Every few hours**. Choose a time for daily, weekday, weekly,
+and monthly schedules; weekly schedules let you check one or more days.
+For monthly schedules, choose a day of the month. Months without that day are
+skipped (for example, the 31st skips February). Hourly schedules run around the
+clock from midnight, every 1, 2, 3, 4, 6, 8, or 12 hours, on the hour. The live
+summary and next-run preview show what will happen before you save.
+
+**Advanced cron** lets you enter a cron expression directly, including schedules
+such as business-hour windows that the picker does not yet offer. Existing
+expressions that the picker can represent open in the picker; other expressions
+open in Advanced and are preserved unchanged. Switching modes does not rewrite
+your expression. For a custom expression, **Start a new simple schedule** explicitly
+replaces it with the weekday 9 AM default, which you can then adjust before saving.
+
 New schedules created in the browser automatically save **your browser's
 timezone** (for example, `America/New_York`), including suggested automations.
-Enter cron hours in that timezone: `10 8 * * 1-5` means weekdays at 8:10 AM.
+Enter times in that timezone. In Advanced cron, `10 8 * * 1-5` means weekdays at 8:10 AM.
 The form and schedule lists show the saved timezone; no timezone picker is needed.
 Schedules follow local daylight saving changes, so an 8:10 AM schedule stays at
 8:10 AM year-round. A daily time in the skipped spring-forward hour moves ahead
