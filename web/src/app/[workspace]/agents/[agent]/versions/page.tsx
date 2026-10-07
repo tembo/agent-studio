@@ -30,6 +30,7 @@ import {
 import { PromoteButton } from "../promote-button";
 import { VersionsSection } from "../versions-section";
 import { VersionsSourceTabs } from "./versions-source-tabs";
+import { EffortPicker } from "./effort-picker";
 import { InlineFileEditor } from "./inline-file-editor";
 import {
   SpecVersionViewer,
@@ -211,6 +212,18 @@ export default async function AgentVersionsPage({
             label: "Definition",
             content: (
               <>
+                {agent.ok && agent.spec.framework === "pydantic-agentspec" && (
+                  <Section title="Model effort" description={agent.spec.model}>
+                    <EffortPicker
+                      key={raw}
+                      source={raw}
+                      format={specLanguage}
+                      workspaceSlug={workspace.slug}
+                      agentName={canonicalName}
+                      canEdit={canEdit && !!repo}
+                    />
+                  </Section>
+                )}
                 {commits.length > 0 && repo && (
                   <Section
                     title="Git history"

@@ -180,8 +180,12 @@ Edit the canonical, version-specific catalog in `src/model-pricing.json` after
 checking the linked provider sources; update `verifiedOn` and run
 `cd ../web && pnpm gen:pricing`. Commit both copies (Docker builds have separate
 contexts). Shared pricing fixtures exercise both Rust and TypeScript calculators.
-Prices are maintained manually, not refreshed by a scheduled job. Keep historical
-run snapshots unchanged when updating the catalog.
+Model effort support lives in `src/model-capabilities.json` and is copied by the
+same command. Keep provider defaults and adapter setting names model-specific.
+The weekly maintenance agent follows `../.agents/model-catalog-review.md` and
+proposes updates through PRs. Its schedule is managed in Tembo, separately from
+this repository; there is no GitHub Actions scheduler. Keep historical run
+snapshots unchanged when updating either catalog.
 
 Run `cargo test pricing` and, against disposable PostgreSQL,
 `PRICING_TEST_DATABASE_URL=postgres://… cargo test completion_saves_cost -- --ignored`

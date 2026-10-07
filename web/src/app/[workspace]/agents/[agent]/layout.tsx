@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import { effortLabel } from "@/lib/model-effort";
 import { memberChoice } from "@/lib/member-choice";
 import { getWorkspaceMemberChoice } from "@/lib/workspace-member-search";
 import { BackLink } from "@/components/back-link";
@@ -133,6 +134,11 @@ export default async function AgentLayout({
                 <Badge variant="purple" size="small">
                   {agent.spec.model ?? "—"}
                 </Badge>
+                {agent.spec.framework === "pydantic-agentspec" && (
+                  <Badge variant="gray" size="small">
+                    Draft effort: {effortLabel(agent.spec.raw)}
+                  </Badge>
+                )}
                 <code className="text-foreground-muted text-sm">
                   {agent.filename}
                 </code>

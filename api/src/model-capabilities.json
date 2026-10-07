@@ -1,0 +1,292 @@
+{
+  "verifiedOn": "2026-10-07",
+  "effort": [
+    {
+      "models": [
+        "anthropic:claude-sonnet-5",
+        "anthropic:claude-sonnet-5-5"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-sonnet-4-6"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-opus-5-5"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-opus-5",
+        "anthropic:claude-opus-4-8",
+        "anthropic:claude-opus-4-7"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-opus-4-6"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-opus-4-5",
+        "anthropic:claude-opus-4-5-20251101"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-fable-5",
+        "anthropic:claude-fable-5-1",
+        "anthropic:claude-mythos-5",
+        "anthropic:claude-mythos-5-1"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "high",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "anthropic:claude-haiku-5-5"
+      ],
+      "setting": "anthropic_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max"
+      ],
+      "default": "medium",
+      "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
+    },
+    {
+      "models": [
+        "openai:gpt-5.5"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.5"
+    },
+    {
+      "models": [
+        "openai:gpt-5.4"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "none",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.4"
+    },
+    {
+      "models": [
+        "openai:gpt-5.4-mini"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "none",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini"
+    },
+    {
+      "models": [
+        "openai:gpt-5.4-nano"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "none",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.4-nano"
+    },
+    {
+      "models": [
+        "openai:gpt-5.2",
+        "openai:gpt-5.2-2025-12-11"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ],
+      "default": "none",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.2"
+    },
+    {
+      "models": [
+        "openai:gpt-5.1",
+        "openai:gpt-5.1-2025-11-13"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "none",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "none",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.1"
+    },
+    {
+      "models": [
+        "openai:gpt-5",
+        "openai:gpt-5-2025-08-07"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5"
+    },
+    {
+      "models": [
+        "openai:gpt-5-mini",
+        "openai:gpt-5-mini-2025-08-07"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5-mini"
+    },
+    {
+      "models": [
+        "openai:gpt-5-nano",
+        "openai:gpt-5-nano-2025-08-07"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "minimal",
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5-nano"
+    },
+    {
+      "models": [
+        "openai:o3",
+        "openai:o3-2025-04-16"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/o3"
+    },
+    {
+      "models": [
+        "openai:o3-mini",
+        "openai:o3-mini-2025-01-31"
+      ],
+      "setting": "openai_reasoning_effort",
+      "levels": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/o3-mini"
+    }
+  ]
+}
