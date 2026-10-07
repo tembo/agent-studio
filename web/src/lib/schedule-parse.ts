@@ -6,14 +6,13 @@
 // ("reply within 9 hours", "the 9am report") must return null — a false
 // positive would present a misleading suggestion.
 //
-// Cron is interpreted in UTC everywhere in this codebase (see cron.ts /
-// migration 0015), so the spoken hour is taken as a UTC hour. The suggestion
-// helper validates the result with validateCron() before presenting it.
+// Spoken hours are wall-clock hours. The browser supplies the timezone when
+// saving a suggested automation. This helper validates the cron syntax in UTC.
 
 import { validateCron } from "./cron";
 
 export type ParsedSchedule = {
-  /** 5-field cron (minute hour day-of-month month day-of-week), UTC. */
+  /** 5-field cron (minute hour day-of-month month day-of-week), wall-clock time. */
   cron: string;
 };
 

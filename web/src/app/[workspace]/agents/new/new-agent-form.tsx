@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useBrowserTimezone } from "@/lib/use-browser-timezone";
 import { useActionToast } from "@/lib/use-action-toast";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function NewAgentForm({
   /** Prefill from an Agent Library starter (?starter=<id>). */
   defaults?: { name?: string; description?: string };
 }) {
+  const timezone = useBrowserTimezone();
   const direct = commitMode === "direct";
   const [state, action, pending] = useActionState(
     createFromChatAction,
@@ -124,7 +126,7 @@ export function NewAgentForm({
               <span className="text-foreground font-medium">
                 {s.suggestedSchedule.humanReadable.toLowerCase()}
               </span>{" "}
-              <span className="text-foreground-weak">(UTC).</span>
+              <span className="text-foreground-weak">({timezone ?? "detecting timezone…"} · detected from your browser).</span>
             </p>
             <p className="text-foreground-weak">
               Create it now if you want to save this schedule. It will stay
@@ -133,6 +135,7 @@ export function NewAgentForm({
             <SuggestedAutomationForm
               workspaceSlug={workspaceSlug}
               improvementId={s.improvementId}
+              timezone={timezone}
             />
           </section>
         )}
@@ -268,9 +271,11 @@ export function NewAgentForm({
 function SuggestedAutomationForm({
   workspaceSlug,
   improvementId,
+  timezone,
 }: {
   workspaceSlug: string;
   improvementId: string;
+  timezone: string | null;
 }) {
   const [state, action, pending] = useActionState(
     createSuggestedAutomationAction,
@@ -297,7 +302,8 @@ function SuggestedAutomationForm({
     <form action={action} className="flex flex-col items-start gap-1.5 pt-1">
       <input type="hidden" name="workspace" value={workspaceSlug} />
       <input type="hidden" name="improvement_id" value={improvementId} />
-      <Button type="submit" variant="primary" disabled={pending}>
+      <input type="hidden" name="timezone" value={timezone ?? ""} />
+      <Button type="submit" variant="primary" disabled={pending || !timezone}>
         {pending ? "Creating automation…" : "Create suggested automation"}
       </Button>
       {state.error && (

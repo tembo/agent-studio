@@ -63,6 +63,7 @@ export default async function AgentAutomationPage({
       lastFireEventId: a.lastFireEventId,
       href: `/${workspace.slug}/automations/${a.id}`,
       cron: a.cron,
+      timezone: a.timezone,
     })),
     ...triggers.map((t): AgentAutomationRow => ({
       id: t.id,

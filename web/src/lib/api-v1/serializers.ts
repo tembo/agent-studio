@@ -176,6 +176,7 @@ export type SerializedAutomation = {
   name: string;
   agentName: string;
   cron: string;
+  timezone: string;
   inputMessage: string;
   enabled: boolean;
   ownerUserId: string;
@@ -193,6 +194,7 @@ export function serializeAutomation(a: Automation): SerializedAutomation {
     name: a.name,
     agentName: a.agentName,
     cron: a.cron,
+    timezone: a.timezone,
     inputMessage: a.inputMessage,
     enabled: a.enabled,
     ownerUserId: a.ownerUserId,

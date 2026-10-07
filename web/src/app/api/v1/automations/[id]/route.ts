@@ -61,7 +61,7 @@ export async function PATCH(
 
   const cron = typeof body.cron === "string" ? body.cron : existing.cron;
   if (typeof body.cron === "string") {
-    const v = validateCron(cron);
+    const v = validateCron(cron, existing.timezone);
     if (!v.ok) return apiError(400, v.error);
   }
 
@@ -90,6 +90,7 @@ export async function PATCH(
       apiKeyId: auth.apiKeyId,
       name: updated.name,
       cron: updated.cron,
+      timezone: updated.timezone,
       enabled: updated.enabled,
     },
   });

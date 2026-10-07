@@ -154,7 +154,7 @@ async function maybeFire(a: Automation, now: Date) {
   // anchor to created_at so we don't fire on every tick for a brand-
   // new cron whose first window is in the future.
   const floor = a.lastFiredAt ?? a.createdAt;
-  if (!hasFiringInWindow(a.cron, floor, now)) return;
+  if (!hasFiringInWindow(a.cron, floor, now, a.timezone)) return;
 
   if (!a.lastFireError) dispatchRetries.delete(a.id);
   const pendingRetry = dispatchRetries.get(a.id);

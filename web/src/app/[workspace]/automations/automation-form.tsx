@@ -3,8 +3,7 @@
 // Shared create/edit form for an automation. Live cron preview so
 // the user sees both the human description ("Every weekday at 09:00")
 // and the next-fire instant rendered in their local tz before they
-// commit. The cron itself is always evaluated in UTC by the
-// scheduler — see lib/cron.ts.
+// commit. New schedules capture the browser timezone; edits keep the saved zone.
 
 import { useActionState, useMemo, useState } from "react";
 import { useActionToast } from "@/lib/use-action-toast";
@@ -15,6 +14,7 @@ import { LocalTime } from "@/components/local-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useBrowserTimezone } from "@/lib/use-browser-timezone";
 import { validateCron } from "@/lib/cron";
 
 import {
@@ -38,6 +38,7 @@ type CommonProps = {
     name?: string;
     agentName?: string;
     cron?: string;
+    timezone?: string;
     inputMessage?: string;
     enabled?: boolean;
     useDraft?: boolean;
@@ -65,11 +66,17 @@ export function AutomationForm({
   const [enabled, setEnabled] = useState(defaults?.enabled ?? true);
   const [owner, setOwner] = useState(initialOwner);
   const [useDraft, setUseDraft] = useState(defaults?.useDraft ?? false);
-  const preview = useMemo(() => validateCron(cron), [cron]);
+  const browserTimezone = useBrowserTimezone();
+  const timezone = mode === "edit" ? defaults?.timezone ?? "UTC" : browserTimezone;
+  const preview = useMemo(
+    () => timezone ? validateCron(cron, timezone) : null,
+    [cron, timezone],
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="workspace" value={workspaceSlug} />
+      <input type="hidden" name="timezone" value={timezone ?? ""} />
       {mode === "edit" && defaults?.id && (
         <input type="hidden" name="id" value={defaults.id} />
       )}
@@ -125,7 +132,7 @@ export function AutomationForm({
 
       <div className="grid gap-1.5">
         <Label htmlFor="cron" className="text-sm">
-          Schedule (cron, UTC)
+          Schedule (cron)
         </Label>
         <Input
           id="cron"
@@ -142,9 +149,13 @@ export function AutomationForm({
         />
         <p className="text-foreground-muted text-sm">
           Five-field cron (minute, hour, day-of-month, month, day-of-week).
-          Times are UTC.
         </p>
-        <CronPreview preview={preview} />
+        <p className="text-foreground-muted text-sm">
+          {timezone
+            ? `Times use ${timezone} · ${mode === "create" ? "detected from your browser" : "saved with this schedule"}.`
+            : "Detecting your browser’s timezone…"}
+        </p>
+        {preview && timezone && <CronPreview preview={preview} timezone={timezone} />}
         {state.fieldErrors?.cron && (
           <FieldError>{state.fieldErrors.cron}</FieldError>
         )}
@@ -213,7 +224,7 @@ export function AutomationForm({
       )}
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || !timezone}>
           {pending ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
         </Button>
       </div>
@@ -223,15 +234,17 @@ export function AutomationForm({
 
 function CronPreview({
   preview,
+  timezone,
 }: {
   preview: ReturnType<typeof validateCron>;
+  timezone: string;
 }) {
   if (!preview.ok) return null;
   return (
     <div className="text-foreground-weak flex flex-col gap-0.5 text-sm">
       <span>
         <span className="text-foreground">{preview.humanReadable}</span>{" "}
-        <span className="text-foreground-muted">(UTC)</span>
+        <span className="text-foreground-muted">({timezone})</span>
       </span>
       <span>
         Next fire:{" "}

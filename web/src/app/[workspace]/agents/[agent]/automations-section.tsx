@@ -29,7 +29,7 @@ export function AutomationsSection({
           ? `Schedules (${automations.length})`
           : "Schedules"
       }
-      description="Schedules that fire this agent on their own. Cron is UTC; times shown are local."
+      description="Schedules that fire this agent on their own. Each schedule uses its saved timezone."
     >
       <div className="mb-3">
         <Button asChild variant="secondary">
@@ -45,8 +45,8 @@ export function AutomationsSection({
       ) : (
         <ul className="divide-border flex flex-col divide-y border-y border-[var(--color-border)]">
           {automations.map((a) => {
-            const preview = validateCron(a.cron);
-            const next = a.enabled ? nextFireAfter(a.cron, new Date()) : null;
+            const preview = validateCron(a.cron, a.timezone);
+            const next = a.enabled ? nextFireAfter(a.cron, new Date(), a.timezone) : null;
             return (
               <li
                 key={a.id}
@@ -76,7 +76,7 @@ export function AutomationsSection({
                   </span>
                   <span className="text-foreground-weak truncate text-sm">
                     {preview.ok ? preview.humanReadable : a.cron}{" "}
-                    <span className="text-foreground-muted">(UTC)</span>
+                    <span className="text-foreground-muted">({a.timezone})</span>
                   </span>
                 </Link>
                 <span className="text-foreground-muted shrink-0 text-sm">

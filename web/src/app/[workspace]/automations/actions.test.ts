@@ -40,6 +40,7 @@ vi.mock("@/lib/workspace-agents", () => ({
 import {
   createAutomationAction,
   updateAutomationAction,
+  toggleAutomationAction,
 } from "./actions";
 import {
   createAutomation,
@@ -74,6 +75,7 @@ const existingAutomation = {
   name: "Nightly run",
   agentName: "agent",
   cron: "0 0 * * *",
+  timezone: "UTC",
   inputMessage: "Run",
   enabled: true,
   lastFiredAt: null,
@@ -150,5 +152,44 @@ describe("automation owner validation", () => {
     expect(result.error).toMatch(/workspace member/);
     expect(mockUserIsMember).toHaveBeenCalledWith(workspace.id, "victim-user");
     expect(mockUpdateAutomation).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("automation timezone", () => {
+  beforeEach(() => {
+    mockUserIsMember.mockResolvedValue(true);
+    mockCreateAutomation.mockResolvedValue(existingAutomation);
+  });
+
+  it("saves the browser timezone on creation", async () => {
+    await expect(createAutomationAction({}, automationForm({
+      timezone: "America/New_York",
+    }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockCreateAutomation).toHaveBeenCalledWith(expect.objectContaining({
+      timezone: "America/New_York",
+    }));
+  });
+
+  it("rejects an invalid timezone before saving", async () => {
+    const result = await createAutomationAction({}, automationForm({ timezone: "Not/AZone" }));
+    expect(result.fieldErrors?.cron).toBeTruthy();
+    expect(mockCreateAutomation).not.toHaveBeenCalled();
+  });
+
+  it.each(["UTC", "America/New_York"])("preserves %s when editing from another browser", async (timezone) => {
+    mockGetAutomation.mockResolvedValue({ ...existingAutomation, timezone });
+    await expect(updateAutomationAction({}, automationForm({
+      id: existingAutomation.id, timezone: "Not/AZone",
+    }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockUpdateAutomation).toHaveBeenCalledOnce();
+    expect(mockUpdateAutomation.mock.calls[0][0]).not.toHaveProperty("timezone");
+  });
+
+  it("does not change the timezone when toggling", async () => {
+    mockGetAutomation.mockResolvedValue({ ...existingAutomation, timezone: "America/Chicago" });
+    await toggleAutomationAction(automationForm({ id: existingAutomation.id }));
+    expect(mockUpdateAutomation).toHaveBeenCalledOnce();
+    expect(mockUpdateAutomation.mock.calls[0][0]).not.toHaveProperty("timezone");
   });
 });

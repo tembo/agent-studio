@@ -58,6 +58,7 @@ export default async function AutomationsPage({
       lastFireEventId: a.lastFireEventId,
       href: `/${slug}/automations/${a.id}`,
       cron: a.cron,
+      timezone: a.timezone,
     })),
     ...triggers.map((t): AutomationRow => ({
       id: t.id,

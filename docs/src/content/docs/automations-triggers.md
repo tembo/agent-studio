@@ -14,6 +14,21 @@ message, and an **owner** — the automation runs as that owner, so it uses the
 owner's [connection](/agent-studio/connections/) credentials. You can also choose
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
+New schedules created in the browser automatically save **your browser's
+timezone** (for example, `America/New_York`), including suggested automations.
+Enter cron hours in that timezone: `10 8 * * 1-5` means weekdays at 8:10 AM.
+The form and schedule lists show the saved timezone; no timezone picker is needed.
+Schedules follow local daylight saving changes, so an 8:10 AM schedule stays at
+8:10 AM year-round. A daily time in the skipped spring-forward hour moves ahead
+by the DST gap (for example, 2:30 AM becomes 3:30 AM in New York); a daily time
+in the repeated fall-back hour fires once, at its first occurrence. The next-fire timestamp is displayed in the viewer's local time.
+
+Editing, pausing, re-enabling, or changing the run-as owner preserves the saved
+timezone, even from a browser in another timezone. The timezone comes from the
+creator's browser, not the run-as person's location. Existing schedules and new
+schedules created through the API or MCP continue to use UTC. API responses include
+`timezone` so clients can interpret the cron correctly.
+
 Schedules always require explicit creation. When a new-agent description names
 a recurring cadence, TAS may suggest that cadence, but it does not create or
 enable an automation automatically. Test the new agent first, then use **Create

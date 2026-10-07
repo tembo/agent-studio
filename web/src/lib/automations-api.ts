@@ -17,6 +17,7 @@ export interface Automation {
   name: string;
   agentName: string;
   cron: string;
+  timezone: string;
   inputMessage: string;
   enabled: boolean;
   lastFiredAt: Date | null;
@@ -46,6 +47,7 @@ type Row = {
   name: string;
   agent_name: string;
   cron: string;
+  timezone: string;
   input_message: string;
   enabled: boolean;
   last_fired_at: Date | null;
@@ -69,6 +71,7 @@ function rowToAutomation(r: Row): Automation {
     name: r.name,
     agentName: r.agent_name,
     cron: r.cron,
+    timezone: r.timezone,
     inputMessage: r.input_message,
     enabled: r.enabled,
     lastFiredAt: r.last_fired_at,
@@ -87,7 +90,7 @@ function rowToAutomation(r: Row): Automation {
 }
 
 const COLUMNS = `
-  a.id, a.workspace_id, a.name, a.agent_name, a.cron, a.input_message,
+  a.id, a.workspace_id, a.name, a.agent_name, a.cron, a.timezone, a.input_message,
   a.enabled, a.last_fired_at, a.last_fire_error, a.last_fire_event_id, a.created_by,
   u.name AS created_by_name, u.email AS created_by_email,
   a.owner_user_id,
@@ -104,6 +107,7 @@ export async function createAutomation(input: {
   name: string;
   agentName: string;
   cron: string;
+  timezone?: string;
   inputMessage: string;
   enabled: boolean;
   userId: string;
@@ -115,8 +119,8 @@ export async function createAutomation(input: {
   const res = await db.query<Row>(
     `WITH inserted AS (
        INSERT INTO automation
-         (workspace_id, name, agent_name, cron, input_message, enabled, created_by, owner_user_id, use_draft)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         (workspace_id, name, agent_name, cron, input_message, enabled, created_by, owner_user_id, use_draft, timezone)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *
      )
      SELECT ${COLUMNS}
@@ -133,6 +137,7 @@ export async function createAutomation(input: {
       input.userId,
       input.ownerUserId ?? input.userId,
       input.useDraft ?? false,
+      input.timezone ?? "UTC",
     ],
   );
   return rowToAutomation(res.rows[0]);
