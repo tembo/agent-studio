@@ -133,7 +133,13 @@ issues to Project 1, mirrors Priority and Status, preserves an assigned Initiati
 and fills an unassigned Initiative from `user request` or a maintained milestone.
 It recomputes Order deterministically from priority, status, user-request evidence,
 the existing sequence, and `blockedBy` dependencies. Closing sets Project Status
-to Done and clears Order. Strategic priority and initiative decisions remain
+to Done and clears Order while retaining historical Priority and Initiative.
+Missing, invalid, or conflicting Priority/Status labels preserve the existing
+Project field and emit a warning; ordering uses those preserved values. Only a
+single recognized label can replace an open item's corresponding field. New
+items with no valid label remain unset in that field until their taxonomy is
+repaired. Each field mutation logs the issue number, field, old/new values, and
+reason. Strategic priority and initiative decisions remain
 manual; routine synchronization does not require an LLM.
 
 ## GitHub Project contract
@@ -156,3 +162,9 @@ Until organization issue types are writable, `bug`, `enhancement`, `task`, and
 The Actions workflow requires a `PROJECTS_TOKEN` secret with repository Issues
 write and organization Projects v2 write access; `GITHUB_TOKEN` alone cannot
 write this private organization Project.
+
+Regression tests run without credentials or network access:
+
+```bash
+node --test .agents/skills/reprioritize-backlog/scripts/sync-project.test.mjs
+```

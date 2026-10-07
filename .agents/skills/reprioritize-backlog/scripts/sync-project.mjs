@@ -261,22 +261,43 @@ function labelNames(issue) {
   return issue.labels.nodes.map((label) => label.name);
 }
 
+function singleLabelValue(issue, prefix, options) {
+  const labels = labelNames(issue).filter((name) => name.startsWith(prefix));
+  return labels.length === 1 ? options.get(labels[0]) ?? null : null;
+}
+
 function desiredPriority(issue) {
-  const label = labelNames(issue).find((name) => name.startsWith("priority: "));
-  if (!label) return null;
-  const value = label.slice("priority: ".length);
-  return value === "parked" ? "Parked" : value.toUpperCase();
+  return singleLabelValue(issue, "priority: ", new Map([
+    ["priority: p0", "P0"],
+    ["priority: p1", "P1"],
+    ["priority: p2", "P2"],
+    ["priority: p3", "P3"],
+    ["priority: parked", "Parked"],
+  ]));
 }
 
 function desiredStatus(issue) {
   if (issue.state === "CLOSED") return "Done";
-  const label = labelNames(issue).find((name) => name.startsWith("status: "));
-  return new Map([
+  return singleLabelValue(issue, "status: ", new Map([
     ["status: backlog", "Backlog"],
     ["status: ready", "Ready"],
     ["status: in progress", "In Progress"],
     ["status: blocked", "Blocked"],
-  ]).get(label) ?? null;
+  ]));
+}
+
+function preserveWithoutLabel(issue, field, desired, current) {
+  if (desired !== null) return desired;
+  console.warn(
+    `#${issue.number} ${field}: missing, invalid, or conflicting labels; preserving ${JSON.stringify(current)}.`,
+  );
+  return current;
+}
+
+function logFieldChange(issue, field, previous, next, reason) {
+  console.log(
+    `#${issue.number} ${field}: ${JSON.stringify(previous)} -> ${JSON.stringify(next)} (${reason}).`,
+  );
 }
 
 function desiredInitiative(issue, current) {
@@ -423,28 +444,31 @@ for (const item of managedItems) {
   const currentStatus = fieldValue(values, "Status")?.name ?? null;
   const currentInitiative = fieldValue(values, "Initiative")?.text ?? null;
   const currentOrder = fieldValue(values, "Order")?.number ?? null;
-  const priority = desiredPriority(issue);
-  const status = desiredStatus(issue);
+  // Closed items retain historical priority even if their labels later change.
+  const priority = issue.state === "CLOSED" && currentPriority !== null
+    ? currentPriority
+    : preserveWithoutLabel(issue, "Priority", desiredPriority(issue), currentPriority);
+  const status = preserveWithoutLabel(issue, "Status", desiredStatus(issue), currentStatus);
   const initiative = desiredInitiative(issue, currentInitiative);
 
   if (priority && currentPriority !== priority) {
     await updateField(project.id, item.id, fields.get("Priority").id, {
       singleSelectOptionId: optionId(fields.get("Priority"), priority),
     });
-  } else if (!priority && currentPriority) {
-    await clearField(project.id, item.id, fields.get("Priority").id);
+    logFieldChange(issue, "Priority", currentPriority, priority, "priority label");
   }
   if (status && currentStatus !== status) {
     await updateField(project.id, item.id, fields.get("Status").id, {
       singleSelectOptionId: optionId(fields.get("Status"), status),
     });
-  } else if (!status && currentStatus) {
-    await clearField(project.id, item.id, fields.get("Status").id);
+    logFieldChange(issue, "Status", currentStatus, status,
+      issue.state === "CLOSED" ? "issue closed" : "status label");
   }
   if (currentInitiative !== initiative) {
     await updateField(project.id, item.id, fields.get("Initiative").id, {
       text: initiative,
     });
+    logFieldChange(issue, "Initiative", currentInitiative, initiative, "initiative default");
   }
 
   if (issue.state === "OPEN") {
@@ -462,6 +486,7 @@ for (const item of managedItems) {
     });
   } else if (currentOrder !== null) {
     await clearField(project.id, item.id, fields.get("Order").id);
+    logFieldChange(issue, "Order", currentOrder, null, "issue closed");
   }
 }
 
@@ -470,6 +495,7 @@ for (const [index, entry] of ordered.entries()) {
   const order = index + 1;
   if (entry.existingOrder !== order) {
     await updateField(project.id, entry.item.id, fields.get("Order").id, { number: order });
+    logFieldChange(entry.issue, "Order", entry.existingOrder, order, "backlog ranking");
   }
 }
 
