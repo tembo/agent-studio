@@ -421,6 +421,8 @@ pub struct RunRecord {
     pub completed_at: Option<DateTime<Utc>>,
     pub tokens_input: Option<i32>,
     pub tokens_output: Option<i32>,
+    pub cost_usd: Option<f64>,
+    pub pricing_snapshot: Option<serde_json::Value>,
     /// ScaleDown prompt-compression totals (NULL unless the run compressed).
     pub scaledown_original_tokens: Option<i32>,
     pub scaledown_compressed_tokens: Option<i32>,
@@ -451,7 +453,7 @@ pub async fn get_run(
         r#"SELECT id, workspace_id, agent_name, agent_path, user_message, model, status,
                   output, streamed_output, error_message, failure_code,
                   failure_summary, failure_recommendation, created_by, created_at,
-                  started_at, completed_at, tokens_input, tokens_output,
+                  started_at, completed_at, tokens_input, tokens_output, cost_usd, pricing_snapshot,
                   scaledown_original_tokens, scaledown_compressed_tokens,
                    trigger, automation_id, agent_version_id, agent_version_label,
                    run_environment, resume_count, resumed_at, is_dry_run, reused_from_run_id, output_reuse_type

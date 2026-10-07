@@ -218,7 +218,7 @@ impl RunFailure {
 struct Usage {
     input_tokens: i32,
     output_tokens: i32,
-    /// Anthropic prompt-cache halves (0 when caching is off / not Anthropic).
+    /// Prompt-cache halves (0 when caching is off or unreported).
     /// Priced separately from input_tokens in the cost estimate.
     cache_read_tokens: i32,
     cache_write_tokens: i32,
@@ -417,11 +417,12 @@ async fn execute_run_inner(state: &AppState, ctx: RunContext, cancel: &Cancellat
     match result {
         Ok(outcome) => {
             if let Err(e) = mark_succeeded(
-                state,
+                &state.db,
                 ctx.run_id,
                 &outcome.output,
                 outcome.usage,
                 &ctx.model,
+                &steps,
             )
             .await
             {
@@ -958,31 +959,42 @@ async fn mark_running(
 }
 
 async fn mark_succeeded(
-    state: &AppState,
+    db: &sqlx::PgPool,
     run_id: Uuid,
     output: &str,
     usage: Option<Usage>,
     model: &str,
+    steps: &[pydantic::RunStep],
 ) -> anyhow::Result<()> {
     let (tokens_in, tokens_out) = match usage {
         Some(u) => (Some(u.input_tokens), Some(u.output_tokens)),
         None => (None, None),
     };
-    // Persist the cost estimate now, with the model + tokens
-    // already in hand, so the runs-list UI doesn't have to map
-    // model→rate on every render. None when usage is missing
-    // (cargo-ai) or the model isn't in our pricing table.
-    let cost_usd: Option<f64> = match usage {
-        Some(u) => crate::pricing::estimate_run_cost(
-            model,
-            u.input_tokens,
-            u.output_tokens,
-            u.cache_read_tokens,
-            u.cache_write_tokens,
-        ),
-        None => None,
-    };
-    let mut tx = state.db.begin().await?;
+    let pricing = crate::pricing::lookup_pricing(model);
+    let requests: Vec<_> = steps
+        .iter()
+        .filter_map(|s| {
+            Some(crate::pricing::Tokens {
+                input: s.input_tokens?,
+                output: s.output_tokens?,
+                cache_read: s.cache_read_tokens.unwrap_or(0),
+                cache_write: s.cache_write_tokens.unwrap_or(0),
+            })
+        })
+        .collect();
+    let cost_usd = usage.and_then(|u| {
+        pricing.as_ref()?.run_cost(
+            crate::pricing::Tokens {
+                input: u.input_tokens,
+                output: u.output_tokens,
+                cache_read: u.cache_read_tokens,
+                cache_write: u.cache_write_tokens,
+            },
+            &requests,
+        )
+    });
+    let pricing_snapshot = pricing.as_ref().map(serde_json::to_value).transpose()?;
+    let mut tx = db.begin().await?;
     let declaration_json: Option<serde_json::Value> =
         sqlx::query_scalar("SELECT output_delivery FROM run WHERE id = $1 FOR UPDATE")
             .bind(run_id)
@@ -1016,7 +1028,7 @@ async fn mark_succeeded(
         "UPDATE run SET status = 'succeeded', output = $1, completed_at = $2, \
                         tokens_input = $3, tokens_output = $4, cost_usd = $5, \
                         streamed_output = NULL, delivery_status = $6, \
-                        delivery_evidence = $7 \
+                        delivery_evidence = $7, pricing_snapshot = $9 \
                   WHERE id = $8 AND status = 'running'",
     )
     .bind(output)
@@ -1027,6 +1039,7 @@ async fn mark_succeeded(
     .bind(delivery_status.as_str())
     .bind(delivery_evidence)
     .bind(run_id)
+    .bind(pricing_snapshot)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -1442,5 +1455,92 @@ async fn record_sms_delivery_error(state: &AppState, run_id: Uuid, detail: &str)
         .await
     {
         tracing::warn!(run_id = %run_id, ?error, "sms delivery error record failed");
+    }
+}
+
+#[cfg(test)]
+mod pricing_integration_tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "requires PRICING_TEST_DATABASE_URL pointing to disposable PostgreSQL"]
+    async fn completion_saves_cost_and_pricing_without_repricing_history() {
+        let db = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("PRICING_TEST_DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+        // Temporary table isolates the real completion SQL from application data.
+        sqlx::raw_sql(
+            "CREATE TEMP TABLE run (
+                id uuid PRIMARY KEY, status text, output text, completed_at timestamptz,
+                tokens_input integer, tokens_output integer, cost_usd float8,
+                streamed_output text, output_delivery jsonb, delivery_status text,
+                delivery_evidence jsonb
+            );",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        let legacy = Uuid::new_v4();
+        sqlx::query("INSERT INTO run (id, status, cost_usd) VALUES ($1, 'succeeded', 18)")
+            .bind(legacy)
+            .execute(&db)
+            .await
+            .unwrap();
+        for _ in 0..2 {
+            sqlx::raw_sql(include_str!(
+                "../../migrations/0100_run_pricing_snapshot.sql"
+            ))
+            .execute(&db)
+            .await
+            .unwrap();
+        }
+        let usage = Some(Usage {
+            input_tokens: 1_000_000,
+            output_tokens: 1_000_000,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        });
+        for (model, expected) in [
+            ("anthropic:claude-sonnet-4-6", Some(18.0)),
+            ("anthropic:claude-sonnet-5", Some(12.0)),
+            ("anthropic:claude-sonnet-5-5", Some(12.0)),
+            ("anthropic:claude-sonnet-unknown", None),
+        ] {
+            let id = Uuid::new_v4();
+            sqlx::query("INSERT INTO run (id, status) VALUES ($1, 'running')")
+                .bind(id)
+                .execute(&db)
+                .await
+                .unwrap();
+            mark_succeeded(&db, id, "done", usage, model, &[])
+                .await
+                .unwrap();
+            let row: (String, Option<f64>, Option<serde_json::Value>) =
+                sqlx::query_as("SELECT status, cost_usd, pricing_snapshot FROM run WHERE id=$1")
+                    .bind(id)
+                    .fetch_one(&db)
+                    .await
+                    .unwrap();
+            assert_eq!(row.0, "succeeded");
+            assert_eq!(row.1, expected);
+            assert_eq!(row.2.is_some(), expected.is_some());
+            if let Some(snapshot) = row.2 {
+                assert_eq!(snapshot["verifiedOn"], "2026-10-07");
+                assert!(snapshot["rate"]["input"].is_number());
+            }
+        }
+        // Completion guards must also protect an already completed legacy row.
+        mark_succeeded(&db, legacy, "done", usage, "anthropic:claude-sonnet-5", &[])
+            .await
+            .unwrap();
+        let old: (f64, Option<serde_json::Value>) =
+            sqlx::query_as("SELECT cost_usd, pricing_snapshot FROM run WHERE id=$1")
+                .bind(legacy)
+                .fetch_one(&db)
+                .await
+                .unwrap();
+        assert_eq!(old, (18.0, None));
     }
 }

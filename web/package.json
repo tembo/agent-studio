@@ -7,6 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "gen:pricing": "node scripts/gen-pricing.mjs",
     "gen:docs": "node scripts/gen-docs.mjs",
     "gen:allowlist": "tsx scripts/gen-native-oauth-allowlist.ts",
     "lint": "eslint",

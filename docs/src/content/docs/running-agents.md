@@ -120,3 +120,37 @@ selected when you search again or a search fails.
 Member options load only when requested, rather than loading the whole directory
 when opening an agent. Existing admin and membership checks still apply when a
 run is submitted.
+
+## How cost estimates work
+
+Agent Studio uses a version-specific catalog of public USD token rates, manually
+reviewed against provider pricing and shipped in app releases. It does **not**
+refresh prices automatically. The current catalog was verified October 7, 2026.
+The run's **Pricing** row links to the provider's source and shows the verification
+date and base input/output rates per million tokens.
+
+For example, Sonnet 4.6 is $3 input / $15 output per million tokens; Sonnet 5 and
+5.5 are $2 / $10. The same one million input and one million output tokens cost
+an estimated $18 versus $12, before caching. Actual task costs also depend on
+token usage, tool calls, and caching; a cheaper token rate need not make every
+task cheaper.
+
+New completed runs store their rates alongside their cost, so run details and
+history keep the same estimate when the catalog changes. Runs from before this
+change retain their stored cost and are labeled **Legacy estimate · rates not
+recorded**; their per-step token counts remain visible without repricing them.
+Unknown model IDs and unsupported variants show no estimate rather than inheriting
+a family price. Missing usage can also prevent an estimate.
+
+Cache reads and writes use model-specific rates. Cache writes assume the default
+five-minute lifetime; one-hour cache writes are not separately reported by the
+runner. GPT-5.4/5.5 and Haiku 5.5 prompt-length tiers are calculated per request,
+including cached input, not from the sum of an entire run. If a tiered model's
+request usage is incomplete (for example after resuming an older checkpoint),
+the total is unavailable rather than guessed.
+
+These are standard token-price estimates, not invoices. They exclude provider
+tool fees, regional or service-tier premiums, batch discounts, and negotiated
+rates. Use your provider bill for actual charges. The inventory's trailing
+30-day average still includes historical runs across model and agent versions;
+compare individual runs' model, version, tokens, and saved cost to assess a change.

@@ -3,10 +3,9 @@ import { Fragment } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   abbreviateTokens,
-  estimateInputCost,
-  estimateRunCost,
-  estimateTokenCost,
-  formatPenny,
+  estimateRequestCost,
+  type PricingSnapshot,
+  formatCurrency,
 } from "@/lib/pricing";
 import type { RunStep, RunToolCall } from "@/lib/runs-db";
 
@@ -28,13 +27,15 @@ const TOOL_CALL_PREVIEW = 5;
 // view. Tokens are per step (one LLM request); the in/out costs are each
 // direction's own.
 export function RunSteps({
-  model,
+  pricing = null,
+  savedCost = null,
   steps,
   calls,
   toolProviders = {},
   live = false,
 }: {
-  model: string;
+  pricing?: PricingSnapshot | null;
+  savedCost?: number | null;
   steps: RunStep[];
   calls: RunToolCall[];
   toolProviders?: ToolProviderMap;
@@ -48,35 +49,38 @@ export function RunSteps({
     callsByStep.set(c.stepOrdinal, arr);
   }
 
-  // Run totals for the footer. Track the cache halves separately from uncached
-  // input: the "in" token count shows the full context processed (input + cache
-  // read + write), but the cost weights the cache portions (read 0.1x, write
-  // 1.25x).
-  let totalInUncached = 0;
+  let totalInTokens = 0;
   let totalCacheRead = 0;
   let totalCacheWrite = 0;
   let totalOut = 0;
   let hasTokens = false;
-  for (const s of steps) {
-    if (s.inputTokens !== null) {
-      totalInUncached += s.inputTokens;
-      hasTokens = true;
-    }
-    if (s.cacheReadTokens !== null) totalCacheRead += s.cacheReadTokens;
-    if (s.cacheWriteTokens !== null) totalCacheWrite += s.cacheWriteTokens;
-    if (s.outputTokens !== null) {
-      totalOut += s.outputTokens;
-      hasTokens = true;
-    }
-  }
-  const totalInTokens = totalInUncached + totalCacheRead + totalCacheWrite;
-  const combinedCost = estimateRunCost(
-    model,
-    totalInUncached,
-    totalOut,
-    totalCacheRead,
-    totalCacheWrite,
+  const costs = steps.map((s) =>
+    s.inputTokens === null || s.outputTokens === null
+      ? null
+      : estimateRequestCost(
+          pricing,
+          s.inputTokens,
+          s.outputTokens,
+          s.cacheReadTokens ?? 0,
+          s.cacheWriteTokens ?? 0,
+        ),
   );
+  for (const s of steps) {
+    totalInTokens +=
+      (s.inputTokens ?? 0) + (s.cacheReadTokens ?? 0) + (s.cacheWriteTokens ?? 0);
+    totalCacheRead += s.cacheReadTokens ?? 0;
+    totalCacheWrite += s.cacheWriteTokens ?? 0;
+    totalOut += s.outputTokens ?? 0;
+    hasTokens ||= s.inputTokens !== null || s.outputTokens !== null;
+  }
+  const allPriced = costs.length > 0 && costs.every((c) => c !== null);
+  const inputCost = allPriced ? costs.reduce((sum, c) => sum + (c?.input ?? 0), 0) : null;
+  const outputCost = allPriced ? costs.reduce((sum, c) => sum + (c?.output ?? 0), 0) : null;
+  // Completed runs always use their stored total, including legacy estimates.
+  const combinedCost =
+    live && inputCost !== null && outputCost !== null
+      ? inputCost + outputCost
+      : savedCost;
 
   return (
     <div className="bg-surface border-border flex flex-col overflow-hidden rounded-lg border">
@@ -128,11 +132,16 @@ export function RunSteps({
               )}
             </div>
             <span className="text-foreground-muted w-28 shrink-0 whitespace-nowrap text-right text-xs leading-6 tabular-nums">
-              {inStr(model, s.inputTokens, s.cacheReadTokens, s.cacheWriteTokens)}{" "}
+              {tokenCostStr(
+                s.inputTokens === null
+                  ? null
+                  : s.inputTokens + (s.cacheReadTokens ?? 0) + (s.cacheWriteTokens ?? 0),
+                costs[i]?.input ?? null,
+              )}{" "}
               <span className="text-foreground-weak">in</span>
             </span>
             <span className="text-foreground-muted w-28 shrink-0 whitespace-nowrap text-right text-xs leading-6 tabular-nums">
-              {dirStr(model, s.outputTokens, "output")}{" "}
+              {tokenCostStr(s.outputTokens, costs[i]?.output ?? null)}{" "}
               <span className="text-foreground-weak">out</span>
             </span>
           </div>
@@ -144,17 +153,15 @@ export function RunSteps({
           {/* Broken-down In/Out totals — small, columns aligned with the rows. */}
           <div className="flex items-baseline gap-x-4">
             <span className="text-foreground-weak w-28 shrink-0 whitespace-nowrap text-right text-xs tabular-nums">
-              {inStr(model, totalInUncached, totalCacheRead, totalCacheWrite)}{" "}
+              {tokenCostStr(totalInTokens, inputCost)}{" "}
               <span className="text-foreground-muted">in</span>
             </span>
             <span className="text-foreground-weak w-28 shrink-0 whitespace-nowrap text-right text-xs tabular-nums">
-              {dirStr(model, totalOut, "output")}{" "}
+              {tokenCostStr(totalOut, outputCost)}{" "}
               <span className="text-foreground-muted">out</span>
             </span>
           </div>
-          {/* Prompt-cache breakdown — shows caching is working and by how much.
-              `read` tokens billed at ~0.1x, `write` (one-time) at ~1.25x; the
-              `in` cost above already reflects those rates. */}
+          {/* Cache rates depend on the exact model and are included above. */}
           {(totalCacheRead > 0 || totalCacheWrite > 0) && (
             <div className="text-foreground-muted whitespace-nowrap text-xs tabular-nums">
               prompt cache: {abbreviateTokens(totalCacheRead)} read
@@ -166,7 +173,7 @@ export function RunSteps({
           {/* Combined total — the headline number, larger. */}
           <div className="text-foreground whitespace-nowrap text-base font-semibold tabular-nums">
             {abbreviateTokens(totalInTokens + totalOut)}
-            {combinedCost !== null && ` ~${formatPenny(combinedCost)}`} total
+            {combinedCost !== null && ` ~${formatCurrency(combinedCost)}`} total
           </div>
         </div>
       )}
@@ -214,30 +221,7 @@ function ToolCall({
   );
 }
 
-// "9.50k ~$.04" for one direction's tokens + cost; "··" until tokens land.
-function dirStr(
-  model: string,
-  tokens: number | null,
-  direction: "input" | "output",
-): string {
+function tokenCostStr(tokens: number | null, cost: number | null): string {
   if (tokens === null) return "··";
-  const cost = estimateTokenCost(model, tokens, direction);
-  return `${abbreviateTokens(tokens)}${cost !== null ? ` ~${formatPenny(cost)}` : ""}`;
-}
-
-// Cache-aware "in" cell. Tokens shown = the full context processed (uncached
-// input + cache read + write); the cost weights the cache halves (read 0.1x,
-// write 1.25x). "··" until tokens land.
-function inStr(
-  model: string,
-  inputTokens: number | null,
-  cacheReadTokens: number | null,
-  cacheWriteTokens: number | null,
-): string {
-  if (inputTokens === null) return "··";
-  const cacheRead = cacheReadTokens ?? 0;
-  const cacheWrite = cacheWriteTokens ?? 0;
-  const tokens = inputTokens + cacheRead + cacheWrite;
-  const cost = estimateInputCost(model, inputTokens, cacheRead, cacheWrite);
-  return `${abbreviateTokens(tokens)}${cost !== null ? ` ~${formatPenny(cost)}` : ""}`;
+  return `${abbreviateTokens(tokens)}${cost !== null ? ` ~${formatCurrency(cost)}` : ""}`;
 }

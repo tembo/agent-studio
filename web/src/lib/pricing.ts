@@ -1,123 +1,67 @@
-// Rough Anthropic model pricing per 1M tokens. Public list pricing as
-// of 2026; surfaced as "approx" in the UI so users know to trust the
-// invoice for the authoritative number. Update the table as Anthropic
-// publishes new model rates.
+import catalog from "./model-pricing.json";
 
-type Rate = { input: number; output: number };
+export type TokenRate = {
+  input: number;
+  output: number;
+  cacheRead: number | null;
+  cacheWrite: number | null;
+};
+export type ModelRate = TokenRate & {
+  longContext?: TokenRate & { threshold: number };
+};
+export type PricingSnapshot = {
+  verifiedOn: string;
+  source: string;
+  rate: ModelRate;
+};
 
-// Provider rate tables. Patterns match family identifiers, not
-// specific versions — providers re-use the same tier across versions
-// inside a family. Update as providers publish new rates.
-const ANTHROPIC_RATES: Array<{ pattern: RegExp; rate: Rate }> = [
-  // Fable 5 (Mythos-class) is the premium tier — list it first; it doesn't
-  // overlap the opus/sonnet/haiku patterns. $10/$50 per MTok (GA 2026-06-09).
-  { pattern: /claude-fable/i, rate: { input: 10, output: 50 } },
-  // Current Opus (4.5–4.8) is $5/$25. The only $15/$75 Opus models were 4.1
-  // and 4.0, both deprecated and retiring mid-2026 — not worth special-casing.
-  { pattern: /claude-opus/i, rate: { input: 5, output: 25 } },
-  { pattern: /claude-sonnet/i, rate: { input: 3, output: 15 } },
-  { pattern: /claude-haiku/i, rate: { input: 1, output: 5 } },
-];
-
-// OpenAI public list pricing per 1M tokens, by model family.
-// Source: https://platform.openai.com/docs/pricing
-const OPENAI_RATES: Array<{ pattern: RegExp; rate: Rate }> = [
-  // GPT-5.x family. Order matters — `find` takes the first match, so the more
-  // specific patterns precede the bare `^gpt-5` catch-all (which would
-  // otherwise swallow every 5.x variant). gpt-5.5/5.4 are the current flagship
-  // tier (2026); gpt-5.1/5.2 and the original gpt-5 sit below.
-  { pattern: /^gpt-5\.5/i, rate: { input: 5, output: 30 } },
-  { pattern: /^gpt-5\.4-mini/i, rate: { input: 0.75, output: 4.5 } },
-  { pattern: /^gpt-5\.4-nano/i, rate: { input: 0.2, output: 1.25 } },
-  { pattern: /^gpt-5\.4/i, rate: { input: 2.5, output: 15 } },
-  { pattern: /^gpt-5\.2/i, rate: { input: 0.875, output: 7 } },
-  { pattern: /^gpt-5\.1/i, rate: { input: 0.625, output: 5 } },
-  { pattern: /^gpt-5-mini/i, rate: { input: 0.25, output: 2 } },
-  { pattern: /^gpt-5-nano/i, rate: { input: 0.05, output: 0.4 } },
-  { pattern: /^gpt-5/i, rate: { input: 1.25, output: 10 } },
-  // GPT-4o family.
-  { pattern: /^gpt-4o-mini/i, rate: { input: 0.15, output: 0.6 } },
-  { pattern: /^gpt-4o/i, rate: { input: 2.5, output: 10 } },
-  // GPT-4.1 family.
-  { pattern: /^gpt-4\.1-nano/i, rate: { input: 0.1, output: 0.4 } },
-  { pattern: /^gpt-4\.1-mini/i, rate: { input: 0.4, output: 1.6 } },
-  { pattern: /^gpt-4\.1/i, rate: { input: 2, output: 8 } },
-  // o-series reasoning.
-  { pattern: /^o3-mini/i, rate: { input: 1.1, output: 4.4 } },
-  { pattern: /^o3/i, rate: { input: 2, output: 8 } },
-];
-
-/**
- * Returns the estimated USD cost of a run, or null if we don't have a
- * pricing entry for the model. Model strings look like
- * `provider:model-name` (e.g. `anthropic:claude-sonnet-5`,
- * `openai:gpt-4o-mini`).
- */
-function lookupRate(model: string): Rate | null {
-  const tables: Array<{ prefix: string; rates: typeof ANTHROPIC_RATES }> = [
-    { prefix: "anthropic:", rates: ANTHROPIC_RATES },
-    { prefix: "openai:", rates: OPENAI_RATES },
-  ];
-  for (const { prefix, rates } of tables) {
-    if (!model.startsWith(prefix)) continue;
-    const modelName = model.slice(prefix.length);
-    return rates.find((r) => r.pattern.test(modelName))?.rate ?? null;
-  }
-  return null;
+export function lookupPricing(model: string): PricingSnapshot | null {
+  const name = model.toLowerCase();
+  const entry = catalog.rates.find((r) => r.models.includes(name));
+  if (!entry) return null;
+  const rate: ModelRate = {
+    input: entry.input,
+    output: entry.output,
+    cacheRead: entry.cacheRead,
+    cacheWrite: entry.cacheWrite,
+    ...("longContext" in entry ? { longContext: entry.longContext } : {}),
+  };
+  const provider = name.split(":")[0] as keyof typeof catalog.sources;
+  return {
+    verifiedOn: catalog.verifiedOn,
+    source: catalog.sources[provider],
+    rate,
+  };
 }
 
-// Anthropic prompt-cache multipliers on the base INPUT rate: cache writes
-// (creation) bill at 1.25x, cache reads at 0.1x. `tokensInput` is the uncached
-// input (full rate); the cache halves are separate, non-overlapping counts.
-// Keep in lockstep with api/src/pricing.rs.
-const CACHE_READ_MULTIPLIER = 0.1;
-const CACHE_WRITE_MULTIPLIER = 1.25;
-
-export function estimateRunCost(
-  model: string,
-  tokensInput: number,
-  tokensOutput: number,
+/** One request, with disjoint uncached input / cache read / cache write counts.
+ * Thresholds must never be applied to a multi-request run's aggregate usage. */
+export function estimateRequestCost(
+  pricing: PricingSnapshot | null,
+  input: number,
+  output: number,
   cacheRead = 0,
   cacheWrite = 0,
-): number | null {
-  const rate = lookupRate(model);
-  if (!rate) return null;
+): { input: number; output: number; total: number } | null {
+  if (
+    !pricing ||
+    [input, output, cacheRead, cacheWrite].some((n) => !Number.isFinite(n) || n < 0)
+  ) return null;
+  const base = pricing.rate;
+  const rate =
+    base.longContext && input + cacheRead + cacheWrite > base.longContext.threshold
+      ? base.longContext
+      : base;
+  if (
+    (cacheRead > 0 && rate.cacheRead === null) ||
+    (cacheWrite > 0 && rate.cacheWrite === null)
+  ) return null;
   const inputCost =
-    (tokensInput +
-      cacheRead * CACHE_READ_MULTIPLIER +
-      cacheWrite * CACHE_WRITE_MULTIPLIER) *
-    rate.input;
-  return (inputCost + tokensOutput * rate.output) / 1_000_000;
-}
-
-/** Cost of just the input or just the output tokens, for per-direction display. */
-export function estimateTokenCost(
-  model: string,
-  tokens: number,
-  direction: "input" | "output",
-): number | null {
-  const rate = lookupRate(model);
-  if (!rate) return null;
-  return (tokens * rate[direction]) / 1_000_000;
-}
-
-/** Cache-aware "input" cost for display: uncached input at full rate plus the
- *  cache read/write halves at their multipliers. */
-export function estimateInputCost(
-  model: string,
-  uncachedInput: number,
-  cacheRead: number,
-  cacheWrite: number,
-): number | null {
-  const rate = lookupRate(model);
-  if (!rate) return null;
-  return (
-    ((uncachedInput +
-      cacheRead * CACHE_READ_MULTIPLIER +
-      cacheWrite * CACHE_WRITE_MULTIPLIER) *
-      rate.input) /
-    1_000_000
-  );
+    (input * rate.input +
+      cacheRead * (rate.cacheRead ?? 0) +
+      cacheWrite * (rate.cacheWrite ?? 0)) / 1_000_000;
+  const outputCost = output * rate.output / 1_000_000;
+  return { input: inputCost, output: outputCost, total: inputCost + outputCost };
 }
 
 export function formatTokens(n: number): string {

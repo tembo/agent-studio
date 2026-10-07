@@ -173,3 +173,17 @@ After changing auth schema migrations, install web dependencies and run
 from the repository root against disposable PostgreSQL. It applies the migration
 history in an isolated transaction, checks Better Auth's core/JWT/OAuth schema,
 and verifies legacy identity preservation and provider/account uniqueness.
+
+## Model pricing
+
+Edit the canonical, version-specific catalog in `src/model-pricing.json` after
+checking the linked provider sources; update `verifiedOn` and run
+`cd ../web && pnpm gen:pricing`. Commit both copies (Docker builds have separate
+contexts). Shared pricing fixtures exercise both Rust and TypeScript calculators.
+Prices are maintained manually, not refreshed by a scheduled job. Keep historical
+run snapshots unchanged when updating the catalog.
+
+Run `cargo test pricing` and, against disposable PostgreSQL,
+`PRICING_TEST_DATABASE_URL=postgres://… cargo test completion_saves_cost -- --ignored`
+to check the real completion write and additive migration. The integration test
+uses a temporary table and makes no model calls.
