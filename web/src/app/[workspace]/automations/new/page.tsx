@@ -127,7 +127,7 @@ export default async function NewAutomationPage({
           href={`${newHref}?type=schedule`}
           logo={<IconCalendarRepeat size={20} className="text-foreground-muted" />}
           title="Schedule"
-          sublabel="Run an agent on a cron"
+          sublabel="Run an agent on a schedule"
         />
         <OptionCard
           href={`${newHref}?type=trigger`}

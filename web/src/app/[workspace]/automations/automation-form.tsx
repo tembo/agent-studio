@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useBrowserTimezone } from "@/lib/use-browser-timezone";
 import { validateCron } from "@/lib/cron";
+import { SchedulePicker } from "./schedule-picker";
 
 import {
   createAutomationAction,
@@ -131,31 +132,16 @@ export function AutomationForm({
       </div>
 
       <div className="grid gap-1.5">
-        <Label htmlFor="cron" className="text-sm">
-          Schedule (cron)
-        </Label>
-        <Input
-          id="cron"
-          name="cron"
-          type="text"
-          required
-          autoComplete="off"
-          spellCheck={false}
-          disabled={pending}
-          value={cron}
-          onChange={(e) => setCron(e.target.value)}
-          placeholder="0 9 * * 1-5"
-          className="font-mono"
-        />
-        <p className="text-foreground-muted text-sm">
-          Five-field cron (minute, hour, day-of-month, month, day-of-week).
-        </p>
+        <SchedulePicker cron={cron} onChange={setCron} disabled={pending} />
         <p className="text-foreground-muted text-sm">
           {timezone
             ? `Times use ${timezone} · ${mode === "create" ? "detected from your browser" : "saved with this schedule"}.`
             : "Detecting your browser’s timezone…"}
         </p>
         {preview && timezone && <CronPreview preview={preview} timezone={timezone} />}
+        {cron && preview && !preview.ok && (
+          <FieldError>{preview.error}</FieldError>
+        )}
         {state.fieldErrors?.cron && (
           <FieldError>{state.fieldErrors.cron}</FieldError>
         )}
@@ -224,7 +210,7 @@ export function AutomationForm({
       )}
 
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={pending || !timezone}>
+        <Button type="submit" disabled={pending || !timezone || !preview?.ok}>
           {pending ? "Saving…" : mode === "create" ? "Create" : "Save changes"}
         </Button>
       </div>
@@ -247,7 +233,7 @@ function CronPreview({
         <span className="text-foreground-muted">({timezone})</span>
       </span>
       <span>
-        Next fire:{" "}
+        Next run:{" "}
         <LocalTime iso={preview.nextFire.toISOString()} />
       </span>
     </div>
