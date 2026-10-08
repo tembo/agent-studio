@@ -98,9 +98,10 @@ export function SchedulePicker({
                 <option value="weekly">Weekly</option>
                 <option value="monthly">Monthly</option>
                 <option value="hourly">Every few hours</option>
+                <option value="business-hours">Business hours</option>
               </select>
             </div>
-            {schedule.frequency === "hourly" ? (
+            {(schedule.frequency === "hourly" || schedule.frequency === "business-hours") ? (
               <div className="grid content-start gap-1.5">
                 <Label htmlFor="schedule-interval">Every</Label>
                 <select
@@ -129,7 +130,33 @@ export function SchedulePicker({
               </div>
             )}
           </div>
-          {schedule.frequency === "weekly" && (
+          {schedule.frequency === "business-hours" && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(["startHour", "endHour"] as const).map((field) => (
+                <div key={field} className="grid gap-1.5">
+                  <Label htmlFor={`schedule-${field}`}>{field === "startHour" ? "From" : "Through"}</Label>
+                  <select
+                    id={`schedule-${field}`}
+                    value={schedule[field]}
+                    onChange={(event) => update({ ...schedule, [field]: Number(event.target.value) })}
+                    className={SELECT_CLASS}
+                  >
+                    {Array.from({ length: 24 }, (_, hour) => (
+                      <option key={hour} value={hour}>{hour.toString().padStart(2, "0")}:00</option>
+                    ))}
+                  </select>
+                </div>
+              ))}
+              <p className="text-foreground-muted text-sm sm:col-span-2">
+                Runs on the hour from the start time. Includes the end hour if the interval lands on it.
+                The window restarts on each selected day. For overnight windows, use Advanced cron.
+              </p>
+              {schedule.startHour >= schedule.endHour && (
+                <p className="text-sentiment-negative text-sm sm:col-span-2" role="alert">End hour must be later than start hour.</p>
+              )}
+            </div>
+          )}
+          {(schedule.frequency === "weekly" || schedule.frequency === "business-hours") && (
             <fieldset className="grid gap-2">
               <legend className="mb-2 text-sm font-medium">On these days</legend>
               <div className="flex flex-wrap gap-x-4 gap-y-2">

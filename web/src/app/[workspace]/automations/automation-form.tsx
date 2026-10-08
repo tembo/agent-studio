@@ -68,7 +68,15 @@ export function AutomationForm({
   const [owner, setOwner] = useState(initialOwner);
   const [useDraft, setUseDraft] = useState(defaults?.useDraft ?? false);
   const browserTimezone = useBrowserTimezone();
-  const timezone = mode === "edit" ? defaults?.timezone ?? "UTC" : browserTimezone;
+  const [selectedTimezone, setSelectedTimezone] = useState<string | null>(
+    mode === "edit" ? defaults?.timezone ?? "UTC" : defaults?.timezone ?? null,
+  );
+  const timezone = selectedTimezone ?? browserTimezone;
+  // Enumerate in the browser after hydration; keep saved aliases and UTC available.
+  const timezoneOptions = useMemo(() => [...new Set([
+    "UTC", ...(timezone ? [timezone] : []),
+    ...(browserTimezone ? Intl.supportedValuesOf("timeZone") : []),
+  ])].sort(), [browserTimezone, timezone]);
   const preview = useMemo(
     () => timezone ? validateCron(cron, timezone) : null,
     [cron, timezone],
@@ -77,7 +85,6 @@ export function AutomationForm({
   return (
     <form action={formAction} className="flex flex-col gap-5">
       <input type="hidden" name="workspace" value={workspaceSlug} />
-      <input type="hidden" name="timezone" value={timezone ?? ""} />
       {mode === "edit" && defaults?.id && (
         <input type="hidden" name="id" value={defaults.id} />
       )}
@@ -133,10 +140,24 @@ export function AutomationForm({
 
       <div className="grid gap-1.5">
         <SchedulePicker cron={cron} onChange={setCron} disabled={pending} />
+        <Label htmlFor="timezone">Timezone</Label>
+        <select
+          id="timezone"
+          name="timezone"
+          value={timezone ?? ""}
+          onChange={(event) => setSelectedTimezone(event.target.value)}
+          disabled={pending || !timezone}
+          required
+          className="bg-surface border-border text-foreground min-w-0 rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--focus-ring-color,#009eff)]"
+        >
+          {!timezone && <option value="">Detecting your browser’s timezone…</option>}
+          {timezoneOptions.map((zone) => (
+            <option key={zone} value={zone}>{zone.replaceAll("_", " ")}</option>
+          ))}
+        </select>
         <p className="text-foreground-muted text-sm">
-          {timezone
-            ? `Times use ${timezone} · ${mode === "create" ? "detected from your browser" : "saved with this schedule"}.`
-            : "Detecting your browser’s timezone…"}
+          {mode === "create" ? "Defaults to your browser’s timezone. " : "Saved with this schedule. "}
+          Changing timezone keeps the selected clock times and follows local daylight saving changes.
         </p>
         {preview && timezone && <CronPreview preview={preview} timezone={timezone} />}
         {cron && preview && !preview.ok && (

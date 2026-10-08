@@ -1,4 +1,4 @@
-export type ScheduleFrequency = "daily" | "weekdays" | "weekly" | "monthly" | "hourly";
+export type ScheduleFrequency = "daily" | "weekdays" | "weekly" | "monthly" | "hourly" | "business-hours";
 
 export type SimpleSchedule = {
   frequency: ScheduleFrequency;
@@ -6,6 +6,8 @@ export type SimpleSchedule = {
   days: number[];
   dayOfMonth: number;
   hourInterval: number;
+  startHour: number;
+  endHour: number;
 };
 
 // Only offer intervals that divide a day evenly; */5 would restart at midnight.
@@ -17,9 +19,19 @@ export const DEFAULT_SCHEDULE: SimpleSchedule = {
   days: [1, 2, 3, 4, 5],
   dayOfMonth: 1,
   hourInterval: 2,
+  startHour: 9,
+  endHour: 17,
 };
 
 export function scheduleToCron(schedule: SimpleSchedule): string {
+  if (schedule.frequency === "business-hours") {
+    const days = [...new Set(schedule.days)].sort((a, b) => a - b);
+    if (!days.length || days.some((day) => !Number.isInteger(day) || day < 0 || day > 6)) return "";
+    if (!HOUR_INTERVALS.some((n) => n === schedule.hourInterval)) return "";
+    if (!Number.isInteger(schedule.startHour) || !Number.isInteger(schedule.endHour)
+      || schedule.startHour < 0 || schedule.endHour > 23 || schedule.startHour >= schedule.endHour) return "";
+    return `0 ${schedule.startHour}-${schedule.endHour}/${schedule.hourInterval} * * ${days.join(",")}`;
+  }
   if (schedule.frequency === "hourly") {
     if (!HOUR_INTERVALS.some((n) => n === schedule.hourInterval)) return "";
     return schedule.hourInterval === 1 ? "0 * * * *" : `0 */${schedule.hourInterval} * * *`;
@@ -49,6 +61,19 @@ export function cronToSchedule(cron: string): SimpleSchedule | null {
   if (fields.length !== 5) return null;
   const [minute, hour, dayOfMonth, month, days] = fields;
   if (month !== "*") return null;
+
+  const window = /^(\d{1,2})-(\d{1,2})(?:\/(\d+))?$/.exec(hour);
+  if (minute === "0" && dayOfMonth === "*" && window) {
+    const selectedDays = days === "*" ? [0, 1, 2, 3, 4, 5, 6]
+      : days === "1-5" ? [1, 2, 3, 4, 5]
+      : /^[0-6](,[0-6])*$/.test(days) ? [...new Set(days.split(",").map(Number))] : null;
+    if (!selectedDays) return null;
+    const schedule: SimpleSchedule = {
+      ...DEFAULT_SCHEDULE, frequency: "business-hours", days: selectedDays,
+      startHour: Number(window[1]), endHour: Number(window[2]), hourInterval: Number(window[3] ?? 1),
+    };
+    return scheduleToCron(schedule) ? schedule : null;
+  }
 
   if (minute === "0" && dayOfMonth === "*" && days === "*") {
     const interval = hour === "*" ? 1 : /^\*\/\d+$/.test(hour) ? Number(hour.slice(2)) : 0;

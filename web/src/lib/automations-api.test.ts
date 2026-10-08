@@ -61,3 +61,18 @@ describe("automation owner membership", () => {
     expect(updated.lastFireEventId).toBe("event-1");
   });
 });
+
+
+describe("timezone updates", () => {
+  it.each([undefined, "America/Chicago"])("passes %s to the timezone-preserving update", async (timezone) => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [{}] });
+    await updateAutomation({
+      id: "automation-1", name: "Report", agentName: "report", cron: "0 9 * * *",
+      inputMessage: "", enabled: true, ownerUserId: "user-1", timezone,
+    });
+    const [sql, parameters] = query.mock.calls[0];
+    expect(sql).toContain("timezone = COALESCE($9, timezone)");
+    expect(parameters[8]).toBe(timezone ?? null);
+  });
+});
