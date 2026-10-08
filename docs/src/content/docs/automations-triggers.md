@@ -115,9 +115,14 @@ on the agent detail page, in the **Triggers** section (above Automations).
 ### Prerequisites
 
 1. **Composio API key** — set under **Settings → Composio**.
-2. **Composio webhook secret** — also under **Settings → Composio**. Copy the
-   webhook URL shown there (`/api/hooks/composio/{workspace}`) into your Composio
-   app's webhook configuration, then paste the matching secret into TAS.
+2. **Webhook delivery** — under **Settings → Composio → Event delivery**, a
+   workspace admin can choose **Configure delivery** to register the workspace
+   URL and save its signing secret. The instance must have a public HTTPS
+   `BETTER_AUTH_URL`. A project already delivering to another URL is left unchanged.
+   Alternatively, register the displayed URL (`/api/hooks/composio/{workspace}`)
+   in the same Composio project as the API key, subscribe to
+   `composio.trigger.message`, and paste that subscription's signing secret
+   into TAS. Saving an API key and secret alone does **not** register delivery.
 3. **A connection** — the acting user must have authorized the toolkit the
    trigger listens on (e.g. Gmail). Authorize it under
    [Connections](/agent-studio/connections/) first.
@@ -156,6 +161,35 @@ triggers — it determines which credentials a run uses. See
 
 Each fired run shows up in [Runs](/agent-studio/dashboard-and-runs/) with
 **Source = Event** so you can tell automated activity from hand runs.
+
+### When a trigger stays at Never fired
+
+A workspace admin can use **Settings → Composio → Check delivery** to check the
+remote webhook URL, trigger-event subscription, and signing-secret match (when
+Composio returns the secret). It also lists each local trigger's Composio ID and
+whether that instance is enabled, disabled, or missing in the current Composio
+project. A failed remote check is reported as unavailable, not as a missing trigger.
+
+Use **Configure delivery** to add a missing workspace subscription or enable
+trigger events on its existing subscription. If Composio does not return the
+signing secret, copy it manually from that subscription in the Composio dashboard.
+Composio currently allows one subscription per project. If the project already
+delivers to another URL, setup stops without changing it. Use a separate
+Composio project for this workspace or review the destination in the dashboard.
+Duplicate subscriptions for the same URL must also be resolved there first.
+
+An enabled instance and correct delivery configuration do not prove that Composio
+has detected an email. For Gmail, send a **new** matching message after enabling
+`GMAIL_NEW_GMAIL_MESSAGE`, then inspect Composio's trigger logs and webhook
+delivery attempts for the displayed trigger ID. Verify the Gmail connection and
+query if no event is detected; inspect the destination URL, response status, and
+signing secret if an event is detected but delivery fails. Once corrected, send
+another matching message and confirm a run appears in TAS.
+
+Empty TAS dispatch history does not prove that no HTTP requests arrived:
+missing headers or invalid signatures are rejected before a trigger can be
+identified, and unknown or wrong-workspace trigger IDs are ignored. Composio's
+delivery log distinguishes those cases from no detection or no subscription.
 
 ## External webhooks
 

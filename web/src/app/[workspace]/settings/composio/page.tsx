@@ -8,6 +8,7 @@ import {
 } from "@/lib/workspace";
 
 import { SecretKeyForm } from "../secret-key-form";
+import { DeliveryForm } from "./delivery-form";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,12 @@ export default async function ComposioSettingsPage({
                 : null
             }
           />
+        </Section>
+      </div>
+
+      <div className="py-6">
+        <Section title="Event delivery" description="Verify that Composio sends trigger events to this workspace.">
+          <DeliveryForm workspaceSlug={workspace.slug} />
         </Section>
       </div>
 
