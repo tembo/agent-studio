@@ -56,7 +56,7 @@ export default async function NewAutomationPage({
       <FormShell
         back={backToTypes}
         title="New schedule"
-        description="Run an agent on a recurring cadence. New schedules use your browser’s timezone and follow its daylight saving changes."
+        description="Run an agent on a recurring cadence. Choose a timezone or use your browser’s default. Schedules follow local daylight saving changes."
       >
         <AutomationForm
           workspaceSlug={slug}

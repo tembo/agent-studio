@@ -152,6 +152,7 @@ export async function updateAutomation(input: {
   enabled: boolean;
   ownerUserId: string;
   useDraft?: boolean;
+  timezone?: string;
 }): Promise<Automation> {
   // An edit is not evidence that the dispatch problem recovered. Keep the
   // current health summary until a run is successfully queued; durable event
@@ -161,7 +162,7 @@ export async function updateAutomation(input: {
        UPDATE automation
        SET name = $2, agent_name = $3, cron = $4, input_message = $5,
            enabled = $6, owner_user_id = $7, use_draft = $8,
-           updated_at = NOW()
+           timezone = COALESCE($9, timezone), updated_at = NOW()
        WHERE id = $1
        RETURNING *
      )
@@ -178,6 +179,7 @@ export async function updateAutomation(input: {
       input.enabled,
       input.ownerUserId,
       input.useDraft ?? false,
+      input.timezone ?? null,
     ],
   );
   return rowToAutomation(res.rows[0]);

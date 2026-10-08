@@ -153,8 +153,8 @@ export async function updateAutomationAction(
   const { workspace, userId } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
 
-  // Editing from another browser must never move the schedule.
-  parsed.timezone = existing.timezone;
+  // Older callers can omit the field; explicit selections may change the zone.
+  if (!formData.has("timezone")) parsed.timezone = existing.timezone;
   const invalid = await validate(workspace.id, parsed);
   if (invalid) return invalid;
 
@@ -167,6 +167,7 @@ export async function updateAutomationAction(
     name: parsed.name,
     agentName: parsed.agentName,
     cron: parsed.cron,
+    timezone: parsed.timezone,
     inputMessage: parsed.inputMessage,
     enabled: parsed.enabled,
     // Preserve the existing owner when the form omits the picker

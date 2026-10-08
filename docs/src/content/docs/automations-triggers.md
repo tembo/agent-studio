@@ -15,15 +15,23 @@ owner's [connection](/agent-studio/connections/) credentials. You can also choos
 whether a schedule runs the agent's **stable** version or its live **draft**.
 
 Use the **Schedule** picker to choose **Daily**, **Weekdays**, **Weekly**,
-**Monthly**, or **Every few hours**. Choose a time for daily, weekday, weekly,
+**Monthly**, **Every few hours**, or **Business hours**. Choose a time for daily, weekday, weekly,
 and monthly schedules; weekly schedules let you check one or more days.
 For monthly schedules, choose a day of the month. Months without that day are
 skipped (for example, the 31st skips February). Hourly schedules run around the
 clock from midnight, every 1, 2, 3, 4, 6, 8, or 12 hours, on the hour. The live
 summary and next-run preview show what will happen before you save.
 
+**Business hours** repeats on selected days within a same-day window. Choose an
+interval, a **From** hour, a **Through** hour, and days of the week. For example,
+every 2 hours from 09:00 through 17:00 on weekdays runs at 09:00, 11:00, 13:00,
+15:00, and 17:00 Monday–Friday. The interval starts again at the From hour each
+selected day. The end hour is included only if the interval lands on it; no run
+occurs later. Times are on the hour; the end must be later than the start. Use
+Advanced cron for overnight windows or minute offsets.
+
 **Advanced cron** lets you enter a cron expression directly, including schedules
-such as business-hour windows that the picker does not yet offer. Existing
+such as overnight windows or repeating minutes. Existing
 expressions that the picker can represent open in the picker; other expressions
 open in Advanced and are preserved unchanged. Switching modes does not rewrite
 your expression. For a custom expression, **Start a new simple schedule** explicitly
@@ -32,16 +40,21 @@ replaces it with the weekday 9 AM default, which you can then adjust before savi
 New schedules created in the browser automatically save **your browser's
 timezone** (for example, `America/New_York`), including suggested automations.
 Enter times in that timezone. In Advanced cron, `10 8 * * 1-5` means weekdays at 8:10 AM.
-The form and schedule lists show the saved timezone; no timezone picker is needed.
+The **Timezone** selector defaults to your browser's timezone and can be overridden,
+for example with `America/New_York` for Eastern or `America/Chicago` for Central.
+The form and schedule lists show the saved timezone.
 Schedules follow local daylight saving changes, so an 8:10 AM schedule stays at
 8:10 AM year-round. A daily time in the skipped spring-forward hour moves ahead
 by the DST gap (for example, 2:30 AM becomes 3:30 AM in New York); a daily time
 in the repeated fall-back hour fires once, at its first occurrence. The next-fire timestamp is displayed in the viewer's local time.
 
 Editing, pausing, re-enabling, or changing the run-as owner preserves the saved
-timezone, even from a browser in another timezone. The timezone comes from the
+timezone, even from a browser in another timezone, unless you explicitly change
+**Timezone**. Changing it keeps the selected clock times, so the actual run
+instant changes; review the next-run preview before saving. The timezone comes from the
 creator's browser, not the run-as person's location. Existing schedules and new
-schedules created through the API or MCP continue to use UTC. API responses include
+schedules created through the API or MCP continue to use UTC. To move an existing
+UTC schedule to local time, edit its timezone and adjust the clock time as needed. API responses include
 `timezone` so clients can interpret the cron correctly.
 
 Schedules always require explicit creation. When a new-agent description names

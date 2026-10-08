@@ -10,6 +10,7 @@ describe("simple schedule creation", () => {
     ["weekly", "10 8 * * 0,2,4"],
     ["monthly", "10 8 15 * *"],
     ["hourly", "0 */2 * * *"],
+    ["business-hours", "0 9-17/2 * * 0,2,4"],
   ] as const)("creates a valid %s schedule", (frequency, expected) => {
     const cron = scheduleToCron({ ...DEFAULT_SCHEDULE, frequency, time: "08:10", days: [4, 0, 2, 2], dayOfMonth: 15 });
     expect(cron).toBe(expected);
@@ -54,6 +55,9 @@ describe("editing existing schedules", () => {
     ["0 9 31 * *", "monthly"],
     ["0 * * * *", "hourly"],
     ["0 */4 * * *", "hourly"],
+    ["0 9-17/2 * * 1-5", "business-hours"],
+    ["0 9-17 * * *", "business-hours"],
+    ["0 8-17/3 * * 0,6", "business-hours"],
     ["  05 09 * * *  ", "daily"],
   ])("recognizes %s without changing its firing times", (cron, frequency) => {
     const parsed = cronToSchedule(cron);
@@ -71,7 +75,11 @@ describe("editing existing schedules", () => {
     "*/15 * * * *", // Minute intervals.
     "15 */2 * * *", // Hour intervals with a minute offset.
     "0 */5 * * *", // Uneven hour intervals.
-    "0 9-17/2 * * 1-5", // Business hours.
+    "0 17-9/2 * * 1-5", // Overnight windows.
+    "0 9-24/2 * * 1-5", // Invalid end hour.
+    "0 9-17/0 * * 1-5", // Invalid interval.
+    "30 9-17/2 * * 1-5", // Windows with minute offsets stay in Advanced.
+    "0 9-17/2 1 * 1-5", // OR semantics remain in Advanced.
     "0 9 1 * 1", // OR semantics for day-of-month and day-of-week.
     "0 9 * 1 1", // Specific month.
     "0 9 * * MON", // Named day.
@@ -86,5 +94,43 @@ describe("editing existing schedules", () => {
     "",
   ])("leaves %s in Advanced instead of approximating it", (cron) => {
     expect(cronToSchedule(cron)).toBeNull();
+  });
+});
+
+
+describe("business-hour schedules", () => {
+  it("runs only at 9, 11, 13, 15 and 17 on weekdays, crossing the fall DST change", () => {
+    const cron = scheduleToCron({ ...DEFAULT_SCHEDULE, frequency: "business-hours" });
+    let after = new Date("2026-10-30T12:59:00Z");
+    const expected = [
+      "2026-10-30T13:00:00.000Z", "2026-10-30T15:00:00.000Z",
+      "2026-10-30T17:00:00.000Z", "2026-10-30T19:00:00.000Z",
+      "2026-10-30T21:00:00.000Z", "2026-11-02T14:00:00.000Z",
+    ];
+    for (const iso of expected) {
+      const next = nextFireAfter(cron, after, "America/New_York")!;
+      expect(next.toISOString()).toBe(iso);
+      after = next;
+    }
+  });
+
+  it("keeps the start hour across spring DST in Central time", () => {
+    const cron = scheduleToCron({ ...DEFAULT_SCHEDULE, frequency: "business-hours" });
+    expect(nextFireAfter(cron, new Date("2026-03-06T23:00:00Z"), "America/Chicago")?.toISOString())
+      .toBe("2026-03-09T14:00:00.000Z");
+  });
+
+  it("never overshoots the end and restarts the interval on the next selected day", () => {
+    const cron = scheduleToCron({ ...DEFAULT_SCHEDULE, frequency: "business-hours", endHour: 16 });
+    expect(nextFireAfter(cron, new Date("2026-10-05T15:00:00Z"))?.toISOString())
+      .toBe("2026-10-06T09:00:00.000Z");
+  });
+
+  it.each([
+    { startHour: 17, endHour: 9 }, { startHour: 9, endHour: 9 },
+    { startHour: -1 }, { endHour: 24 }, { startHour: 9.5 },
+    { days: [] }, { days: [7] }, { hourInterval: 0 },
+  ])("rejects an invalid window: %j", (overrides) => {
+    expect(scheduleToCron({ ...DEFAULT_SCHEDULE, frequency: "business-hours", ...overrides })).toBe("");
   });
 });

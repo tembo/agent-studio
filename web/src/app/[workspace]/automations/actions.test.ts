@@ -177,13 +177,32 @@ describe("automation timezone", () => {
     expect(mockCreateAutomation).not.toHaveBeenCalled();
   });
 
-  it.each(["UTC", "America/New_York"])("preserves %s when editing from another browser", async (timezone) => {
+  it.each(["UTC", "America/New_York"])("preserves %s when an older form omits timezone", async (timezone) => {
     mockGetAutomation.mockResolvedValue({ ...existingAutomation, timezone });
     await expect(updateAutomationAction({}, automationForm({
-      id: existingAutomation.id, timezone: "Not/AZone",
+      id: existingAutomation.id,
     }))).rejects.toThrow("NEXT_REDIRECT");
     expect(mockUpdateAutomation).toHaveBeenCalledOnce();
-    expect(mockUpdateAutomation.mock.calls[0][0]).not.toHaveProperty("timezone");
+    expect(mockUpdateAutomation).toHaveBeenCalledWith(expect.objectContaining({ timezone }));
+  });
+
+  it("allows explicitly changing a legacy UTC schedule to local business hours", async () => {
+    mockGetAutomation.mockResolvedValue(existingAutomation);
+    await expect(updateAutomationAction({}, automationForm({
+      id: existingAutomation.id, timezone: "America/Chicago", cron: "0 9-17/2 * * 1-5",
+    }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockUpdateAutomation).toHaveBeenCalledWith(expect.objectContaining({
+      timezone: "America/Chicago", cron: "0 9-17/2 * * 1-5",
+    }));
+  });
+
+  it("rejects invalid timezone edits without writing", async () => {
+    mockGetAutomation.mockResolvedValue(existingAutomation);
+    const result = await updateAutomationAction({}, automationForm({
+      id: existingAutomation.id, timezone: "Not/AZone",
+    }));
+    expect(result.fieldErrors?.cron).toBeTruthy();
+    expect(mockUpdateAutomation).not.toHaveBeenCalled();
   });
 
   it("does not change the timezone when toggling", async () => {
