@@ -1474,7 +1474,7 @@ mod pricing_integration_tests {
         sqlx::raw_sql(
             "CREATE TEMP TABLE run (
                 id uuid PRIMARY KEY, status text, output text, completed_at timestamptz,
-                tokens_input integer, tokens_output integer, cost_usd float8,
+                tokens_input integer, tokens_output integer,
                 streamed_output text, output_delivery jsonb, delivery_status text,
                 delivery_evidence jsonb
             );",
@@ -1482,6 +1482,10 @@ mod pricing_integration_tests {
         .execute(&db)
         .await
         .unwrap();
+        sqlx::raw_sql(include_str!("../../migrations/0021_run_cost.sql"))
+            .execute(&db)
+            .await
+            .unwrap();
         let legacy = Uuid::new_v4();
         sqlx::query("INSERT INTO run (id, status, cost_usd) VALUES ($1, 'succeeded', 18)")
             .bind(legacy)
@@ -1517,12 +1521,13 @@ mod pricing_integration_tests {
             mark_succeeded(&db, id, "done", usage, model, &[])
                 .await
                 .unwrap();
-            let row: (String, Option<f64>, Option<serde_json::Value>) =
-                sqlx::query_as("SELECT status, cost_usd, pricing_snapshot FROM run WHERE id=$1")
-                    .bind(id)
-                    .fetch_one(&db)
-                    .await
-                    .unwrap();
+            let row: (String, Option<f64>, Option<serde_json::Value>) = sqlx::query_as(
+                "SELECT status, cost_usd::double precision, pricing_snapshot FROM run WHERE id=$1",
+            )
+            .bind(id)
+            .fetch_one(&db)
+            .await
+            .unwrap();
             assert_eq!(row.0, "succeeded");
             assert_eq!(row.1, expected);
             assert_eq!(row.2.is_some(), expected.is_some());
@@ -1535,12 +1540,13 @@ mod pricing_integration_tests {
         mark_succeeded(&db, legacy, "done", usage, "anthropic:claude-sonnet-5", &[])
             .await
             .unwrap();
-        let old: (f64, Option<serde_json::Value>) =
-            sqlx::query_as("SELECT cost_usd, pricing_snapshot FROM run WHERE id=$1")
-                .bind(legacy)
-                .fetch_one(&db)
-                .await
-                .unwrap();
+        let old: (f64, Option<serde_json::Value>) = sqlx::query_as(
+            "SELECT cost_usd::double precision, pricing_snapshot FROM run WHERE id=$1",
+        )
+        .bind(legacy)
+        .fetch_one(&db)
+        .await
+        .unwrap();
         assert_eq!(old, (18.0, None));
     }
 }
