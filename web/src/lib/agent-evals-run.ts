@@ -43,6 +43,8 @@ const POLL_MS = 1500;
 export type StartEvalInput = {
   workspaceId: string;
   userId: string;
+  /** Credential holder, authorized by the caller; defaults to the initiator. */
+  runAsUserId?: string;
   agent: string;
   version?: "draft" | "stable";
   spec?: string;
@@ -77,7 +79,7 @@ export async function startEvalRun(
   scheduleEvalRun({
     evalRunId: evalRun.id,
     workspaceId: input.workspaceId,
-    userId: input.userId,
+    userId: input.runAsUserId ?? input.userId,
     dispatch: prepared.dispatch,
     suite: prepared.suite,
   });
@@ -178,13 +180,18 @@ async function prepareEval(
   const suite = await loadSuite(input, dispatch.agentPath);
   if (!suite.ok) return suite;
 
+  const actingUserId = input.runAsUserId ?? input.userId;
   const missing = await findMissingConnections(
     input.workspaceId,
-    input.userId,
+    actingUserId,
     dispatch.connections,
   );
   if (missing.length > 0) {
-    return { ok: false, status: 422, error: missingConnectionsMessage(missing, true) };
+    return {
+      ok: false,
+      status: 422,
+      error: missingConnectionsMessage(missing, actingUserId === input.userId),
+    };
   }
 
   return { ok: true, dispatch, suite: suite.suite };
