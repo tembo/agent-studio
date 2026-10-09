@@ -453,7 +453,8 @@ pub async fn get_run(
         r#"SELECT id, workspace_id, agent_name, agent_path, user_message, model, status,
                   output, streamed_output, error_message, failure_code,
                   failure_summary, failure_recommendation, created_by, created_at,
-                  started_at, completed_at, tokens_input, tokens_output, cost_usd, pricing_snapshot,
+                  started_at, completed_at, tokens_input, tokens_output,
+                  cost_usd::double precision AS cost_usd, pricing_snapshot,
                   scaledown_original_tokens, scaledown_compressed_tokens,
                    trigger, automation_id, agent_version_id, agent_version_label,
                    run_environment, resume_count, resumed_at, is_dry_run, reused_from_run_id, output_reuse_type
@@ -464,7 +465,10 @@ pub async fn get_run(
     .bind(query.workspace_id)
     .fetch_optional(&state.db)
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|error| {
+        tracing::error!(run_id = %id, workspace_id = %query.workspace_id, ?error, "failed to read run");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     row.map(Json).ok_or(StatusCode::NOT_FOUND)
 }
@@ -612,6 +616,129 @@ mod tests {
         assert_eq!(
             dry_run_error(Framework::Pydantic, true, Some(&delivery())),
             None
+        );
+    }
+}
+
+#[cfg(test)]
+mod pricing_integration_tests {
+    use super::*;
+    use std::sync::{atomic::AtomicBool, Arc, Mutex};
+
+    #[tokio::test]
+    #[ignore = "requires PRICING_TEST_DATABASE_URL and TAS_ENCRYPTION_KEY"]
+    async fn run_details_remain_readable_after_cost_is_saved() {
+        let db = sqlx::postgres::PgPoolOptions::new()
+            .max_connections(1)
+            .connect(&std::env::var("PRICING_TEST_DATABASE_URL").unwrap())
+            .await
+            .unwrap();
+        // A single connection keeps this fixture isolated from application data.
+        // Apply the cost migration rather than substituting a Rust-friendly type.
+        sqlx::raw_sql(
+            "CREATE TEMP TABLE run (
+                id uuid PRIMARY KEY, workspace_id uuid, agent_name text DEFAULT 'test',
+                agent_path text DEFAULT 'test.yaml', user_message text DEFAULT '',
+                model text DEFAULT 'anthropic:claude-sonnet-4-6', status text DEFAULT 'running',
+                output text DEFAULT '', streamed_output text, error_message text,
+                failure_code text, failure_summary text, failure_recommendation text,
+                created_by text DEFAULT 'test-user', created_at timestamptz DEFAULT now(),
+                started_at timestamptz, completed_at timestamptz,
+                tokens_input integer, tokens_output integer,
+                scaledown_original_tokens integer, scaledown_compressed_tokens integer,
+                trigger text DEFAULT 'manual', automation_id uuid, agent_version_id uuid,
+                agent_version_label text, run_environment text DEFAULT 'production',
+                resume_count integer DEFAULT 0, resumed_at timestamptz,
+                is_dry_run boolean DEFAULT false, reused_from_run_id uuid, output_reuse_type text
+            );",
+        )
+        .execute(&db)
+        .await
+        .unwrap();
+        sqlx::raw_sql(include_str!("../../migrations/0021_run_cost.sql"))
+            .execute(&db)
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!(
+            "../../migrations/0100_run_pricing_snapshot.sql"
+        ))
+        .execute(&db)
+        .await
+        .unwrap();
+        let state = AppState {
+            db: db.clone(),
+            http: reqwest::Client::new(),
+            encryption_key: Arc::new(crate::crypto::MasterKey::from_env().unwrap()),
+            memory: crate::memory::Memory::from_env(0),
+            run_cancels: Arc::new(Mutex::new(Default::default())),
+            run_concurrency: crate::runs::concurrency::RunConcurrency::new(2, 1, 1).unwrap(),
+            draining: Arc::new(AtomicBool::new(false)),
+        };
+        let workspace_id = Uuid::new_v4();
+        for cost in [None, Some(0.0_f64), Some(0.123456_f64)] {
+            let id = Uuid::new_v4();
+            sqlx::query("INSERT INTO run (id, workspace_id) VALUES ($1, $2)")
+                .bind(id)
+                .bind(workspace_id)
+                .execute(&db)
+                .await
+                .unwrap();
+            let running = get_run(
+                State(state.clone()),
+                Path(id),
+                Query(GetRunQuery { workspace_id }),
+            )
+            .await
+            .unwrap()
+            .0;
+            assert_eq!(running.status, "running");
+            assert_eq!(running.cost_usd, None);
+
+            let snapshot = serde_json::json!({"verifiedOn": "2026-10-07"});
+            sqlx::query("UPDATE run SET status='succeeded', output='done', cost_usd=$2, pricing_snapshot=$3 WHERE id=$1")
+                .bind(id)
+                .bind(cost)
+                .bind(&snapshot)
+                .execute(&db)
+                .await
+                .unwrap();
+            let completed = get_run(
+                State(state.clone()),
+                Path(id),
+                Query(GetRunQuery { workspace_id }),
+            )
+            .await
+            .unwrap()
+            .0;
+            assert_eq!(completed.status, "succeeded");
+            assert_eq!(completed.output, "done");
+            assert_eq!(completed.cost_usd, cost);
+            assert_eq!(completed.pricing_snapshot, Some(snapshot));
+            assert_eq!(
+                serde_json::to_value(&completed).unwrap()["cost_usd"],
+                serde_json::json!(cost)
+            );
+
+            let wrong_workspace = get_run(
+                State(state.clone()),
+                Path(id),
+                Query(GetRunQuery {
+                    workspace_id: Uuid::new_v4(),
+                }),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(wrong_workspace, StatusCode::NOT_FOUND);
+        }
+        assert_eq!(
+            get_run(
+                State(state),
+                Path(Uuid::new_v4()),
+                Query(GetRunQuery { workspace_id })
+            )
+            .await
+            .unwrap_err(),
+            StatusCode::NOT_FOUND
         );
     }
 }
