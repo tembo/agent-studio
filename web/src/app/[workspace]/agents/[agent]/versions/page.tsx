@@ -14,6 +14,7 @@ import {
   listAgentVersions,
 } from "@/lib/agent-versions";
 import { listFileCommits, type FileCommit } from "@/lib/github";
+import { memberChoice } from "@/lib/member-choice";
 import { meetsMinRole } from "@/lib/rbac";
 import {
   getWorkspaceRole,
@@ -281,6 +282,8 @@ export default async function AgentVersionsPage({
                 parseError={evalSuite && !evalSuite.ok ? evalSuite.detail : null}
                 canRun={canEdit && !(evalSuite && !evalSuite.ok)}
                 hasStable={Boolean(stable)}
+                canRunAsOthers={isAdmin}
+                currentMember={memberChoice(session.user.id, session.user.name, session.user.email)}
                 workspaceSlug={workspace.slug}
                 agentName={canonicalName}
               />

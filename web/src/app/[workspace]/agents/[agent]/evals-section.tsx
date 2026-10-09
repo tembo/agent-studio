@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LocalTime } from "@/components/local-time";
 import { Section } from "@/components/section";
 import { Badge } from "@/components/ui/badge";
+import type { MemberChoice } from "@/lib/member-choice";
 import type { AgentEvalRun } from "@/lib/agent-evals-db";
 
 import { EvalPoller } from "./eval-poller";
@@ -14,6 +15,8 @@ export function EvalsSection({
   evalPath,
   parseError,
   canRun,
+  canRunAsOthers,
+  currentMember,
   hasStable,
   workspaceSlug,
   agentName,
@@ -23,6 +26,8 @@ export function EvalsSection({
   evalPath: string | null;
   parseError: string | null;
   canRun: boolean;
+  canRunAsOthers: boolean;
+  currentMember: MemberChoice;
   hasStable: boolean;
   workspaceSlug: string;
   agentName: string;
@@ -40,6 +45,8 @@ export function EvalsSection({
             <RunEvalsButton
               workspaceSlug={workspaceSlug}
               agentName={agentName}
+              canRunAsOthers={canRunAsOthers}
+              currentMember={currentMember}
               version="draft"
               disabled={Boolean(inFlight)}
               disabledReason="An eval is already running."
@@ -47,6 +54,8 @@ export function EvalsSection({
             <RunEvalsButton
               workspaceSlug={workspaceSlug}
               agentName={agentName}
+              canRunAsOthers={canRunAsOthers}
+              currentMember={currentMember}
               version="stable"
               disabled={Boolean(inFlight) || !hasStable}
               disabledReason={

@@ -82,6 +82,20 @@ TAS owns the runner. You do not need a GitHub Action in the agents repo.
 Direct-commit (YOLO) authoring has no PR to attach a status to; Promote is
 still gated.
 
+### Run evals as another member
+
+In **Versions → Evals**, choose **Run evals on draft** or **Run evals on
+stable**. Workspace admins can use **Run as** in the dialog to search for
+and select a workspace member, just like **Run now**. The selection defaults
+to yourself and applies to that eval suite only. Other operators run evals as
+themselves.
+
+Every case uses the selected member's connections. TAS checks their required
+connections before starting the suite and identifies the selected member in
+any missing-connection error. The eval still records the person who started
+it as its creator. A passing draft eval satisfies the existing promotion gate
+regardless of which member supplied the connections.
+
 ## REST API
 
 Operator key. `POST /api/v1/evals` queues a suite and returns `202`. Poll
