@@ -328,6 +328,23 @@ also shows the **draft** effort, which can differ from the promoted stable versi
 5.5 default to High; Haiku 5.5 and Opus 5.5 default to Medium. On OpenAI models,
 **None** is an explicit value and is separate from Provider default.
 
+The October 10, 2026 review adds GPT-6.1 Sol, GPT-6 Sol/Luna, and
+GPT-5.6 Sol/Terra/Luna with a Medium provider default and Maximum effort.
+GPT-6.1 Sol supports Low through Maximum, but not None or Minimal; the other
+listed models additionally support None. The catalog also recognizes the exact
+GPT-5.5 (`2026-04-23`), GPT-5.4 (`2026-03-05`), and GPT-5.4 Mini/Nano
+(`2026-03-17`) snapshots documented by OpenAI.
+
+These models are verified against Pydantic AI 2.55.0's Responses adapter,
+which `openai:` selects in that version. GPT-6 Astra and GPT-6.1 Sol require
+Responses for tool calling; GPT-6 Sol/Luna only support Chat Completions tool
+calling at None effort. An older deployment that resolves `openai:` to Chat
+Completions cannot use all these combinations. GPT-6 Astra has verified token
+prices but no effort dropdown: the checked documentation lists its effort
+levels without establishing a provider default. Explicit authored settings
+remain intact. See the [OpenAI model guide](https://developers.openai.com/api/docs/guides/latest-model)
+and [model-specific documentation](https://developers.openai.com/api/docs/models).
+
 Lower effort can reduce token usage and latency; higher effort can improve
 difficult tasks. It does not change the per-token price, and savings depend on
 the task. Compare runs and eval results before promoting an effort change.

@@ -125,7 +125,7 @@ run is submitted.
 
 Agent Studio uses a version-specific catalog of public USD token rates. Catalog
 updates are reviewed in pull requests and shipped in app releases; the running
-app does **not** refresh prices automatically. The current catalog was verified October 7, 2026.
+app does **not** refresh prices automatically. The current catalog was verified October 10, 2026.
 The run's **Pricing** row links to the provider's source and shows the verification
 date and base input/output rates per million tokens.
 
@@ -144,10 +144,19 @@ a family price. Missing usage can also prevent an estimate.
 
 Cache reads and writes use model-specific rates. Cache writes assume the default
 five-minute lifetime; one-hour cache writes are not separately reported by the
-runner. GPT-5.4/5.5 and Haiku 5.5 prompt-length tiers are calculated per request,
+runner. GPT-5.4/5.5, GPT-5.6 Sol/Terra/Luna, GPT-6 Astra/Sol/Luna,
+GPT-6.1 Sol, and Haiku 5.5 prompt-length tiers are calculated per request,
 including cached input, not from the sum of an entire run. If a tiered model's
 request usage is incomplete (for example after resuming an older checkpoint),
 the total is unavailable rather than guessed.
+
+The October 10 review separates Sonnet 5.5's cache-read price ($0.10 per
+million tokens) from Sonnet 5's unchanged $0.20 rate. New OpenAI GPT-5.6/6
+entries include cache-write prices, and requests above 272,000 prompt tokens
+use their documented long-context input, output, and cache rates. Exact
+GPT-5.4/5.5 snapshot IDs share their documented alias rates; unverified
+variants remain unpriced. See [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing)
+and [OpenAI pricing](https://developers.openai.com/api/docs/pricing).
 
 These are standard token-price estimates, not invoices. They exclude provider
 tool fees, regional or service-tier premiums, batch discounts, and negotiated
