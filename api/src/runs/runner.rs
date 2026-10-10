@@ -1532,7 +1532,7 @@ mod pricing_integration_tests {
             assert_eq!(row.1, expected);
             assert_eq!(row.2.is_some(), expected.is_some());
             if let Some(snapshot) = row.2 {
-                assert_eq!(snapshot["verifiedOn"], "2026-10-07");
+                assert_eq!(snapshot["verifiedOn"], "2026-10-10");
                 assert!(snapshot["rate"]["input"].is_number());
             }
         }
