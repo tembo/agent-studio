@@ -206,6 +206,7 @@ mod tests {
     #[test]
     fn snapshot_survives_round_trip_and_catalog_changes() {
         let mut pricing = lookup_pricing("anthropic:claude-sonnet-5").unwrap();
+        pricing.verified_on = "2026-10-07".into();
         pricing.rate.base.input = 99.0;
         let json = serde_json::to_value(&pricing).unwrap();
         assert_eq!(json["verifiedOn"], "2026-10-07");
@@ -223,6 +224,28 @@ mod tests {
                 .unwrap()
                 .run_cost(tokens, &[]),
             Some(2.0)
+        );
+    }
+
+    #[test]
+    fn saved_sonnet_5_5_cache_rate_is_not_repriced() {
+        let mut historical = lookup_pricing("anthropic:claude-sonnet-5-5").unwrap();
+        historical.verified_on = "2026-10-07".into();
+        historical.rate.base.cache_read = Some(0.2);
+        let saved: PricingSnapshot =
+            serde_json::from_value(serde_json::to_value(historical).unwrap()).unwrap();
+        let tokens = Tokens {
+            input: 0,
+            output: 0,
+            cache_read: 1_000_000,
+            cache_write: 0,
+        };
+        assert_eq!(saved.run_cost(tokens, &[]), Some(0.2));
+        assert_eq!(
+            lookup_pricing("anthropic:claude-sonnet-5-5")
+                .unwrap()
+                .run_cost(tokens, &[]),
+            Some(0.1)
         );
     }
 

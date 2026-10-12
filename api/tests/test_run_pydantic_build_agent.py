@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic_ai import Agent, ModelMessagesTypeAdapter
@@ -505,3 +506,69 @@ def test_build_agent_preserves_explicit_effort(model, setting, effort) -> None:
     })
     assert agent.model_settings[setting] == effort
     assert agent.model_settings["max_tokens"] == 4096
+
+
+MODEL_CAPABILITIES = json.loads(
+    (Path(__file__).resolve().parents[1] / "src/model-capabilities.json").read_text()
+)
+REVIEWED_OPENAI_MODELS = {
+    "openai:gpt-6.1-sol", "openai:gpt-6-sol", "openai:gpt-6-luna",
+    "openai:gpt-5.6-sol", "openai:gpt-5.6-terra", "openai:gpt-5.6-luna",
+    "openai:gpt-5.5-2026-04-23", "openai:gpt-5.4-2026-03-05",
+    "openai:gpt-5.4-mini-2026-03-17", "openai:gpt-5.4-nano-2026-03-17",
+}
+REVIEWED_EFFORT_CASES = [
+    (model, effort)
+    for row in MODEL_CAPABILITIES["effort"]
+    for model in row["models"]
+    if model in REVIEWED_OPENAI_MODELS
+    for effort in [None, *row["levels"]]
+] + [("openai:gpt-6-astra", effort) for effort in [None, "low", "medium", "high", "xhigh", "max"]]
+
+
+@pytest.mark.parametrize("model,effort", REVIEWED_EFFORT_CASES)
+def test_reviewed_models_send_effort_tools_and_cache_usage_through_responses(model, effort, monkeypatch) -> None:
+    from openai.types.responses import Response
+    from pydantic_ai.models.openai import OpenAIResponsesModel
+
+    settings = {} if effort is None else {"openai_reasoning_effort": effort}
+    agent = run_pydantic.build_agent({
+        "model": model, "instructions": "Reply briefly.", "model_settings": settings,
+    })
+    assert isinstance(agent.model, OpenAIResponsesModel)
+
+    @agent.tool_plain
+    def available_tool() -> str:
+        return "available"
+
+    response = Response.model_validate({
+        "id": "resp_catalog", "object": "response", "created_at": 0,
+        "model": model.split(":", 1)[1], "status": "completed",
+        "parallel_tool_calls": False, "tool_choice": "auto", "tools": [],
+        "output": [{
+            "type": "message", "id": "msg_catalog", "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": "done", "annotations": []}],
+        }],
+        "usage": {
+            "input_tokens": 272001, "output_tokens": 10000, "total_tokens": 282001,
+            "input_tokens_details": {"cached_tokens": 50000, "cache_write_tokens": 50000},
+            "output_tokens_details": {"reasoning_tokens": 0},
+        },
+    })
+    create = AsyncMock(return_value=response)
+    monkeypatch.setattr(agent.model.client.responses, "create", create)
+    result = asyncio.run(agent.run("Hello"))
+    assert result.output == "done"
+    request = create.call_args.kwargs
+    assert any(tool.get("name") == "available_tool" for tool in request["tools"])
+    if effort is None:
+        assert not isinstance(request.get("reasoning"), dict) or "effort" not in request["reasoning"]
+        assert "openai_reasoning_effort" not in agent.model_settings
+    else:
+        assert request["reasoning"]["effort"] == effort
+        assert agent.model_settings["openai_reasoning_effort"] == effort
+    usage = result.usage
+    assert usage.cache_read_tokens == 50000
+    assert usage.cache_write_tokens == 50000
+    assert run_pydantic._uncached_input(usage) == 172001
