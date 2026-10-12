@@ -188,6 +188,7 @@ this repository; there is no GitHub Actions scheduler. Keep historical run
 snapshots unchanged when updating either catalog.
 
 Run `cargo test pricing` and, against disposable PostgreSQL,
-`PRICING_TEST_DATABASE_URL=postgres://… cargo test completion_saves_cost -- --ignored`
-to check the real completion write and additive migration. The integration test
-uses a temporary table and makes no model calls.
+`PRICING_TEST_DATABASE_URL=postgres://… TAS_ENCRYPTION_KEY=<base64-32-byte-key> cargo test pricing_integration_tests -- --ignored`
+to check completion writes, additive migrations, and run-detail reads before and
+after a cost is saved. These tests use temporary tables with the migration-defined
+NUMERIC cost column and make no model calls. CI runs them against PostgreSQL.

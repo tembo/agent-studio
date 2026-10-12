@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-10-07",
+  "verifiedOn": "2026-10-10",
   "effort": [
     {
       "models": [
@@ -125,8 +125,51 @@
       "source": "https://platform.claude.com/docs/en/build-with-claude/effort"
     },
     {
+      "models": ["openai:gpt-6.1-sol"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+    },
+    {
+      "models": ["openai:gpt-6-sol"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-sol"
+    },
+    {
+      "models": ["openai:gpt-6-luna"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6-luna"
+    },
+    {
+      "models": ["openai:gpt-5.6-sol"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-sol"
+    },
+    {
+      "models": ["openai:gpt-5.6-terra"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-terra"
+    },
+    {
+      "models": ["openai:gpt-5.6-luna"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-5.6-luna"
+    },
+    {
       "models": [
-        "openai:gpt-5.5"
+        "openai:gpt-5.5",
+        "openai:gpt-5.5-2026-04-23"
       ],
       "setting": "openai_reasoning_effort",
       "levels": [
@@ -141,7 +184,8 @@
     },
     {
       "models": [
-        "openai:gpt-5.4"
+        "openai:gpt-5.4",
+        "openai:gpt-5.4-2026-03-05"
       ],
       "setting": "openai_reasoning_effort",
       "levels": [
@@ -156,7 +200,8 @@
     },
     {
       "models": [
-        "openai:gpt-5.4-mini"
+        "openai:gpt-5.4-mini",
+        "openai:gpt-5.4-mini-2026-03-17"
       ],
       "setting": "openai_reasoning_effort",
       "levels": [
@@ -171,7 +216,8 @@
     },
     {
       "models": [
-        "openai:gpt-5.4-nano"
+        "openai:gpt-5.4-nano",
+        "openai:gpt-5.4-nano-2026-03-17"
       ],
       "setting": "openai_reasoning_effort",
       "levels": [

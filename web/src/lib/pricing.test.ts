@@ -25,6 +25,13 @@ describe("model pricing", () => {
     expect(estimateRequestCost(saved, 1_000_000, 0)?.total).toBe(99);
     expect(estimateRequestCost(lookupPricing("anthropic:claude-sonnet-5"), 1_000_000, 0)?.total).toBe(2);
   });
+  it("preserves the historical Sonnet 5.5 cache rate in saved snapshots", () => {
+    const saved = structuredClone(lookupPricing("anthropic:claude-sonnet-5-5")!);
+    saved.verifiedOn = "2026-10-07";
+    saved.rate.cacheRead = 0.2;
+    expect(estimateRequestCost(saved, 0, 0, 1_000_000)?.total).toBe(0.2);
+    expect(estimateRequestCost(lookupPricing("anthropic:claude-sonnet-5-5"), 0, 0, 1_000_000)?.total).toBe(0.1);
+  });
   it("rejects non-finite token counts", () => {
     expect(estimateRequestCost(lookupPricing("anthropic:claude-sonnet-5"), NaN, 0)).toBeNull();
   });

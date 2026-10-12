@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound } from "next/navigation";
 
+import { getWorkspaceRole } from "@/lib/workspace";
 import { startEvalRun } from "@/lib/agent-evals-run";
 import {
   authorizeWorkspace,
@@ -20,6 +21,7 @@ export async function runAgentEvalsAction(
 ): Promise<RunEvalsFormState> {
   const slug = String(formData.get("workspace") ?? "");
   const agentName = String(formData.get("agent") ?? "");
+  const runAsRaw = String(formData.get("run_as") ?? "").trim();
   const version = String(formData.get("version") ?? "") === "stable"
     ? "stable"
     : "draft";
@@ -30,9 +32,21 @@ export async function runAgentEvalsAction(
     notFound();
   }
 
+  let runAsUserId = auth.userId;
+  if (runAsRaw && runAsRaw !== auth.userId) {
+    if (auth.role !== "workspace_admin") {
+      return { error: "Only workspace admins can run as another member." };
+    }
+    if (!(await getWorkspaceRole(auth.workspace.id, runAsRaw))) {
+      return { error: "That user isn't a member of this workspace." };
+    }
+    runAsUserId = runAsRaw;
+  }
+
   const result = await startEvalRun({
     workspaceId: auth.workspace.id,
     userId: auth.userId,
+    runAsUserId,
     agent: agentName,
     version,
     source: "manual",

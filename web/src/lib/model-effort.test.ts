@@ -36,6 +36,27 @@ describe("effort catalog", () => {
     expect(haiku?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
     expect(haiku?.default).toBe("medium");
   });
+  it.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("verifies exact effort levels and defaults for %s", (model) => {
+    const support = effortSupport(`openai:${model}`);
+    const levels = ["low", "medium", "high", "xhigh", "max"];
+    expect(support?.levels).toEqual(model === "gpt-6.1-sol" ? levels : ["none", ...levels]);
+    expect(support?.default).toBe("medium");
+    expect(support?.setting).toBe("openai_reasoning_effort");
+    expect(() => setModelEffort(JSON.stringify({ model: `openai:${model}`, instructions: "Hello" }), "json", "minimal")).toThrow(/not supported/);
+  });
+  it.each([
+    ["gpt-5.5", "gpt-5.5-2026-04-23"],
+    ["gpt-5.4", "gpt-5.4-2026-03-05"],
+    ["gpt-5.4-mini", "gpt-5.4-mini-2026-03-17"],
+    ["gpt-5.4-nano", "gpt-5.4-nano-2026-03-17"],
+  ])("uses the same verified effort options for %s and %s", (alias, snapshot) => {
+    expect(effortSupport(`openai:${snapshot}`)).toEqual(effortSupport(`openai:${alias}`));
+  });
+  it("does not guess Astra's undocumented provider default or future aliases", () => {
+    expect(effortSupport("openai:gpt-6-astra")).toBeNull();
+    expect(effortSupport("openai:gpt-6.1-sol-preview")).toBeNull();
+    expect(() => setModelEffort('{"model":"openai:gpt-6.1-sol","instructions":"Hello"}', "json", "none")).toThrow(/not supported/);
+  });
 });
 
 describe("effort edits", () => {
@@ -61,6 +82,12 @@ describe("effort edits", () => {
     const spec = { model: "openai:gpt-5.5", instructions: "Hello", model_settings: { openai_reasoning_effort: "none" } };
     expect(effortLabel(spec)).toBe("None");
     expect(effortLabel({ model: spec.model })).toBe("Provider default (Medium)");
+  });
+  it("preserves a previously authored unsupported effort on a newly cataloged model", () => {
+    const spec = { model: "openai:gpt-6.1-sol", instructions: "Hello", model_settings: { openai_reasoning_effort: "none", temperature: 0.2 } };
+    expect(readModelEffort(spec).custom).toBe(true);
+    expect(() => setModelEffort(JSON.stringify(spec), "json", "medium")).toThrow(/custom thinking/);
+    expect(spec.model_settings.openai_reasoning_effort).toBe("none");
   });
   it("can add settings when no map exists", () => {
     expect(YAML.parse(setModelEffort("name: example-agent\nmodel: anthropic:claude-sonnet-5\ninstructions: Hello\n", "yaml", "high")).model_settings).toEqual({ anthropic_effort: "high" });

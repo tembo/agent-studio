@@ -13,6 +13,17 @@ text while troubleshooting. This includes viewers and operators.
 
 ## Common issues
 
+**Run details fail to load / `get_run` says "Could not reach the run service".**
+This message can also mean the API returned a server error, not just a network
+outage. In v2026.10.9 and v2026.10.10, reading a run with a saved cost can fail
+because of a database type mismatch. Polling can work while the run is active
+and fail immediately after it completes. Upgrade to a release containing the
+[run-cost read fix](https://github.com/tembo/agent-studio/issues/599).
+Increasing the agent's `retries` does not resolve this error. After upgrading,
+check the sub-agent's saved output before rerunning work that sends messages or
+makes other external changes. If the problem persists, ask an administrator to
+check API logs for `failed to read run` and the affected run ID.
+
 **"Memory report was not queued" / a Memory write shows Failed.**
 The run's Memory warning includes a safe reason code and an action to take:
 
