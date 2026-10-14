@@ -16,9 +16,12 @@ function checkChange(files, body = "") {
     && file.status !== "removed" && file.additions > 0)) {
     return "CHANGELOG.md updated.";
   }
-  // Ignore the template's commented example; only an explicit explanation counts.
-  const visibleBody = (body || "").replace(/<!--[\s\S]*?-->/g, "");
-  const exemption = visibleBody.match(/^Changelog: not needed — (\S[^\r\n]*)$/m)?.[1]?.trim();
+  // Inspect non-comment segments separately: removing comments could join text
+  // into an exemption that was never written. Unclosed comments hide the rest.
+  const exemption = (body || "")
+    .split(/<!--[\s\S]*?(?:-->|$)/)
+    .map((segment) => segment.match(/^Changelog: not needed — (\S[^\r\n]*)$/m)?.[1]?.trim())
+    .find(Boolean);
   if (exemption) return `Changelog exemption: ${exemption}`;
   throw new Error("Product changes need an entry in CHANGELOG.md under Unreleased. "
     + "For changes with no user-visible impact, explain why in the PR body: "

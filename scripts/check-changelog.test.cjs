@@ -48,6 +48,17 @@ test("exemptions require a visible, nonempty explanation", () => {
   }
 });
 
+test("comments cannot assemble an exemption or expose an unterminated example", () => {
+  for (const body of [
+    "Changelog: not <!-- template -->needed — Internal refactor.",
+    `<!-- Unfinished template\n${reason}`,
+    `<!-- Closed example: ${reason} -->\n<!--\n${reason}`,
+  ]) {
+    assert.throws(() => checkChange([product], body), /need an entry/);
+  }
+  assert.match(checkChange([product], `<!-- Template -->\n${reason}\n<!-- Notes -->`), /Internal refactor/);
+});
+
 function fixture(prs, files) {
   const messages = [];
   const checked = [];
