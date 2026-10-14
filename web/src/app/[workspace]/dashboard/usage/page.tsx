@@ -54,9 +54,9 @@ export default async function UsagePage({ params, searchParams }: {
         </label>
         {(["user", "agent", "automation", "trigger", "kind"] as const).map((name) =>
           filters[name] ? <input key={name} type="hidden" name={name} value={filters[name]} /> : null)}
-        <Button type="submit" variant="secondary">Apply</Button>
-        <Link href={`/${slug}/dashboard/usage`} className="text-sm underline">Last 30 days</Link>
-        <span className="text-foreground-weak pb-1 text-xs">Eastern time · inclusive dates</span>
+        <Button type="submit" variant="secondary" className="h-8">Apply</Button>
+        <Link href={`/${slug}/dashboard/usage`} className="inline-flex h-8 items-center text-sm underline">Last 30 days</Link>
+        <span className="text-foreground-weak inline-flex h-8 items-center text-xs">Eastern time · inclusive dates</span>
       </form>
       {filtered && <div className="border-border bg-surface rounded-lg border p-3 text-sm">
         Showing a selected {filters.group === "users" ? "member" : "agent / automation"} and its matching runs.
