@@ -23,6 +23,52 @@ configuration and health details. Tool usage shows the five most-used tools and
 the total tool and call counts; expand the remainder to browse it in a bounded,
 scrollable list.
 
+### Usage report (workspace admins)
+
+Open **Dashboard → Usage report** to investigate estimated spend. It defaults to
+30 calendar days, including today, in **America/New_York (Eastern time)**. Choose
+inclusive From/Through dates (up to 366 days) and group by:
+
+- **Agent and trigger:** combines an agent's spend across run-as users, making
+  unexpectedly frequent shared agents visible. Sub-agent executions have their
+  own rows.
+- **Automation:** groups saved schedules across users, with the agent and
+  stored trigger type. Runs without a retained schedule reference appear under
+  **Unavailable automation** or **No saved automation**; this includes event
+  sources and sub-runs whose initiating automation was not recorded.
+- **Run-as user:** attributes usage to the identity that executed each run,
+  independently of agent ownership.
+
+Rows show run counts, known estimated spend, average cost per priced run, missing
+cost counts, and the development/exempt/unclassified spend split. Select a row
+to filter daily activity and individual runs; select a day to narrow the period,
+and follow a run link for its details. Runs are paginated 50 at a time. The
+breakdown shows the 100 highest-spend groups, while totals and daily activity
+include all matching runs. Date and grouping changes preserve a selected filter;
+**Clear selection** removes it, and **Last 30 days** resets the report.
+
+This report includes all statuses, dry runs, and eval-triggered agent executions.
+It uses each run's start time (creation time until it starts), with Eastern day
+boundaries, including daylight saving changes. Sub-agent costs are counted once,
+separately from the parent's own model cost. Reused outputs add zero cost rather
+than charging their producer again.
+
+**Missing estimates are not free runs.** Known spend sums only saved estimates;
+averages divide by the number of priced runs, including actual zero costs. Failed
+or unfinished work can have no saved cost. Separate eval judge calls, external
+tool fees, and other costs not stored on a run are not included. These figures
+are estimates, not provider invoices, and historical prices are not rewritten.
+
+The spend split is independent of the dashboard's environment tabs. An agent
+promoted before a run was admitted is **exempt**, including subsequent draft
+runs. Earlier development spend stays **development** after promotion. Each
+sub-agent is classified independently. Legacy runs without sufficient version
+or promotion history are **unclassified**. A category with no runs shows zero;
+when runs exist but none have an estimate, its spend is **Unavailable**.
+
+This is a reporting milestone toward per-member spend controls. It does **not**
+set or enforce caps, block runs, or send spending alerts.
+
 ### Team (workspace admins)
 
 Below the headline tiles, the **Team** section lists every workspace member with
