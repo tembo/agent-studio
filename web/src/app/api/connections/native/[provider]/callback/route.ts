@@ -11,7 +11,7 @@ import {
   type McpProviderSlug,
 } from "@/lib/mcp-providers";
 import {
-  noRedirectFetchInit,
+  fetchOAuthEndpoint,
   trustedOAuthUrl,
 } from "@/lib/native-oauth-security";
 import { getNativeOAuthClientSecret } from "@/lib/native-oauth-clients";
@@ -212,11 +212,16 @@ export async function GET(
       Buffer.from(`${state.clientId}:${confidentialSecret}`).toString("base64");
   }
   try {
-    const tokenRes = await fetch(tokenEndpoint, noRedirectFetchInit({
-      method: "POST",
-      headers: tokenHeaders,
-      body: new URLSearchParams(tokenParams).toString(),
-    }));
+    const tokenRes = await fetchOAuthEndpoint(
+      tokenEndpoint,
+      allowedOauthOrigins,
+      "Token endpoint",
+      {
+        method: "POST",
+        headers: tokenHeaders,
+        body: new URLSearchParams(tokenParams).toString(),
+      },
+    );
     if (!tokenRes.ok) {
       const body = await tokenRes.text().catch(() => "");
       return back(
@@ -320,6 +325,13 @@ export async function GET(
     const tools = await fetchNativeMcpTools(
       mcpServerUrl,
       tokenJson.access_token,
+      (url, init) =>
+        fetchOAuthEndpoint(
+          url,
+          [new URL(mcpServerUrl).origin],
+          "MCP tools endpoint",
+          init,
+        ),
     );
     await replaceToolsForConnection({
       workspaceId: state.workspaceId,

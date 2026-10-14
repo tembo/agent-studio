@@ -15,6 +15,10 @@ export type OutputReuseOptions = z.infer<typeof outputReuseSchema>;
 
 // Hash metadata only, never credential values. Any local connection/secret or
 // membership change invalidates prior results, even if the user ID is unchanged.
+// This is a deterministic cache/content fingerprint, not password storage:
+// ctx contains IDs/roles/scope names, and SQL selects only metadata. SHA-256 is
+// intentional here: a password KDF adds no protection to a cache key, and
+// random salts would prevent matching previously computed keys.
 export async function buildOutputReuseKey(
   ctx: AuthorizeApiSuccess,
   dispatch: ResolvedDispatch,

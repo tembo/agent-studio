@@ -1,7 +1,8 @@
 import "server-only";
 
 import { lookup } from "node:dns/promises";
-import { BlockList, isIP } from "node:net";
+import { BlockList, isIP, type LookupFunction } from "node:net";
+import { Agent } from "undici";
 
 const privateIpBlocks = new BlockList();
 
@@ -23,7 +24,11 @@ privateIpBlocks.addAddress("255.255.255.255", "ipv4");
 
 privateIpBlocks.addAddress("::", "ipv6");
 privateIpBlocks.addAddress("::1", "ipv6");
+// Translation/tunnel ranges can encode an otherwise blocked IPv4 target.
+privateIpBlocks.addSubnet("64:ff9b::", 96, "ipv6");
 privateIpBlocks.addSubnet("64:ff9b:1::", 48, "ipv6");
+privateIpBlocks.addSubnet("2002::", 16, "ipv6");
+privateIpBlocks.addSubnet("::", 96, "ipv6");
 privateIpBlocks.addSubnet("100::", 64, "ipv6");
 privateIpBlocks.addSubnet("2001::", 23, "ipv6");
 privateIpBlocks.addSubnet("2001:2::", 48, "ipv6");
@@ -144,9 +149,69 @@ export async function trustedOAuthUrl(
   return url;
 }
 
-export function noRedirectFetchInit(init?: RequestInit): RequestInit {
-  return {
+// Validate the answers used by the socket itself, not only an earlier lookup.
+// Returning these exact records prevents a second DNS lookup/rebinding between
+// validation and connect while retaining hostname-based TLS/SNI verification.
+const publicLookup: LookupFunction = (hostname, options, callback) => {
+  void lookup(hostname, { all: true, verbatim: true }).then(
+    (records) => {
+      if (
+        !records.length ||
+        records.some((record) => !isPublicIpAddress(record.address))
+      ) {
+        callback(
+          new Error("OAuth endpoint resolves to a non-public IP address."),
+          "",
+        );
+        return;
+      }
+      const family =
+        options.family === "IPv4"
+          ? 4
+          : options.family === "IPv6"
+            ? 6
+            : options.family;
+      const matching = family
+        ? records.filter((record) => record.family === family)
+        : records;
+      if (!matching.length) {
+        callback(
+          new Error(
+            "OAuth endpoint has no addresses for the requested family.",
+          ),
+          "",
+        );
+      } else if (options.all) {
+        callback(null, matching);
+      } else {
+        callback(null, matching[0].address, matching[0].family);
+      }
+    },
+    (error: Error) => callback(error, ""),
+  );
+};
+
+const publicDispatcher = new Agent({
+  connect: { lookup: publicLookup, timeout: 10_000 },
+});
+
+/** Server-side OAuth requests must use this transport, including discovery
+ *  and DCR. Callers cannot override the dispatcher, follow redirects, or use
+ *  a proxy that resolves the destination outside the checked DNS lookup. */
+export async function fetchOAuthEndpoint(
+  rawUrl: string | URL,
+  allowedOrigins: string[],
+  label: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const url = await trustedOAuthUrl(String(rawUrl), allowedOrigins, label);
+  const timeout = AbortSignal.timeout(30_000);
+  const requestInit: RequestInit & { dispatcher: Agent } = {
     ...init,
+    dispatcher: publicDispatcher,
     redirect: "manual",
+    cache: "no-store",
+    signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
   };
+  return fetch(url, requestInit);
 }

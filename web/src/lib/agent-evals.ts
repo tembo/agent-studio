@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import YAML from "yaml";
+import { RE2JS } from "re2js";
 
 // Sidecar eval suites live next to the agent spec as `<name>.eval.yaml`.
 // They are not agent files — listAgents must skip them.
@@ -9,6 +10,15 @@ const MAX_CASES = 20;
 const MAX_NAME = 80;
 const MAX_INPUT = 8000;
 const MAX_RUBRIC = 4000;
+const MAX_REGEX = 2000;
+
+function compileEvalRegex(pattern: string): RE2JS {
+  if (pattern.length > MAX_REGEX) {
+    throw new Error(`Regex patterns must be at most ${MAX_REGEX} characters.`);
+  }
+  // RE2 avoids backtracking on patterns supplied in eval files/API requests.
+  return RE2JS.compile(pattern);
+}
 
 export function isEvalSidecarFilename(filename: string): boolean {
   return EVAL_SIDECAR_RE.test(filename);
@@ -57,9 +67,7 @@ export type ParseEvalResult =
   | { ok: true; suite: EvalSuite; format: "yaml" | "json" }
   | { ok: false; error: ParseEvalError; detail: string };
 
-export function detectEvalFormat(
-  filename: string,
-): "yaml" | "json" | null {
+export function detectEvalFormat(filename: string): "yaml" | "json" | null {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".yaml") || lower.endsWith(".yml")) return "yaml";
   if (lower.endsWith(".json")) return "json";
@@ -81,7 +89,11 @@ export function parseEvalContent(
     };
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    return { ok: false, error: "not-an-object", detail: "Eval file must be an object." };
+    return {
+      ok: false,
+      error: "not-an-object",
+      detail: "Eval file must be an object.",
+    };
   }
   const obj = parsed as Record<string, unknown>;
   if (!Array.isArray(obj.cases)) {
@@ -125,7 +137,10 @@ export function parseEvalContent(
   return { ok: true, suite: { cases }, format };
 }
 
-export function parseEvalFile(filename: string, content: string): ParseEvalResult {
+export function parseEvalFile(
+  filename: string,
+  content: string,
+): ParseEvalResult {
   const format = detectEvalFormat(filename);
   if (!format) {
     return {
@@ -245,12 +260,12 @@ function parseAssert(raw: unknown, prefix: string): ParseAssertResult {
       };
     }
     try {
-      new RegExp(obj.regex);
+      compileEvalRegex(obj.regex);
     } catch {
       return {
         ok: false,
         error: "invalid-case",
-        detail: `${prefix}.assert.regex is not a valid regular expression.`,
+        detail: `${prefix}.assert.regex must be an RE2-compatible expression of at most ${MAX_REGEX} characters (no lookaround or backreferences).`,
       };
     }
     result.regex = obj.regex;
@@ -390,8 +405,14 @@ export function scoreAssert(
     }
   }
   if (assert.regex) {
-    if (!new RegExp(assert.regex).test(output)) {
-      reasons.push(`did not match /${assert.regex}/`);
+    try {
+      if (!compileEvalRegex(assert.regex).test(output)) {
+        reasons.push(`did not match /${assert.regex}/`);
+      }
+    } catch {
+      reasons.push(
+        "regex is invalid, unsupported by RE2, or exceeds the pattern limit",
+      );
     }
   }
   if (assert.equals !== undefined) {

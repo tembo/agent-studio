@@ -43,6 +43,15 @@ automatically: each account owner must reconnect using their own browser
 session. Deploy the updated web app **and API** to enforce this everywhere.
 :::
 
+## OAuth endpoint security
+
+Native OAuth discovery, client registration, token exchange, and the initial
+tool-list request require HTTPS endpoints on the allowed provider origins (or
+the same origin as a self-hosted instance). These requests do not follow HTTP
+redirects. DNS answers are checked again at connection time, and private,
+loopback, link-local, and address-translation targets are rejected. A hostname
+that changes to a private address during authorization will fail the connection.
+
 ## Three substrates
 
 | Substrate      | When to pick it                                                                                                |

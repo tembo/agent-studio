@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { FetchLike } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
@@ -35,8 +36,10 @@ export type FetchedMcpTool = {
 export async function fetchNativeMcpTools(
   serverUrl: string,
   accessToken: string,
+  fetchImplementation?: FetchLike,
 ): Promise<FetchedMcpTool[]> {
   const transport = new StreamableHTTPClientTransport(new URL(serverUrl), {
+    fetch: fetchImplementation,
     requestInit: {
       headers: { Authorization: `Bearer ${accessToken}` },
     },
