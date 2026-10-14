@@ -1,8 +1,11 @@
 // Bundle the published user-manual markdown (docs/src/content/docs/*.md) into a
 // TS module the web app imports, so the in-app docs viewer ships the SAME
 // content tied to the running version — no network, no drift. Re-run after
-// editing the docs: `pnpm gen:docs` (also wired into prebuild). The source of
+// editing the docs: `pnpm gen:docs` (required by CI before deployment). The source of
 // truth stays the markdown files; this is a generated artifact.
+
+// Keep the public project pages and in-app bundle in sync in one command.
+import "../../docs/gen-project-pages.mjs";
 
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

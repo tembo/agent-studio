@@ -42,9 +42,11 @@ has landed. Verify the chosen commit contains both intended defaults with:
 git show "$RELEASE_SHA:compose.release.yaml" | rg 'image:.*tas-'
 ```
 
-Update release documentation as appropriate. If editing the user manual under
-`docs/src/content/docs/`, run `pnpm --dir web gen:docs` and include the generated
-bundle. Keep applied migrations unchanged.
+Before tagging, move shipped entries from `[Unreleased]` in root `CHANGELOG.md`
+to a dated version section and reconcile them against the merged PRs since the
+previous release. GitHub release notes alone do not update the in-app changelog.
+Run `pnpm --dir web gen:docs` and commit the generated public project pages and
+in-app bundle alongside the root changelog. Keep applied migrations unchanged.
 
 ## Build first, announce second
 

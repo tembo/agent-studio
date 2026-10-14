@@ -1,8 +1,8 @@
 // Generate the Changelog + Roadmap doc pages from the canonical root files
 // (CHANGELOG.md / ROADMAP.md) so the published site stays in sync with them.
-// Runs as the docs `prebuild`; the in-app docs viewer reads the root files
-// directly, so this only serves the public Starlight site. Re-run after editing
-// CHANGELOG.md / ROADMAP.md: `node gen-project-pages.mjs`.
+// Runs as the docs `prebuild` and as part of `pnpm --dir web gen:docs`.
+// The in-app viewer ships the generated web/src/lib/docs-content.ts bundle;
+// regenerate both copies after editing CHANGELOG.md / ROADMAP.md.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
