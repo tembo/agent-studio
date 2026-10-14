@@ -47,6 +47,9 @@ breakdown shows the 100 highest-spend groups, while totals and daily activity
 include all matching runs. Date and grouping changes preserve a selected filter;
 **Clear selection** removes it, and **Last 30 days** resets the report.
 
+All report currency amounts display rounded to the nearest cent with two decimal
+places. Totals and averages use the full saved precision before display rounding.
+
 This report includes all statuses, dry runs, and eval-triggered agent executions.
 It uses each run's start time (creation time until it starts), with Eastern day
 boundaries, including daylight saving changes. Sub-agent costs are counted once,

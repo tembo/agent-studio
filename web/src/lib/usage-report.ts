@@ -57,8 +57,7 @@ export function usageHref(slug: string, filters: UsageFilters, changes: Partial<
 }
 
 export function usageMoney(value: number | null): string {
-  if (value !== null && value > 0 && value < 0.0001) return "<$0.0001";
   return value === null ? "Unavailable" : new Intl.NumberFormat("en-US", {
-    style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 4,
+    style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(value);
 }

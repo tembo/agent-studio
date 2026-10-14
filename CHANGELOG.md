@@ -32,6 +32,8 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Usage report currency formatting.** Round all displayed costs, totals, and
+  averages to the nearest cent with two decimal places.
 - **Safer eval expressions and native OAuth connections.** Eval regexes use
   bounded execution; OAuth discovery and token requests reject unsafe targets
   and unexpected redirects. Updated vulnerable dependencies and added a web
