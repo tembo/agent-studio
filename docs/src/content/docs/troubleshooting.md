@@ -13,6 +13,14 @@ text while troubleshooting. This includes viewers and operators.
 
 ## Common issues
 
+**The web container is marked unhealthy.**
+The Docker image checks its local HTTP server every 30 seconds, with a
+30-second startup grace period. Three consecutive failures mark it unhealthy.
+Check the web container logs and its `PORT` setting. The probe requests the
+public `/favicon.ico` asset; it checks HTTP liveness without requiring a login
+or a database connection. A healthy result does not verify database or API
+availability.
+
 **Run details fail to load / `get_run` says "Could not reach the run service".**
 This message can also mean the API returned a server error, not just a network
 outage. In v2026.10.9 and v2026.10.10, reading a run with a saved cost can fail

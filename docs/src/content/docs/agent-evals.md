@@ -53,9 +53,15 @@ All listed checks must pass (case-insensitive for substring matches):
 | --- | --- |
 | `contains` | Output includes every string (string or list) |
 | `not_contains` | Output includes none of the strings |
-| `regex` | Output matches the JavaScript regular expression |
+| `regex` | Output matches an RE2-compatible regular expression |
 | `equals` | Trimmed output equals the expected string |
 | `max_chars` | Output length is at most this integer |
+
+Regex assertions use a linear-time engine so an eval pattern cannot cause
+catastrophic backtracking. Patterns are limited to 2,000 characters. Lookahead,
+lookbehind, and backreferences are unsupported and rejected when saving or
+running a suite. Matching is case-sensitive and searches anywhere in the output;
+use `^` and `$` to anchor a match.
 
 A failed agent run (the case never produced output) also fails the gate.
 

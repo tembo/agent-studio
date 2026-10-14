@@ -18,7 +18,9 @@ describe("eval sidecar filenames", () => {
   });
 
   it("maps an agent path to sidecar candidates", () => {
-    expect(evalSidecarCandidates("agents/pydantic-agentspec/hello-world.yaml")).toEqual([
+    expect(
+      evalSidecarCandidates("agents/pydantic-agentspec/hello-world.yaml"),
+    ).toEqual([
       "agents/pydantic-agentspec/hello-world.eval.yaml",
       "agents/pydantic-agentspec/hello-world.eval.yml",
       "agents/pydantic-agentspec/hello-world.eval.json",
@@ -108,6 +110,40 @@ describe("parseEvalContent", () => {
 });
 
 describe("scoreAssert", () => {
+  it("handles catastrophic-backtracking patterns without blocking", () => {
+    expect(
+      scoreAssert("a".repeat(100_000) + "!", { regex: "^(a+)+$" }).passed,
+    ).toBe(false);
+    expect(
+      scoreAssert("a".repeat(100_000) + "!", { regex: "(a|aa)+$" }).passed,
+    ).toBe(false);
+  });
+
+  it.each(["(?=x)x", "(?<=x)y", "(x)\\1", "(", "a".repeat(2001)])(
+    "rejects unsupported or oversized patterns: %.30s",
+    (regex) => {
+      const parsed = parseEvalContent(
+        JSON.stringify({
+          cases: [{ name: "invalid", input: "x", assert: { regex } }],
+        }),
+        "json",
+      );
+      expect(parsed).toMatchObject({ ok: false, error: "invalid-case" });
+      // Old queued suites can reach the scorer without being reparsed.
+      expect(scoreAssert("xx", { regex }).passed).toBe(false);
+    },
+  );
+
+  it("retains search, anchor, and character-class semantics", () => {
+    expect(
+      scoreAssert("prefix status: 123 suffix", { regex: "status:\\s+\\d+" })
+        .passed,
+    ).toBe(true);
+    expect(
+      scoreAssert("prefix status: 123", { regex: "^status:" }).passed,
+    ).toBe(false);
+    expect(scoreAssert("Hello", { regex: "hello" }).passed).toBe(false);
+  });
   it("passes when all checks hold", () => {
     expect(
       scoreAssert("Hello there", {

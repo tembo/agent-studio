@@ -128,22 +128,25 @@ jobs:
       matrix:
         include:
           - instance: dogfood
-            token_secret: RAILWAY_TOKEN
             env_var: RAILWAY_ENVIRONMENT_ID
             api_service_var: RAILWAY_API_SERVICE_ID
             web_service_var: RAILWAY_WEB_SERVICE_ID
           - instance: faust
-            token_secret: RAILWAY_TOKEN_FAUST
             env_var: RAILWAY_FAUST_ENVIRONMENT_ID
             api_service_var: RAILWAY_FAUST_API_SERVICE_ID
             web_service_var: RAILWAY_FAUST_WEB_SERVICE_ID
           - instance: fireroad
-            token_secret: RAILWAY_TOKEN_FIREROAD
             env_var: RAILWAY_FIREROAD_ENVIRONMENT_ID
             api_service_var: RAILWAY_FIREROAD_API_SERVICE_ID
             web_service_var: RAILWAY_FIREROAD_WEB_SERVICE_ID
     env:
-      RAILWAY_TOKEN: ${{ secrets[matrix.token_secret] }}
+      # Explicit references avoid sending the entire secrets context to runners.
+      # Each condition includes its instance so a missing token cannot fall
+      # through to another customer's credentials.
+      RAILWAY_TOKEN: >-
+        ${{ matrix.instance == 'dogfood' && secrets.RAILWAY_TOKEN ||
+            matrix.instance == 'faust' && secrets.RAILWAY_TOKEN_FAUST ||
+            matrix.instance == 'fireroad' && secrets.RAILWAY_TOKEN_FIREROAD || '' }}
     steps:
       - name: Point ${{ matrix.instance }} at the new digests + deploy
         # Skips cleanly until the instance's token is configured, so

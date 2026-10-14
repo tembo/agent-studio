@@ -6,10 +6,7 @@ import { getPublicOrigin } from "@/lib/config";
 import { createApiKey, deleteApiKey } from "@/lib/api-keys-db";
 import { encryptSecret } from "@/lib/crypto";
 import { aadNativeConnection } from "@/lib/crypto-aad";
-import {
-  getNativeConnection,
-  saveNativeConnection,
-} from "@/lib/connections";
+import { getNativeConnection, saveNativeConnection } from "@/lib/connections";
 import {
   getMcpProvider,
   isInstanceProvider,
@@ -22,7 +19,7 @@ import {
 import { fetchNativeMcpTools } from "@/lib/native-mcp-tools";
 import { replaceToolsForConnection } from "@/lib/mcp-tools";
 import {
-  noRedirectFetchInit,
+  fetchOAuthEndpoint,
   trustedMcpOrigin,
   trustedOAuthUrl,
 } from "@/lib/native-oauth-security";
@@ -214,7 +211,9 @@ export async function GET(
   const instance = connectionName;
   if (!/^[a-z0-9_-]+$/.test(connectionName)) {
     return NextResponse.json(
-      { error: `bad ${isManual ? "app instance" : "connection name"} shape: ${slotRaw}` },
+      {
+        error: `bad ${isManual ? "app instance" : "connection name"} shape: ${slotRaw}`,
+      },
       { status: 400 },
     );
   }
@@ -306,9 +305,11 @@ export async function GET(
   let lastDetail = "";
   for (const prMetaUrl of prCandidates) {
     try {
-      const res = await fetch(
+      const res = await fetchOAuthEndpoint(
         prMetaUrl,
-        noRedirectFetchInit({ headers: { Accept: "application/json" } }),
+        [mcpOrigin],
+        "Protected resource metadata",
+        { headers: { Accept: "application/json" } },
       );
       if (!res.ok) {
         lastDetail = `Couldn't discover ${provider.displayName} MCP auth metadata (${res.status}).`;
@@ -321,7 +322,11 @@ export async function GET(
     }
   }
   if (!prMeta) {
-    return back(workspace.slug, provider.slug, lastDetail || "Discovery failed.");
+    return back(
+      workspace.slug,
+      provider.slug,
+      lastDetail || "Discovery failed.",
+    );
   }
   const authServerUrlRaw = prMeta.authorization_servers?.[0];
   if (!authServerUrlRaw) {
@@ -366,7 +371,9 @@ export async function GET(
       : []),
     `${authServerUrl.origin}/.well-known/openid-configuration`,
     ...(asIssuerPath && asIssuerPath !== "/"
-      ? [`${authServerUrl.href.replace(/\/+$/, "")}/.well-known/openid-configuration`]
+      ? [
+          `${authServerUrl.href.replace(/\/+$/, "")}/.well-known/openid-configuration`,
+        ]
       : []),
     `${mcpOrigin}/.well-known/oauth-authorization-server`,
   ];
@@ -381,9 +388,11 @@ export async function GET(
   let asLastDetail = "";
   for (const asMetaUrl of asUrls) {
     try {
-      const res = await fetch(
+      const res = await fetchOAuthEndpoint(
         asMetaUrl,
-        noRedirectFetchInit({ headers: { Accept: "application/json" } }),
+        [...allowedOauthOrigins, mcpOrigin],
+        "Authorization server metadata",
+        { headers: { Accept: "application/json" } },
       );
       if (!res.ok) {
         asLastDetail = `Couldn't fetch authorization server metadata (${res.status}).`;
@@ -546,9 +555,11 @@ export async function GET(
         );
       }
       try {
-        const dcrRes = await fetch(
+        const dcrRes = await fetchOAuthEndpoint(
           registrationEndpoint,
-          noRedirectFetchInit({
+          allowedOauthOrigins,
+          "Registration endpoint",
+          {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -561,7 +572,7 @@ export async function GET(
               grant_types: ["authorization_code", "refresh_token"],
               response_types: ["code"],
             }),
-          }),
+          },
         );
         if (!dcrRes.ok) {
           const body = await dcrRes.text().catch(() => "");
@@ -623,10 +634,12 @@ export async function GET(
     pkceVerifier,
     clientId,
     tokenEndpoint: tokenEndpoint.toString(),
-    authMode: isManual ? "manual" : confidentialDcr ? "dcr_confidential" : "dcr",
-    ...(isManual
-      ? { instance, tokenEndpointAuthMethod: manualTokenAuth }
-      : {}),
+    authMode: isManual
+      ? "manual"
+      : confidentialDcr
+        ? "dcr_confidential"
+        : "dcr",
+    ...(isManual ? { instance, tokenEndpointAuthMethod: manualTokenAuth } : {}),
     // Instance-based: persist the resolved per-connection URL so the callback
     // stores it (and validates same-origin) — provider.mcpServerUrl is empty.
     ...(isInstanceProvider(provider) ? { mcpServerUrl } : {}),

@@ -5,6 +5,7 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 # `--config.minimum-release-age=0` opts out of pnpm v10's 24h embargo on
 # newly-published dependencies. The committed lockfile pins exact versions;
 # lockfile diffs in PR review are the right place to vet recent packages.
@@ -41,4 +42,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 RUN node -e "require('./node_modules/next/dist/server/require-hook.js')"
 USER nextjs
 EXPOSE 3000
+# Check HTTP liveness without requiring a session or a database connection.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || '3000') + '/favicon.ico', { signal: AbortSignal.timeout(4000), redirect: 'error' }).then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
 CMD ["node", "server.js"]

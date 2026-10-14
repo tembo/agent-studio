@@ -8,6 +8,19 @@ const ctx = { ok: true, apiKeyId: "key", surface: "api", workspace: { id: "works
 const dispatch: ResolvedDispatch = { agentName: "reporter", agentPath: "agents/report.yaml", framework: "pydantic-agentspec", model: "model", specContent: "spec", specFormat: "yaml", versionId: "v1", versionLabel: "v1", connections: [] };
 beforeEach(() => vi.mocked(db.query).mockResolvedValue({ rows: [{ scope: { member: { role: "operator" }, native: ["connection", "timestamp"] } }] } as never));
 describe("output reuse keys", () => {
+  it("does not include credential values or API key IDs in the fingerprint", async () => {
+    const base = await buildOutputReuseKey(ctx, dispatch, "input", "report");
+    const withCredentials = {
+      ...ctx,
+      apiKeyId: "a-different-key",
+      token: "raw-bearer-token",
+      password: "not-a-hash-input",
+      accessToken: "also-not-a-hash-input",
+    };
+    expect(
+      await buildOutputReuseKey(withCredentials, dispatch, "input", "report"),
+    ).toBe(base);
+  });
   it("is stable across scope and skill ordering", async () => {
     const key = await buildOutputReuseKey(ctx, { ...dispatch, skillsContent: { b: "2", a: "1" } }, "input", "report");
     expect(await buildOutputReuseKey({ ...ctx, oauthScopes: ["write", "read"] }, { ...dispatch, skillsContent: { a: "1", b: "2" } }, "input", "report")).toBe(key);
