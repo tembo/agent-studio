@@ -213,5 +213,8 @@ export async function fetchOAuthEndpoint(
     cache: "no-store",
     signal: init.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
   };
+  // Self-hosted OAuth intentionally accepts a user-selected public origin.
+  // SSRF protection is enforced by trustedOAuthUrl plus the socket's
+  // publicLookup above; validating the URL alone cannot prevent DNS rebinding.
   return fetch(url, requestInit);
 }

@@ -50,7 +50,6 @@ describe("native OAuth URL trust checks", () => {
 
   it.each([
     "http://app.attio.com/token",
-    "https://user:pass@app.attio.com/token",
     "https://169.254.169.254/token",
     "https://[::1]/token",
     "https://2130706433/token",
@@ -60,6 +59,36 @@ describe("native OAuth URL trust checks", () => {
     await expect(
       fetchOAuthEndpoint(url, [new URL(url).origin], "Token"),
     ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["username", "password"] as const)(
+    "rejects URL %s before DNS or fetch",
+    async (field) => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      // Synthetic userinfo on a reserved domain, never a provider credential.
+      const url = new URL("https://oauth.example.invalid/token");
+      url[field] = "test-fixture";
+      await expect(
+        fetchOAuthEndpoint(url, [url.origin], "Token"),
+      ).rejects.toThrow(/must not include credentials/);
+      expect(lookup).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "https://app.attio.com.evil.example/token",
+    "https://app.attio.com:8443/token",
+    "https://evil.example/app.attio.com/token",
+  ])("rejects an unapproved origin before DNS or fetch: %s", async (url) => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchOAuthEndpoint(url, allowed, "Token")).rejects.toThrow(
+      /allowed provider origin/,
+    );
+    expect(lookup).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
