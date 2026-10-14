@@ -1,0 +1,32 @@
+name: changelog
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, edited, closed]
+  # Called by checks on main pushes, so a missing entry also blocks deployment.
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  changelog:
+    if: github.event.action != 'closed' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Changelog policy regression tests
+        run: node --test scripts/check-changelog.test.cjs
+      - name: Check product changes and merged PRs
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { run } = require('./scripts/check-changelog.cjs');
+            await run({ github, context, core });

@@ -38,6 +38,7 @@ concurrency:
 # read-only default.
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   checks:

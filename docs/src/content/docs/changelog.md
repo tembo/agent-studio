@@ -19,26 +19,277 @@ they are no longer release versions. Phase scope now lives in
 
 ## Unreleased
 
-### Added
+### Changed
 
-- **Kernel native MCP provider** (`mcp.onkernel.com`, TAS-managed OAuth).
-  Agents can launch Kernel cloud browsers, run Playwright, and automate web
-  sessions with one Connect click.
+- **Refreshed model capabilities and pricing.** Updated the reviewed model
+  catalog, effort support, and model-specific rates used for new run estimates.
+  ([#603](https://github.com/tembo/agent-studio/pull/603))
 
 ### Fixed
 
-- **ZoomInfo native MCP connect.** ZoomInfo's OAuth DCR is partner-allowlisted
-  and rejects TAS, which failed Connect with HTTP 400. ZoomInfo is now a
-  bring-your-own OAuth app: an admin creates a Standard App in the ZoomInfo
-  Developer Portal, then members Connect.
-- **New agents 404 for minutes after their commit lands.** GitHub Contents
-  reads are pinned to the current HEAD commit instead of a 60s branch-name
-  cache, so an agent file committed outside TAS (Tembo CAP, a push, YOLO
-  mode) shows up on the next page load within a few seconds. Reloading the
-  Agents list or opening the agent URL no longer serves a cached 404.
-- **Memory person entities from Studio runs.** The managed Memory tools now
-  require `kind:name` ids (`person:jane@acme.com`, `org:acme`) on `actor` and
-  `entities`. Bare display names were stored as `unknown:` instead of people.
+- **Safer eval expressions and native OAuth connections.** Eval regexes use
+  bounded execution; OAuth discovery and token requests reject unsafe targets
+  and unexpected redirects. Updated vulnerable dependencies and added a web
+  container health check.
+  ([#605](https://github.com/tembo/agent-studio/pull/605))
+- **Changelog freshness.** Backfilled the October releases, synchronized the
+  in-app and published manual, and added checks for changelog coverage on PRs
+  and after merge, plus generated-doc freshness before deployment.
+
+## v2026.10.11 — Run detail and subagent polling fix
+
+### Fixed
+
+- **Run details and sub-agent polling with saved costs.** Correctly decode
+  PostgreSQL numeric costs so completed runs no longer return server errors
+  from run detail or MCP `get_run`. Existing costs and outputs are preserved.
+  This fixes a regression in v2026.10.9 and v2026.10.10. ([#600](https://github.com/tembo/agent-studio/pull/600))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.11)
+
+## v2026.10.10 — Run evals as another member
+
+### Changed
+
+- **Run evals as another member:** workspace admins can select a credential holder
+  when running draft or stable eval files, using the same member picker and
+  permissions as manual runs. Every case uses the selected member's connections,
+  while the eval records who started it. This lets admins validate and promote agents
+  that require another member's connections. Operators continue running evals as
+  themselves. ([#597](https://github.com/tembo/agent-studio/pull/597))
+- **Dependency updates:** Next.js 16.3.8 and Model Context Protocol SDK 1.32.1.
+  ([#594](https://github.com/tembo/agent-studio/pull/594),
+  [#593](https://github.com/tembo/agent-studio/pull/593))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.10)
+
+## v2026.10.9 — Scheduling, model costs, and trigger delivery
+
+### Changed
+
+- **Scheduling without cron:** frequency, day, and time controls, plus business-hour
+  windows such as every two hours from 9 AM through 5 PM on weekdays. Advanced cron
+  remains available and preserves custom expressions.
+  ([#583](https://github.com/tembo/agent-studio/pull/583),
+  [#591](https://github.com/tembo/agent-studio/pull/591))
+- **Local time and daylight saving:** new browser-created schedules default to the
+  browser's IANA timezone. Select a different timezone when creating or editing;
+  previews and lists show the saved zone. Existing UTC schedules remain UTC until
+  explicitly changed. ([#582](https://github.com/tembo/agent-studio/pull/582),
+  [#591](https://github.com/tembo/agent-studio/pull/591))
+- **Model-specific cost estimates:** verified per-model rates replace family-wide
+  estimates. New runs snapshot their pricing basis; historical run costs are
+  preserved and unknown models remain unpriced. Run details show the source,
+  verification date, and rates.
+  ([#584](https://github.com/tembo/agent-studio/pull/584))
+- **Model effort controls:** choose a supported effort level from Versions →
+  Definition and save it as a draft. Provider default remains distinct from explicit
+  effort values; promotion to stable is a separate step. Includes a reviewed
+  model-capability catalog and a reusable prompt for weekly catalog maintenance; the
+  release does not create a scheduled maintenance agent.
+  ([#589](https://github.com/tembo/agent-studio/pull/589))
+- **Composio delivery diagnostics:** workspace admins can check webhook configuration
+  and remote trigger status, or configure delivery and save its signing secret.
+  Existing destinations for other workspaces are preserved. Correct configuration
+  does not by itself confirm Gmail detection or delivery.
+  ([#592](https://github.com/tembo/agent-studio/pull/592))
+- **Backlog synchronization:** preserve Priority and Status when labels are missing,
+  invalid, or conflicting; retain historical Priority on closed issues and log field
+  mutations. ([#590](https://github.com/tembo/agent-studio/pull/590))
+- **Dependency updates:** rustls 0.23.45, quinn-proto 0.11.19, Sharp 0.35.5, and MCP
+  SDK 1.31.0, including upstream networking/security fixes.
+  ([#585](https://github.com/tembo/agent-studio/pull/585)–[#588](https://github.com/tembo/agent-studio/pull/588))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.9)
+
+## v2026.10.8 — Agent authoring request fix
+
+### Fixed
+
+- **Agent authoring requests returning HTTP 400.** Remove an unsupported
+  session-creation field from Chat to Edit, agent creation, and run improvements
+  while preserving repository scoping in both direct-commit and PR modes.
+  Affected requests can be resubmitted without changing their text or API key.
+  ([#580](https://github.com/tembo/agent-studio/pull/580))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.8)
+
+## v2026.10.7 — Better Auth account upgrade fix
+
+### Fixed
+
+- **Better Auth account upgrades.** Migration 0098 makes the obsolete
+  `account.issuer` column nullable and removes its obsolete unique index,
+  preserving account links and provider/account uniqueness. This resolves
+  `Required columns Better Auth never writes: account.issuer`. ([#577](https://github.com/tembo/agent-studio/pull/577))
+
+Start the updated API and wait for migrations and health checks before starting
+web when upgrading from earlier releases.
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.7)
+
+## v2026.10.6 — Automatic Better Auth schema migration
+
+### Fixed
+
+- **Better Auth schema mismatch during upgrades.** Migration 0097 adds nullable `alg`
+  and `crv` text columns to `jwks`, which the current JWT schema expects. It also
+  removes `NOT NULL` constraints if those columns already exist. Existing signing
+  keys and populated metadata are preserved.
+  ([#575](https://github.com/tembo/agent-studio/pull/575))
+- **Matching release defaults.** Both compose image defaults select 2026.10.6 before
+  tagging, so the tagged compose file and published images agree.
+  ([#576](https://github.com/tembo/agent-studio/pull/576))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.6)
+
+## v2026.10.5 — Customer update fixes and Fireworks support
+
+### Fixed
+
+- **Customer release updates.** Both image defaults in the tagged compose file now
+  match 2026.10.5. Release automation reports version-PR errors instead of treating
+  permission failures as success.
+  ([#568](https://github.com/tembo/agent-studio/pull/568),
+  [#572](https://github.com/tembo/agent-studio/pull/572))
+- **Production web build.** Remove an invalid server-action re-export introduced by
+  the provider-settings refactor.
+  ([#572](https://github.com/tembo/agent-studio/pull/572))
+- **Next.js patch update.** Update Next.js to 16.3.6.
+  ([#569](https://github.com/tembo/agent-studio/pull/569))
+
+### Added
+
+- **Fireworks inference provider.** Workspace admins can save encrypted Fireworks API
+  keys under Settings → LLM Providers and use `fireworks:<full-model-id>` in Pydantic
+  agents. Fireworks-only workspaces pass provider readiness checks. Cargo AI remains
+  OpenAI-only. ([#570](https://github.com/tembo/agent-studio/pull/570))
+- **Repository release checklist.** A repo-local release skill covers version
+  selection, matching compose defaults before tagging, production-build validation,
+  image verification, GitHub publication, and recovery.
+  ([#571](https://github.com/tembo/agent-studio/pull/571),
+  [#572](https://github.com/tembo/agent-studio/pull/572))
+
+v2026.10.4 was an unsuccessful build attempt and was not published as a
+release. Upgrade from v2026.10.3 directly to v2026.10.5 or later.
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.5)
+
+## v2026.10.3 — Tembo account validation and API routing fixes
+
+### Fixed
+
+- **Personal Tembo account connections.** Validate API keys through the current
+  `/public-api/auth/context` endpoint and read its `organizationId`, replacing the
+  removed `/public-api/me` route.
+  ([#566](https://github.com/tembo/agent-studio/pull/566))
+- **Staging and self-hosted Tembo API routing.** Account validation, repository
+  lookup, and session creation now share the same API base. Studio appends
+  `/public-api` only when needed, trims trailing slashes, and preserves deployment
+  path prefixes.
+- **Setup documentation.** Update environment examples, deployment instructions,
+  troubleshooting, and the in-app manual for the current API routes.
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.3)
+
+## v2026.10.2 — Authoring, output reuse, and navigation improvements
+
+### Added
+
+- **Inline spec and eval editing from Versions.** Operators can submit validated
+  draft updates using Save draft / Cancel, including starting from a historical spec.
+  Updates follow the workspace's PR/direct-commit policy and land asynchronously;
+  stable promotion and stored snapshots remain separate.
+  ([#557](https://github.com/tembo/agent-studio/pull/557))
+- **Optional reuse of recent agent outputs.** REST and MCP callers can opt into
+  reusing compatible successful production outputs from stable agents. Matching
+  respects workspace, acting user, authorization, version, input, and execution
+  content. Reused runs record provenance and do not repeat tools or deliveries.
+  ([#562](https://github.com/tembo/agent-studio/pull/562))
+- **Text messages navigation setting.** Workspace admins can enable or hide the
+  navigation item under Settings → General, below Memory. It defaults off for new
+  workspaces; existing text-number workspaces retain visibility. Hiding the item does
+  not disable SMS processing.
+  ([#560](https://github.com/tembo/agent-studio/pull/560),
+  [#564](https://github.com/tembo/agent-studio/pull/564))
+
+### Fixed
+
+- **Complete run-history pagination.** Exact timestamp-plus-ID cursors prevent
+  skipped runs with matching timestamps or sub-millisecond differences. REST supports
+  `cursor` and `next_cursor`; the existing `before` time filter remains available.
+  ([#563](https://github.com/tembo/agent-studio/pull/563))
+- **Smaller navigation queries.** Agent headers resolve only the displayed owner.
+  Manual-run and schedule forms search members on demand with at most 25 choices
+  instead of loading the full directory. Run input previews are truncated before
+  database transfer, and a new cursor index improves paging through timestamp
+  batches. ([#563](https://github.com/tembo/agent-studio/pull/563),
+  [#565](https://github.com/tembo/agent-studio/pull/565))
+- **Authoring session creation.** Migrate session creation to the Tembo v1 API.
+  ([#556](https://github.com/tembo/agent-studio/pull/556))
+- **Recoverable authoring requests.** Expose full authoring requests for recovery.
+  ([#558](https://github.com/tembo/agent-studio/pull/558))
+- **Run diagnostics.** Every workspace member who can view a run can expand and copy
+  its available technical diagnostics.
+  ([#559](https://github.com/tembo/agent-studio/pull/559))
+- **Run timestamps.** Display run start and completion timestamps.
+  ([#561](https://github.com/tembo/agent-studio/pull/561))
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.2)
+
+## v2026.10.1 — SMS, workspace memory, and native connections
+
+### Added
+
+- **SMS agent conversations.** Connect multiple agents to one text number, support
+  member-linked conversations across multiple numbers, and collect opt-in consent.
+  ([#498](https://github.com/tembo/agent-studio/pull/498),
+  [#508](https://github.com/tembo/agent-studio/pull/508),
+  [#509](https://github.com/tembo/agent-studio/pull/509),
+  [#510](https://github.com/tembo/agent-studio/pull/510))
+- **Optional workspace Memory for Pydantic agents.** Managed tools ask, search,
+  inspect entities and entity cards, and report observations, with guidance for using
+  memory and durable report delivery.
+  ([#511](https://github.com/tembo/agent-studio/pull/511),
+  [#514](https://github.com/tembo/agent-studio/pull/514),
+  [#517](https://github.com/tembo/agent-studio/pull/517),
+  [#519](https://github.com/tembo/agent-studio/pull/519))
+- **Kernel native MCP provider.** Connect with managed OAuth to launch cloud browsers
+  and automate web sessions. ([#525](https://github.com/tembo/agent-studio/pull/525))
+- **Maxio (Carefeed) native MCP connection.** Managed OAuth with token refresh during
+  Pydantic runs supports short-lived access tokens. This connection targets
+  Carefeed's tenant; confirm the Analyst role in Maxio before connecting.
+  ([#554](https://github.com/tembo/agent-studio/pull/554))
+- **Skill uploads and ownership.** Operators can upload skills, with ownership
+  controls for managing installed skills.
+  ([#550](https://github.com/tembo/agent-studio/pull/550))
+
+### Fixed
+
+- Retry transient scheduled dispatch failures.
+  ([#552](https://github.com/tembo/agent-studio/pull/552))
+- Keep LinkedIn credentials private to each user.
+  ([#551](https://github.com/tembo/agent-studio/pull/551))
+- Use bring-your-own OAuth credentials for ZoomInfo, whose dynamic registration is
+  partner-allowlisted. ([#540](https://github.com/tembo/agent-studio/pull/540))
+- Refresh native MCP tokens before web actions, preserve issuer paths during
+  discovery, retry first-run refresh misses, and retry flaky MCP handshakes.
+  ([#516](https://github.com/tembo/agent-studio/pull/516),
+  [#518](https://github.com/tembo/agent-studio/pull/518),
+  [#521](https://github.com/tembo/agent-studio/pull/521),
+  [#538](https://github.com/tembo/agent-studio/pull/538))
+- Pin GitHub agent reads to HEAD so newly committed agents appear promptly instead of
+  returning cached 404s. ([#524](https://github.com/tembo/agent-studio/pull/524))
+- Require typed Memory entity IDs and expose safe report failures with accurate tool
+  outcomes. ([#515](https://github.com/tembo/agent-studio/pull/515),
+  [#517](https://github.com/tembo/agent-studio/pull/517))
+
+### Maintenance
+
+- Update compatible web, Rust, documentation, and CI dependencies; align Dependabot
+  configuration with the monorepo.
+
+[Release notes](https://github.com/tembo/agent-studio/releases/tag/v2026.10.1)
 
 ## v2026.9.2 — Microsoft multi-tenant sign-in fix
 

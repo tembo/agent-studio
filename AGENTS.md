@@ -103,7 +103,23 @@ affects.
   the slug allow-list that rewrites `/agent-studio/<slug>/` cross-links). Miss
   `nav.ts` and the page is unreachable in-app and its inbound links 404.
 
-CI runs a non-blocking `docs-sync` reminder that flags changes touching
+For product changes, add a user-facing entry under `[Unreleased]` in the root
+`CHANGELOG.md`, then run `pnpm --dir web gen:docs`. That command regenerates both
+project pages and the in-app bundle. At release time, move the entries into a
+dated version section before tagging; publishing GitHub release notes alone
+does not update either manual.
+
+The `changelog` check requires a canonical changelog addition for runtime code,
+migrations, dependencies, assets, and deployment-default changes. For changes
+with no user-visible impact, explain the exemption in a visible PR-body line:
+`Changelog: not needed — <specific reason>`. Test-only, docs-only, and tooling-only
+changes are excluded automatically. The check runs on PR updates (including
+body edits), after merge, and for every merged PR in a push to main before
+deployment. Direct product pushes require a changelog addition in the pushed
+diff. Generated-doc freshness is a separate blocking check with no exemption.
+Reviewers still verify the entry's accuracy and any exemption's justification.
+
+CI also runs a non-blocking `docs-sync` reminder that flags changes touching
 `web/src/app/**` or `api/src/**` without any `docs/` change. It's a nudge, not
 a gate — if a change genuinely needs no doc update, ignore it.
 

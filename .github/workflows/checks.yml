@@ -13,8 +13,27 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  changelog:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/changelog.yml
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Docs generation regression tests
+        run: node --test scripts/docs-generation.test.mjs
+      - name: Verify committed docs match their sources (blocking)
+        run: |
+          node web/scripts/gen-docs.mjs
+          git diff --exit-code -- docs/src/content/docs/changelog.md docs/src/content/docs/roadmap.md web/src/lib/docs-content.ts
+
   web:
     runs-on: ubuntu-latest
     defaults:
