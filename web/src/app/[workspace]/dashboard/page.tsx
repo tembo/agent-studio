@@ -138,6 +138,13 @@ export default async function DashboardPage({
         </h1>
       </div>
 
+      <Link
+        href={`/${workspace.slug}/dashboard/usage`}
+        className="text-foreground text-sm font-medium underline underline-offset-4"
+      >
+        Usage report → Spend by agent, automation, and run-as member
+      </Link>
+
       <hr className="border-[var(--color-border-weak)]" />
 
       <RunEnvironmentTabs

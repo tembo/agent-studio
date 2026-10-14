@@ -23,6 +23,51 @@ configuration and health details. Tool usage shows the five most-used tools and
 the total tool and call counts; expand the remainder to browse it in a bounded,
 scrollable list.
 
+### Usage report
+
+Open **Dashboard → Usage report** to investigate estimated model spend. The
+report defaults to the last **30 calendar days**, including today, in
+**Eastern time (America/New_York)**. Choose 7 or 90 days, or an inclusive custom
+range of up to 366 days. Day boundaries follow daylight saving time. Each run
+belongs to the date it was admitted, even if it finishes later.
+
+Switch between **By agent**, **By automation**, and **By user**. Agent and
+automation rows show trigger type, run count, known total spend, cost per priced
+run, and the number of runs with unavailable estimates. Automation totals combine
+all run-as members, so an expensive schedule firing across a team remains
+visible. Users are attributed by the identity the run acted as, not agent
+ownership. Removed members and unavailable automations retain their usage.
+
+Select a row to see its underlying runs. Date and breakdown filters also apply
+to **Runs per day**, including days with zero runs. Select a day to inspect it;
+use **Clear breakdown filters** to return to the workspace view. The URL
+preserves the selected range and filters for sharing with workspace members.
+
+Spend is split independently of the dashboard's environment tabs:
+
+| Category | Meaning |
+| -------- | ------- |
+| **Development** | The agent had not yet been promoted when the run was admitted. Later promotion does not remove this earlier spend. |
+| **Exempt production** | The agent had already been promoted, including runs using draft after promotion. |
+| **Unclassified** | Historical lifecycle information is insufficient to determine the category. |
+
+The report includes evaluations, dry runs, failed/cancelled runs, and sub-agent
+runs. Each sub-agent appears under its own agent and contributes its own cost
+once; its spend is not added to the parent's row. Reused outputs count as runs
+with zero new spend. This report covers recorded agent runs; it is not a provider
+invoice or an accounting of model calls outside those runs. Separate eval judge
+calls do not have run-level cost records and are excluded.
+
+**Known total** sums stored cost estimates. Missing estimates remain explicitly
+**unavailable**, including unfinished or failed work without a settled cost;
+they are never assumed free. **Cost per priced run** divides known spend by the
+number of runs with a known cost. Legacy estimates without pricing snapshots
+are counted and disclosed, not recalculated at today's prices. Unclassified
+lifecycle spend remains in the known total when a cost is available.
+
+This first release is a report only. Per-member caps, blocking, and spend alerts
+are not yet enabled.
+
 ### Team (workspace admins)
 
 Below the headline tiles, the **Team** section lists every workspace member with
