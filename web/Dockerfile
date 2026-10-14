@@ -5,6 +5,7 @@ WORKDIR /app
 
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 # `--config.minimum-release-age=0` opts out of pnpm v10's 24h embargo on
 # newly-published dependencies. The committed lockfile pins exact versions;
 # lockfile diffs in PR review are the right place to vet recent packages.
