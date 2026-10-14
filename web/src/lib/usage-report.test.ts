@@ -22,10 +22,13 @@ describe("usage report filters", () => {
     expect(next.searchParams.get("page")).toBe("4");
     expect(new URL(usageHref("acme", filters, { group: "users" }), "http://local").searchParams.get("page")).toBe("1");
   });
-  it("distinguishes missing prices from actual zero costs and retains small estimates", () => {
+  it("rounds displayed costs to the nearest cent and preserves missing prices", () => {
     expect(usageMoney(null)).toBe("Unavailable");
     expect(usageMoney(0)).toBe("$0.00");
-    expect(usageMoney(0.0012)).toBe("$0.0012");
-    expect(usageMoney(0.000001)).toBe("<$0.0001");
+    expect(usageMoney(0.0012)).toBe("$0.00");
+    expect(usageMoney(0.000001)).toBe("$0.00");
+    expect(usageMoney(1073.4514)).toBe("$1,073.45");
+    expect(usageMoney(8.666)).toBe("$8.67");
+    expect(usageMoney(1.005)).toBe("$1.01");
   });
 });
