@@ -14,6 +14,16 @@ they are no longer release versions. Phase scope now lives in
 
 ## [Unreleased]
 
+### Added
+
+- **Workspace usage report.** Admins can inspect estimated spend by run-as user,
+  agent/trigger, and saved automation from the dashboard, with a 30-day Eastern
+  date range, daily activity, and drill-downs to individual runs. Includes dry
+  runs, eval executions, and separate sub-agent costs, exposes missing estimates,
+  and separates development from exempt and unclassified historical spend.
+  This first milestone for [#526](https://github.com/tembo/agent-studio/issues/526)
+  provides reporting; spend caps and notifications remain future work.
+
 ### Changed
 
 - **Refreshed model capabilities and pricing.** Updated the reviewed model

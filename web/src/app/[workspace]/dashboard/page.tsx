@@ -153,6 +153,10 @@ export default async function DashboardPage({
         environment={environment}
       />
 
+      {isAdmin && <Section title="Usage report" description="Compare 30-day spend by run-as user, agent, and automation, including development work and missing estimates.">
+        <Link href={`/${workspace.slug}/dashboard/usage`} className="text-sm font-medium underline">Open usage report →</Link>
+      </Section>}
+
       <Section
         title="Team"
         description="Connections, automations, Slack-bot usage, and 30-day run activity per member. Hover a count for details."
