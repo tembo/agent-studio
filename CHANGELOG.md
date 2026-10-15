@@ -32,6 +32,12 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Release database exposure.** The published-image Compose stack no longer
+  publishes PostgreSQL on the host; web and API containers still reach it on
+  the Compose network.
+- **Webhook owner permissions.** Workspace operators can no longer rotate,
+  enable, disable, or delete another member's webhook; workspace admins can
+  still manage all workspace webhooks.
 - **Schedule owner permissions.** Workspace operators can no longer create or
   manage schedules that run with another member's connections; workspace admins
   retain reassignment and handoff controls.

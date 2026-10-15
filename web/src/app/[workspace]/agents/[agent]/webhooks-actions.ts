@@ -121,10 +121,13 @@ export async function rotateWebhookAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
 
   const existing = await getWebhookPreview(workspace.id, id);
   if (!existing) return { error: "Webhook no longer exists." };
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: "Only the webhook owner or a workspace admin can modify it." };
+  }
 
   const token = await rotateWebhookToken(workspace.id, id);
   if (!token) return { error: "Webhook no longer exists." };
@@ -163,10 +166,13 @@ export async function toggleWebhookAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
 
   const existing = await getWebhookPreview(workspace.id, id);
   if (!existing) return { error: "Webhook no longer exists." };
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: "Only the webhook owner or a workspace admin can modify it." };
+  }
 
   await setWebhookEnabled(workspace.id, id, enabled);
   await writeAuditEvent({
@@ -196,10 +202,13 @@ export async function deleteWebhookAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
 
   const existing = await getWebhookPreview(workspace.id, id);
   if (!existing) return { message: "Already gone." };
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: "Only the webhook owner or a workspace admin can modify it." };
+  }
 
   await deleteWebhook(workspace.id, id);
   await writeAuditEvent({

@@ -29,8 +29,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-tas}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tas}
       POSTGRES_DB: ${POSTGRES_DB:-tas}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       # postgres:18+ stores data in a version subdir under
       # /var/lib/postgresql (not /var/lib/postgresql/data) — mount the
