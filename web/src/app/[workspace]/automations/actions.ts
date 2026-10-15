@@ -79,11 +79,6 @@ async function validateOwnerUserId(
   return { error: INVALID_OWNER_MESSAGE };
 }
 
-async function isWorkspaceAdmin(workspaceSlug: string): Promise<boolean> {
-  const auth = await authorizeWorkspace(workspaceSlug, "admin");
-  return auth.ok;
-}
-
 export async function createAutomationAction(
   _prev: AutomationFormState,
   formData: FormData,
@@ -94,7 +89,7 @@ export async function createAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
 
   const invalid = await validate(workspace.id, parsed);
   if (invalid) return invalid;
@@ -103,7 +98,7 @@ export async function createAutomationAction(
   const ownerUserId = parsed.ownerUserId || userId;
   const invalidOwner = await validateOwnerUserId(workspace.id, ownerUserId);
   if (invalidOwner) return invalidOwner;
-  if (ownerUserId !== userId && !(await isWorkspaceAdmin(parsed.workspaceSlug))) {
+  if (ownerUserId !== userId && role !== "workspace_admin") {
     return { error: DENIED_MESSAGE };
   }
 
@@ -156,7 +151,7 @@ export async function updateAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
 
   // Older callers can omit the field; explicit selections may change the zone.
@@ -170,7 +165,7 @@ export async function updateAutomationAction(
   // Editing an existing cross-user schedule or assigning it to another member is admin-only.
   if (
     (existing.ownerUserId !== userId || ownerUserId !== userId) &&
-    !(await isWorkspaceAdmin(parsed.workspaceSlug))
+    role !== "workspace_admin"
   ) {
     return { error: DENIED_MESSAGE };
   }
@@ -237,8 +232,11 @@ export async function deleteAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: DENIED_MESSAGE };
+  }
 
   await deleteAutomation(id);
   await writeAuditEvent({
@@ -273,13 +271,10 @@ export async function toggleAutomationAction(formData: FormData): Promise<void> 
   // be hidden in the UI for viewers anyway (US-0.4-89).
   const auth = await authorizeWorkspace(workspaceSlug, "operator");
   if (!auth.ok) notFound();
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
   if (await validateOwnerUserId(workspace.id, existing.ownerUserId)) notFound();
-  if (
-    existing.ownerUserId !== userId &&
-    !(await isWorkspaceAdmin(workspaceSlug))
-  ) notFound();
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") notFound();
 
   await updateAutomation({
     id,

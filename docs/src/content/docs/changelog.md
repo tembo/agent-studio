@@ -37,6 +37,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Schedule owner permissions.** Workspace operators can no longer create or
+  manage schedules that run with another member's connections; workspace admins
+  retain reassignment and handoff controls.
 - **Backlog ranking and status.** Routine project synchronization preserves
   manually selected Status and repairs stale status labels. Ranking keeps P1
   Backlog issues ahead of lower priorities while respecting hard dependencies.
