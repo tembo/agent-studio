@@ -97,13 +97,13 @@ a cycle instead of discarding an edge or inventing an order.
 Order represents what should receive attention next, not a mechanical label
 sort. Apply these signals in combination:
 
-1. Finish genuinely active work and review/merge linked work before starting
-   another item, unless it is abandoned or a P0 interrupts it.
-2. Put P0 safety, authorization, data-integrity, and incident work first.
-3. Put Backlog work behind In Progress, Ready, and Blocked work across the P1–P3
-   bands. Backlog is a readiness state and does not rewrite the separate Priority
-   field. P0 safety work remains the exception, and a concrete unblock or
-   product-decision action may itself rank early once moved out of Backlog.
+1. Respect hard dependencies, then order by Priority: P0, P1, P2, P3, Parked.
+   A P1 in Backlog still precedes lower-priority work, including active work,
+   unless that work is a hard dependency.
+2. Within each priority, order In Progress, Ready, Blocked, then Backlog. Finish
+   active work and review/merge linked work before starting comparable work.
+3. Preserve the Status chosen in the Project during routine reranking. Backlog
+   is a readiness state, not a reason to downgrade the separate Priority band.
 4. Within comparable work, prefer validated user outcomes, work that
    unlocks several other items, and small changes that complete an active
    initiative.
@@ -129,17 +129,21 @@ reliably from metadata. Run it when:
 The backlog-taxonomy workflow applies safe defaults: new/reopened issues enter
 Backlog, unlabeled priority defaults to P2, `user request` promotes to P1 unless the
 issue is already P0, and closing clears the active status label. It adds all open
-issues to Project 1, mirrors Priority and Status, preserves an assigned Initiative,
+issues to Project 1, mirrors Priority, preserves an assigned Initiative,
 and fills an unassigned Initiative from `user request` or a maintained milestone.
 It recomputes Order deterministically from priority, status, user-request evidence,
 the existing sequence, and `blockedBy` dependencies. Closing sets Project Status
 to Done and clears Order while retaining historical Priority and Initiative.
-Missing, invalid, or conflicting Priority/Status labels preserve the existing
-Project field and emit a warning; ordering uses those preserved values. Only a
-single recognized label can replace an open item's corresponding field. New
-items with no valid label remain unset in that field until their taxonomy is
-repaired. Each field mutation logs the issue number, field, old/new values, and
-reason. Strategic priority and initiative decisions remain
+Missing, invalid, or conflicting Priority labels preserve the existing Project
+Priority and emit a warning. For existing open items, Project Status is authoritative
+during routine synchronization: status labels are repaired to match it, so stale
+labels cannot undo manual Project edits. A labeled event for that issue with a
+single recognized status label explicitly changes its Project Status. An open
+linked PR sets In Progress; reopening a Done item uses its valid status label or
+Backlog. New items initialize Status from a valid label; without one, the existing
+Project default is preserved. Unset fields with no valid label remain unset and
+emit a warning. Each field mutation logs the issue number, field, old/new values,
+and reason. Strategic priority and initiative decisions remain
 manual; routine synchronization does not require an LLM.
 
 ## GitHub Project contract

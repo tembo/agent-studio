@@ -246,13 +246,22 @@ async function positionItem(projectId, itemId, afterId) {
 
 async function replaceStatusLabel(issue, statusName) {
   const names = issue.labels.nodes.map((label) => label.name);
+  const statuses = names.filter((name) => name.startsWith("status: "));
+  if (statuses.length === 1 && statuses[0] === statusName) return;
+  const url = `https://api.github.com/repos/${repository}/issues/${issue.number}/labels`;
+  // Change only status labels so concurrent edits to other taxonomy survive.
+  if (!names.includes(statusName)) {
+    await request(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ labels: [statusName] }),
+    });
+  }
+  for (const name of statuses.filter((name) => name !== statusName)) {
+    await request(`${url}/${encodeURIComponent(name)}`, { method: "DELETE" });
+  }
   const next = names.filter((name) => !name.startsWith("status: "));
   next.push(statusName);
-  await request(`https://api.github.com/repos/${repository}/issues/${issue.number}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ labels: next }),
-  });
   mutations.labelsUpdated += 1;
   issue.labels.nodes = next.map((name) => ({ name }));
 }
@@ -286,6 +295,24 @@ function desiredStatus(issue) {
   ]));
 }
 
+function resolveStatus(issue, current, isNew) {
+  const labeled = desiredStatus(issue);
+  if (issue.state === "CLOSED") return { status: "Done", reason: "issue closed" };
+  if (openPrIssues.has(issue.number)) return { status: "In Progress", reason: "open linked PR" };
+  const explicitLabelChange = Number(process.env.STATUS_LABEL_ISSUE) === issue.number
+    && labeled !== null
+    && process.env.STATUS_LABEL === `status: ${labeled.toLowerCase()}`;
+  if (explicitLabelChange) return { status: labeled, reason: "status label event" };
+  if (!isNew && current && current !== "Done") {
+    return { status: current, reason: "preserved project status" };
+  }
+  if (current === "Done") return { status: labeled ?? "Backlog", reason: "issue reopened" };
+  return {
+    status: preserveWithoutLabel(issue, "Status", labeled, current),
+    reason: "initial status label",
+  };
+}
+
 function preserveWithoutLabel(issue, field, desired, current) {
   if (desired !== null) return desired;
   console.warn(
@@ -310,20 +337,9 @@ function desiredInitiative(issue, current) {
 }
 
 function rank(item) {
-  const priority = item.priority;
-  const status = item.status;
-  if (priority === "P0") return 0;
-  if (status === "In Progress") return item.type === "epic" ? 3 : 1;
-  if (status === "Backlog") {
-    return { P1: 8, P2: 9, P3: 10, Parked: 11 }[priority] ?? 10;
-  }
-  const scores = {
-    P1: { Ready: 2, Blocked: 4 },
-    P2: { Ready: 4, Blocked: 6 },
-    P3: { Ready: 6, Blocked: 7 },
-    Parked: { Ready: 11, Blocked: 11 },
-  };
-  return scores[priority]?.[status] ?? 12;
+  const priority = { P0: 0, P1: 1, P2: 2, P3: 3, Parked: 4 }[item.priority] ?? 5;
+  const status = { "In Progress": 0, Ready: 1, Blocked: 2, Backlog: 3 }[item.status] ?? 4;
+  return priority * 10 + status;
 }
 
 function compareItems(left, right) {
@@ -405,12 +421,6 @@ try {
 } catch (error) {
   console.warn(`Skipping PR-linked in-progress status: ${error.message}`);
 }
-for (const issue of openIssues) {
-  if (openPrIssues.has(issue.number) && desiredStatus(issue) !== "In Progress") {
-    await replaceStatusLabel(issue, "status: in progress");
-  }
-}
-
 let project = await getProject();
 const projectIssueIds = new Set(
   project.items.map((item) => item.content?.id).filter(Boolean),
@@ -448,7 +458,7 @@ for (const item of managedItems) {
   const priority = issue.state === "CLOSED" && currentPriority !== null
     ? currentPriority
     : preserveWithoutLabel(issue, "Priority", desiredPriority(issue), currentPriority);
-  const status = preserveWithoutLabel(issue, "Status", desiredStatus(issue), currentStatus);
+  const { status, reason: statusReason } = resolveStatus(issue, currentStatus, !projectIssueIds.has(issue.id));
   const initiative = desiredInitiative(issue, currentInitiative);
 
   if (priority && currentPriority !== priority) {
@@ -461,8 +471,10 @@ for (const item of managedItems) {
     await updateField(project.id, item.id, fields.get("Status").id, {
       singleSelectOptionId: optionId(fields.get("Status"), status),
     });
-    logFieldChange(issue, "Status", currentStatus, status,
-      issue.state === "CLOSED" ? "issue closed" : "status label");
+    logFieldChange(issue, "Status", currentStatus, status, statusReason);
+  }
+  if (issue.state === "OPEN" && status) {
+    await replaceStatusLabel(issue, `status: ${status.toLowerCase()}`);
   }
   if (currentInitiative !== initiative) {
     await updateField(project.id, item.id, fields.get("Initiative").id, {

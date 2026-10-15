@@ -169,6 +169,12 @@ synchronizes taxonomy and deterministically refreshes Order from the approved
 metadata and dependency graph; it does not infer business priority from issue
 prose.
 
+Routine reranking preserves Project Status and mirrors it back to issue status
+labels. Explicit status-label events, linked open PRs, and issue close/reopen
+transitions can change Status. After hard dependencies, Order compares Priority
+first, then Status within each priority; P1 Backlog work stays ahead of lower
+priorities.
+
 ## What to leave alone
 
 - `node_modules/`, `target/`, `.next/`, `dist/` — build outputs.

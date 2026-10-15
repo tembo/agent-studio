@@ -89,4 +89,6 @@ jobs:
           github.event.pull_request.head.repo.full_name == github.repository
         env:
           GH_TOKEN: ${{ secrets.PROJECTS_TOKEN }}
+          STATUS_LABEL_ISSUE: ${{ github.event_name == 'issues' && github.event.action == 'labeled' && github.event.issue.number || '' }}
+          STATUS_LABEL: ${{ github.event.label.name || '' }}
         run: node .agents/skills/reprioritize-backlog/scripts/sync-project.mjs
