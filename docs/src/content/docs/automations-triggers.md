@@ -13,6 +13,9 @@ the **Automations** page. You pick the agent, the schedule, an optional input
 message, and an **owner** — the automation runs as that owner, so it uses the
 owner's [connection](/agent-studio/connections/) credentials. You can also choose
 whether a schedule runs the agent's **stable** version or its live **draft**.
+Operators can create and manage schedules that run as themselves. Only workspace
+admins can assign another member as owner or change, pause, enable, or remove
+that member's schedule.
 
 Use the **Schedule** picker to choose **Daily**, **Weekdays**, **Weekly**,
 **Monthly**, **Every few hours**, or **Business hours**. Choose a time for daily, weekday, weekly,

@@ -89,17 +89,18 @@ export async function createAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
 
   const invalid = await validate(workspace.id, parsed);
   if (invalid) return invalid;
 
-  // Owner defaults to the creator when the form leaves the picker
-  // blank. Scheduled runs use this user's per-user credentials, so
-  // never trust the posted picker value without a membership check.
+  // Owner defaults to the creator. Choosing another member requires admin authorization.
   const ownerUserId = parsed.ownerUserId || userId;
   const invalidOwner = await validateOwnerUserId(workspace.id, ownerUserId);
   if (invalidOwner) return invalidOwner;
+  if (ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: DENIED_MESSAGE };
+  }
 
   const created = await createAutomation({
     workspaceId: workspace.id,
@@ -150,7 +151,7 @@ export async function updateAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
 
   // Older callers can omit the field; explicit selections may change the zone.
@@ -161,6 +162,13 @@ export async function updateAutomationAction(
   const ownerUserId = parsed.ownerUserId || existing.ownerUserId;
   const invalidOwner = await validateOwnerUserId(workspace.id, ownerUserId);
   if (invalidOwner) return invalidOwner;
+  // Editing an existing cross-user schedule or assigning it to another member is admin-only.
+  if (
+    (existing.ownerUserId !== userId || ownerUserId !== userId) &&
+    role !== "workspace_admin"
+  ) {
+    return { error: DENIED_MESSAGE };
+  }
 
   await updateAutomation({
     id,
@@ -224,8 +232,11 @@ export async function deleteAutomationAction(
     if (auth.reason === "denied") return { error: DENIED_MESSAGE };
     notFound();
   }
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") {
+    return { error: DENIED_MESSAGE };
+  }
 
   await deleteAutomation(id);
   await writeAuditEvent({
@@ -260,9 +271,10 @@ export async function toggleAutomationAction(formData: FormData): Promise<void> 
   // be hidden in the UI for viewers anyway (US-0.4-89).
   const auth = await authorizeWorkspace(workspaceSlug, "operator");
   if (!auth.ok) notFound();
-  const { workspace, userId } = auth;
+  const { workspace, userId, role } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
   if (await validateOwnerUserId(workspace.id, existing.ownerUserId)) notFound();
+  if (existing.ownerUserId !== userId && role !== "workspace_admin") notFound();
 
   await updateAutomation({
     id,

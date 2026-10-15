@@ -39,11 +39,13 @@ vi.mock("@/lib/workspace-agents", () => ({
 
 import {
   createAutomationAction,
+  deleteAutomationAction,
   updateAutomationAction,
   toggleAutomationAction,
 } from "./actions";
 import {
   createAutomation,
+  deleteAutomation,
   getAutomation,
   updateAutomation,
 } from "@/lib/automations-api";
@@ -53,6 +55,7 @@ import { getAgentByName } from "@/lib/workspace-agents";
 
 const mockAuthorizeWorkspace = vi.mocked(authorizeWorkspace);
 const mockCreateAutomation = vi.mocked(createAutomation);
+const mockDeleteAutomation = vi.mocked(deleteAutomation);
 const mockGetAutomation = vi.mocked(getAutomation);
 const mockUpdateAutomation = vi.mocked(updateAutomation);
 const mockUserIsMember = vi.mocked(userIsMember);
@@ -115,7 +118,7 @@ beforeEach(() => {
   mockAuthorizeWorkspace.mockResolvedValue({
     ok: true,
     workspace,
-    userId: "creator",
+    userId: "current-owner",
     role: "operator",
   });
   mockGetAgentByName.mockResolvedValue({
@@ -125,6 +128,32 @@ beforeEach(() => {
 });
 
 describe("automation owner validation", () => {
+  it("does not let an operator create a schedule using another member's credentials", async () => {
+    mockUserIsMember.mockResolvedValue(true);
+    const result = await createAutomationAction({}, automationForm({ owner_user_id: "victim-user" }));
+    expect(result.error).toMatch(/permission/);
+    expect(mockCreateAutomation).not.toHaveBeenCalled();
+  });
+
+  it("lets a workspace admin assign another member as owner", async () => {
+    mockAuthorizeWorkspace.mockResolvedValue({ ok: true, workspace, userId: "current-owner", role: "workspace_admin" });
+    mockUserIsMember.mockResolvedValue(true);
+    mockCreateAutomation.mockResolvedValue(existingAutomation);
+    await expect(createAutomationAction({}, automationForm({ owner_user_id: "victim-user" }))).rejects.toThrow("NEXT_REDIRECT");
+    expect(mockCreateAutomation).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: "victim-user" }));
+  });
+
+  it("does not let an operator update or remove another member's schedule", async () => {
+    mockGetAutomation.mockResolvedValue({ ...existingAutomation, ownerUserId: "victim-user" });
+    mockUserIsMember.mockResolvedValue(true);
+    const form = automationForm({ id: existingAutomation.id, owner_user_id: "victim-user" });
+    expect((await updateAutomationAction({}, form)).error).toMatch(/permission/);
+    expect((await deleteAutomationAction({}, form)).error).toMatch(/permission/);
+    await expect(toggleAutomationAction(form)).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mockUpdateAutomation).not.toHaveBeenCalled();
+    expect(mockDeleteAutomation).not.toHaveBeenCalled();
+  });
+
   it("rejects create when owner_user_id is not a workspace member", async () => {
     mockUserIsMember.mockResolvedValue(false);
 
