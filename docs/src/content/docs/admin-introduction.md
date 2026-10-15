@@ -35,7 +35,8 @@ connected GitHub repo; the API runs agents as subprocess calls into the bundled
 - **Local / from source** — `docker compose up --build` brings up web, API, and
   Postgres. Good for evaluation and development.
 - **From prebuilt images** — `compose.release.yaml` pulls pinned images from
-  GHCR instead of compiling from source.
+  GHCR instead of compiling from source. Its Postgres service is available to
+  the web and API containers on the Compose network, with no host port exposed.
 - **Managed hosts** — the full stack on **Railway** or **AWS** (ECS Fargate +
   RDS), or the web tier on **Vercel** with the API on a long-lived host.
 
