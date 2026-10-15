@@ -32,6 +32,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Backlog ranking and status.** Routine project synchronization preserves
+  manually selected Status and repairs stale status labels. Ranking keeps P1
+  Backlog issues ahead of lower priorities while respecting hard dependencies.
 - **Usage report currency formatting.** Round all displayed costs, totals, and
   averages to the nearest cent with two decimal places.
 - **Safer eval expressions and native OAuth connections.** Eval regexes use
