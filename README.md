@@ -116,7 +116,8 @@ Once healthy:
 
 - Web: `http://localhost:3000`
 - API health: `http://localhost:8080/health`
-- Postgres: `localhost:5432`
+- Postgres: `localhost:5432` when building from source. The published-image
+  stack keeps Postgres on the Compose network and does not publish a host port.
 
 The API applies database migrations automatically on boot via `sqlx::migrate!()`.
 
