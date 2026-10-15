@@ -79,6 +79,11 @@ async function validateOwnerUserId(
   return { error: INVALID_OWNER_MESSAGE };
 }
 
+async function isWorkspaceAdmin(workspaceSlug: string): Promise<boolean> {
+  const auth = await authorizeWorkspace(workspaceSlug, "admin");
+  return auth.ok;
+}
+
 export async function createAutomationAction(
   _prev: AutomationFormState,
   formData: FormData,
@@ -94,12 +99,13 @@ export async function createAutomationAction(
   const invalid = await validate(workspace.id, parsed);
   if (invalid) return invalid;
 
-  // Owner defaults to the creator when the form leaves the picker
-  // blank. Scheduled runs use this user's per-user credentials, so
-  // never trust the posted picker value without a membership check.
+  // Owner defaults to the creator. Choosing another member requires admin authorization.
   const ownerUserId = parsed.ownerUserId || userId;
   const invalidOwner = await validateOwnerUserId(workspace.id, ownerUserId);
   if (invalidOwner) return invalidOwner;
+  if (ownerUserId !== userId && !(await isWorkspaceAdmin(parsed.workspaceSlug))) {
+    return { error: DENIED_MESSAGE };
+  }
 
   const created = await createAutomation({
     workspaceId: workspace.id,
@@ -161,6 +167,13 @@ export async function updateAutomationAction(
   const ownerUserId = parsed.ownerUserId || existing.ownerUserId;
   const invalidOwner = await validateOwnerUserId(workspace.id, ownerUserId);
   if (invalidOwner) return invalidOwner;
+  // Editing an existing cross-user schedule or assigning it to another member is admin-only.
+  if (
+    (existing.ownerUserId !== userId || ownerUserId !== userId) &&
+    !(await isWorkspaceAdmin(parsed.workspaceSlug))
+  ) {
+    return { error: DENIED_MESSAGE };
+  }
 
   await updateAutomation({
     id,
@@ -263,6 +276,10 @@ export async function toggleAutomationAction(formData: FormData): Promise<void> 
   const { workspace, userId } = auth;
   if (workspace.id !== existing.workspaceId) notFound();
   if (await validateOwnerUserId(workspace.id, existing.ownerUserId)) notFound();
+  if (
+    existing.ownerUserId !== userId &&
+    !(await isWorkspaceAdmin(workspaceSlug))
+  ) notFound();
 
   await updateAutomation({
     id,
