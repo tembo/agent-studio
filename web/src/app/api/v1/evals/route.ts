@@ -49,6 +49,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (typeof body.agent !== "string" || !body.agent.trim()) {
     return apiError(400, "`agent` (string) is required");
   }
+  if (typeof body.eval === "string") {
+    return apiError(400, "custom eval definitions are not accepted by this API");
+  }
   const version = body.version === "stable" ? "stable" : "draft";
   const source =
     body.source === "ci" ||
