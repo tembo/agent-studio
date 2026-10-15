@@ -203,6 +203,8 @@ Create one on the agent's detail page, under **External webhooks**:
 1. **Add a webhook** with a name (and, as an admin, an owner to run as). TAS
    shows the **endpoint URL** and a **bearer token** — copy both now; the token
    is shown only once (rotate to issue a new one).
+   Operators can rotate, pause, or remove webhooks they own. Workspace admins
+   can manage webhooks owned by any member.
 2. The caller POSTs to the URL with the token in an `Authorization: Bearer`
    header and a JSON body. TAS verifies the token, queues a run, and acks
    immediately (HTTP 202) — fire-and-forget. The agent receives the request body

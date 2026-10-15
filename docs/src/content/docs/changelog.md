@@ -37,6 +37,9 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Webhook owner permissions.** Workspace operators can no longer rotate,
+  enable, disable, or delete another member's webhook; workspace admins can
+  still manage all workspace webhooks.
 - **Backlog ranking and status.** Routine project synchronization preserves
   manually selected Status and repairs stale status labels. Ranking keeps P1
   Backlog issues ahead of lower priorities while respecting hard dependencies.
