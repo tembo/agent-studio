@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
 
 // Connections list — every connection the (view-)user has, across native-MCP +
 // Composio OAuth and workspace secrets, as clickable rows like /agents. Admin
-// substrate config (enable providers, BYO OAuth apps) lives on /providers.
+// substrate config (enable providers, BYO OAuth apps) lives on
+// /connections/providers.
 export default async function ConnectionsPage({
   params,
   searchParams,
