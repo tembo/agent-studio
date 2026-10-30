@@ -2,10 +2,10 @@ name: deploy-internal
 
 # Continuous deployment of `main` to the Tembo-managed instances on Railway:
 # the internal dogfood box plus the managed early-customer instances (faust,
-# fireroad) that opted into tracking main. On every push to main we:
-# (1) run the checks gate, (2) build + push `:edge` images to GHCR, then
-# (3) point each instance's Railway services at the exact image digests just
-# built and trigger deploys.
+# fireroad, leadership-offroad) that opted into tracking main. On every push
+# to main we: (1) run the checks gate, (2) build + push `:edge` images to
+# GHCR, then (3) point each instance's Railway services at the exact image
+# digests just built and trigger deploys.
 #
 # Scoped to the canonical repo only (forks lack the Railway tokens and
 # shouldn't deploy). Self-hosted customer instances stay pinned to explicit
@@ -21,6 +21,7 @@ name: deploy-internal
 #   var     RAILWAY_WEB_SERVICE_ID             — dogfood web service UUID
 #   secret  RAILWAY_TOKEN_FAUST                + RAILWAY_FAUST_* vars
 #   secret  RAILWAY_TOKEN_FIREROAD             + RAILWAY_FIREROAD_* vars
+#   secret  RAILWAY_TOKEN_LEADERSHIP_OFFROAD   + RAILWAY_LEADERSHIP_OFFROAD_* vars
 # (Railway project tokens are per-project, hence one secret per instance;
 # they authenticate via the Project-Access-Token header.)
 
@@ -140,6 +141,10 @@ jobs:
             env_var: RAILWAY_FIREROAD_ENVIRONMENT_ID
             api_service_var: RAILWAY_FIREROAD_API_SERVICE_ID
             web_service_var: RAILWAY_FIREROAD_WEB_SERVICE_ID
+          - instance: leadership-offroad
+            env_var: RAILWAY_LEADERSHIP_OFFROAD_ENVIRONMENT_ID
+            api_service_var: RAILWAY_LEADERSHIP_OFFROAD_API_SERVICE_ID
+            web_service_var: RAILWAY_LEADERSHIP_OFFROAD_WEB_SERVICE_ID
     env:
       # Explicit references avoid sending the entire secrets context to runners.
       # Each condition includes its instance so a missing token cannot fall
@@ -147,7 +152,8 @@ jobs:
       RAILWAY_TOKEN: >-
         ${{ matrix.instance == 'dogfood' && secrets.RAILWAY_TOKEN ||
             matrix.instance == 'faust' && secrets.RAILWAY_TOKEN_FAUST ||
-            matrix.instance == 'fireroad' && secrets.RAILWAY_TOKEN_FIREROAD || '' }}
+            matrix.instance == 'fireroad' && secrets.RAILWAY_TOKEN_FIREROAD ||
+            matrix.instance == 'leadership-offroad' && secrets.RAILWAY_TOKEN_LEADERSHIP_OFFROAD || '' }}
     steps:
       - name: Point ${{ matrix.instance }} at the new digests + deploy
         # Skips cleanly until the instance's token is configured, so
