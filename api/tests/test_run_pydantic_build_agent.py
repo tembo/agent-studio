@@ -512,7 +512,7 @@ MODEL_CAPABILITIES = json.loads(
     (Path(__file__).resolve().parents[1] / "src/model-capabilities.json").read_text()
 )
 REVIEWED_OPENAI_MODELS = {
-    "openai:gpt-6.1-sol", "openai:gpt-6-sol", "openai:gpt-6-luna",
+    "openai:gpt-6.1-sol", "openai:gpt-6.1-terra", "openai:gpt-6-sol", "openai:gpt-6-luna",
     "openai:gpt-5.6-sol", "openai:gpt-5.6-terra", "openai:gpt-5.6-luna",
     "openai:gpt-5.5-2026-04-23", "openai:gpt-5.4-2026-03-05",
     "openai:gpt-5.4-mini-2026-03-17", "openai:gpt-5.4-nano-2026-03-17",

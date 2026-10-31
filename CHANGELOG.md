@@ -16,6 +16,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **GPT-6.1 Terra catalog support.** Verified standard token/cache prices,
+  pricing above 272,000 input tokens, and None through Maximum effort with a
+  Medium provider default. Existing agent settings and historical run costs
+  remain unchanged.
+
 - **Workspace usage report.** Admins can inspect estimated spend by run-as user,
   agent/trigger, and saved automation from the dashboard, with a 30-day Eastern
   date range, daily activity, and drill-downs to individual runs. Includes dry

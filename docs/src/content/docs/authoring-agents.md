@@ -335,9 +335,22 @@ listed models additionally support None. The catalog also recognizes the exact
 GPT-5.5 (`2026-04-23`), GPT-5.4 (`2026-03-05`), and GPT-5.4 Mini/Nano
 (`2026-03-17`) snapshots documented by OpenAI.
 
-These models are verified against Pydantic AI 2.55.0's Responses adapter,
-which `openai:` selects in that version. GPT-6 Astra and GPT-6.1 Sol require
-Responses for tool calling; GPT-6 Sol/Luna only support Chat Completions tool
+The October 31, 2026 review adds the exact `openai:gpt-6.1-terra` ID with
+None, Low, Medium (provider default), High, Extra high, and Maximum effort.
+Its [official model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)
+lists $1 input, $5 output, $0.05 cached input, and $1.25 cache writes per million
+tokens (30-minute retention). Requests above 272,000 total input tokens,
+including cached reads and writes, use $2 input, $7.50 output, $0.10 cached
+input, and $2.50 cache writes for the entire request. The catalog estimates
+standard processing with the default cache retention; 12-hour cache writes
+cost more and are not separately represented. No dated or preview alias is
+inferred. Terra was checked with Pydantic AI 2.64.0's Responses adapter. Existing
+agents keep their authored model and effort settings, and historical runs keep
+their saved pricing snapshots.
+
+The October 10 models were verified against Pydantic AI 2.55.0's Responses
+adapter, which `openai:` selects in that version. GPT-6 Astra, GPT-6.1 Sol, and
+GPT-6.1 Terra require Responses for tool calling; GPT-6 Sol/Luna only support Chat Completions tool
 calling at None effort. An older deployment that resolves `openai:` to Chat
 Completions cannot use all these combinations. GPT-6 Astra has verified token
 prices but no effort dropdown: the checked documentation lists its effort
