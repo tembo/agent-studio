@@ -1,4 +1,7 @@
 [
+  {"model":"openai:gpt-6.1-terra","input":172000,"output":10000,"read":50000,"write":50000,"expected":0.287},
+  {"model":"openai:gpt-6.1-terra","input":172001,"output":10000,"read":50000,"write":50000,"expected":0.549002},
+  {"model":"openai:gpt-6.1-terra-preview","input":1000,"output":1000,"read":0,"write":0,"expected":null},
   {"model":"anthropic:claude-sonnet-4-6","input":1000000,"output":1000000,"read":0,"write":0,"expected":18},
   {"model":"anthropic:claude-sonnet-5","input":1000000,"output":1000000,"read":0,"write":0,"expected":12},
   {"model":"anthropic:claude-sonnet-5-5","input":1000000,"output":1000000,"read":0,"write":0,"expected":12},
