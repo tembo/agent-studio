@@ -36,7 +36,7 @@ describe("effort catalog", () => {
     expect(haiku?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
     expect(haiku?.default).toBe("medium");
   });
-  it.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("verifies exact effort levels and defaults for %s", (model) => {
+  it.each(["gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("verifies exact effort levels and defaults for %s", (model) => {
     const support = effortSupport(`openai:${model}`);
     const levels = ["low", "medium", "high", "xhigh", "max"];
     expect(support?.levels).toEqual(model === "gpt-6.1-sol" ? levels : ["none", ...levels]);
