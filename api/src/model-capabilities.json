@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-10-31",
+  "verifiedOn": "2026-11-14",
   "effort": [
     {
       "models": [
@@ -93,6 +93,8 @@
     },
     {
       "models": [
+        "anthropic:claude-fable-5-2",
+        "anthropic:claude-mythos-5-2",
         "anthropic:claude-fable-5",
         "anthropic:claude-fable-5-1",
         "anthropic:claude-mythos-5",

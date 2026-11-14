@@ -138,7 +138,15 @@ def test_anthropic_adapter_handles_temperature_with_current_sdk(
     asyncio.run(exercise_request())
 
 
+@pytest.mark.parametrize("model,effort", [
+    ("claude-sonnet-4-5", None),
+    *[(f"claude-{name}-5-2", effort)
+      for name in ("fable", "mythos")
+      for effort in (None, "low", "medium", "high", "xhigh", "max")],
+])
 def test_wrapper_streams_anthropic_request_over_real_tcp(
+    model: str,
+    effort: str | None,
     monkeypatch: pytest.MonkeyPatch,
     anthropic_text_stream: bytes,
 ) -> None:
@@ -185,9 +193,12 @@ def test_wrapper_streams_anthropic_request_over_real_tcp(
             agent = run_pydantic.build_agent(
                 {
                     "name": "anthropic-loopback",
-                    "model": "anthropic:claude-sonnet-4-5",
+                    "model": f"anthropic:{model}",
                     "instructions": "Reply briefly.",
-                    "model_settings": {"temperature": 0.2},
+                    "model_settings": (
+                        {"temperature": 0.2} if model == "claude-sonnet-4-5"
+                        else {"max_tokens": 4096, **({"anthropic_effort": effort} if effort else {})}
+                    ),
                 }
             )
             result = await asyncio.wait_for(
@@ -202,7 +213,23 @@ def test_wrapper_streams_anthropic_request_over_real_tcp(
             await server.wait_closed()
 
         assert result.output == "ok"
-        assert request_bodies[0]["temperature"] == 0.2
+        request = request_bodies[0]
+        assert request["model"] == model
+        assert any(tool["name"] == "get_run_datetime" for tool in request["tools"])
+        assert request["tool_choice"]["disable_parallel_tool_use"] is True
+        if model == "claude-sonnet-4-5":
+            assert request["temperature"] == 0.2
+        else:
+            # These models always think adaptively; omission uses that provider
+            # default. The adapter must never serialize disabled thinking.
+            assert request.get("thinking", {"type": "adaptive"})["type"] == "adaptive"
+            assert request["max_tokens"] == 4096
+            if effort is None:
+                assert "effort" not in request.get("output_config", {})
+                assert "anthropic_effort" not in agent.model_settings
+            else:
+                assert request["output_config"]["effort"] == effort
+                assert agent.model_settings["anthropic_effort"] == effort
         assert agent.model_settings["timeout"] == 300.0
 
     asyncio.run(exercise_stream())

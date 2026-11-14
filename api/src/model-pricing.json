@@ -1,10 +1,20 @@
 {
-  "verifiedOn": "2026-10-31",
+  "verifiedOn": "2026-11-14",
   "sources": {
     "anthropic": "https://platform.claude.com/docs/en/about-claude/pricing",
     "openai": "https://developers.openai.com/api/docs/pricing"
   },
   "rates": [
+    {
+      "models": [
+        "anthropic:claude-fable-5-2",
+        "anthropic:claude-mythos-5-2"
+      ],
+      "input": 8,
+      "output": 40,
+      "cacheRead": 0.2,
+      "cacheWrite": 10
+    },
     {
       "models": [
         "anthropic:claude-sonnet-5"

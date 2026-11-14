@@ -16,6 +16,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **Claude Fable 5.2 and Mythos 5.2 catalog support.** Verified exact model IDs,
+  standard token and cache prices, and Low through Maximum effort with a High
+  provider default. Existing agent settings and saved run costs are preserved;
+  Mythos 5.2 requires restricted provider access.
+
 - **GPT-6.1 Terra catalog support.** Verified standard token/cache prices,
   pricing above 272,000 input tokens, and None through Maximum effort with a
   Medium provider default. Existing agent settings and historical run costs

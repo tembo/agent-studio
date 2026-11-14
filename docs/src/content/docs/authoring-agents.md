@@ -335,6 +335,22 @@ listed models additionally support None. The catalog also recognizes the exact
 GPT-5.5 (`2026-04-23`), GPT-5.4 (`2026-03-05`), and GPT-5.4 Mini/Nano
 (`2026-03-17`) snapshots documented by OpenAI.
 
+The November 14, 2026 review adds the exact `anthropic:claude-fable-5-2`
+and `anthropic:claude-mythos-5-2` IDs. Both support Low, Medium, High (provider
+default), Extra high, and Maximum effort, with adaptive thinking always on.
+Their official [Fable 5.2](https://platform.claude.com/docs/en/models/fable-5-2/overview)
+and [Mythos 5.2](https://platform.claude.com/docs/en/models/mythos-5-2/overview)
+pages list $8 input, $40 output, $0.20 cache reads, and $10 five-minute cache
+writes per million tokens, at the same rates across the full 1M context window.
+One-hour cache writes cost $16 per million tokens and are not separately
+represented in estimates. Mythos 5.2 requires access through Anthropic's
+restricted programs. No dated or preview alias is inferred. Pydantic AI
+2.68.0's Anthropic adapter was checked through the actual runner against a
+loopback provider, including omitted effort, all five explicit levels, adaptive
+thinking, and sequential tool settings. This verifies adapter serialization;
+it does not establish provider account access. Existing agents keep their
+explicit model settings, and saved run costs are unchanged.
+
 The October 31, 2026 review adds the exact `openai:gpt-6.1-terra` ID with
 None, Low, Medium (provider default), High, Extra high, and Maximum effort.
 Its [official model page](https://developers.openai.com/api/docs/models/gpt-6.1-terra)

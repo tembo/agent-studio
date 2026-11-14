@@ -31,6 +31,20 @@ describe("effort catalog", () => {
     expect(effortSupport("anthropic:claude-sonnet-5")?.levels).toContain("xhigh");
     expect(effortSupport("openai:gpt-5.1")?.levels).not.toContain("xhigh");
   });
+  it.each(["fable", "mythos"])("verifies %s 5.2 effort without inferring aliases", (name) => {
+    const model = `anthropic:claude-${name}-5-2`;
+    const support = effortSupport(model);
+    expect(support?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(support?.default).toBe("high");
+    expect(support?.setting).toBe("anthropic_effort");
+    expect(effortSupport(`${model}-preview`)).toBeNull();
+    for (const effort of support!.levels) {
+      const original = { model, instructions: "Hello", model_settings: { max_tokens: 4096 } };
+      const updated = JSON.parse(setModelEffort(JSON.stringify(original), "json", effort));
+      expect(updated.model_settings).toEqual({ max_tokens: 4096, anthropic_effort: effort });
+    }
+    expect(() => setModelEffort(JSON.stringify({ model, instructions: "Hello" }), "json", "none")).toThrow(/not supported/);
+  });
   it("includes Haiku 5.5 with five effort levels and the Medium default", () => {
     const haiku = effortSupport("anthropic:claude-haiku-5-5");
     expect(haiku?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
