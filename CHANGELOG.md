@@ -32,6 +32,10 @@ they are no longer release versions. Phase scope now lives in
 
 ### Fixed
 
+- **Actionable agent-listing errors.** When the workspace can't read its
+  connected repo, the agents page now names the repo and branch, explains
+  what a GitHub 404 or rejected token means, and links to repository
+  settings instead of showing a bare code like `not-found`.
 - **Release database exposure.** The published-image Compose stack no longer
   publishes PostgreSQL on the host; web and API containers still reach it on
   the Compose network.

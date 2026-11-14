@@ -19,7 +19,7 @@ import { listAgentSubAgentEdges } from "@/lib/run-orchestration-db";
 import { listAgentSummaries30d } from "@/lib/runs-db";
 import { getServerSession } from "@/lib/session";
 import { isTemboConfiguredForUser } from "@/lib/tembo-credentials";
-import { listAgents } from "@/lib/workspace-agents";
+import { listAgents, type ListAgentsResult } from "@/lib/workspace-agents";
 import {
   getWorkspaceBySlug,
   getWorkspaceRepo,
@@ -33,6 +33,25 @@ import {
 } from "./agents-inventory";
 
 export const dynamic = "force-dynamic";
+
+// The raw codes ("not-found", "invalid-token", …) don't say which side is
+// broken. A "not-found" here comes from resolving the branch HEAD, not from a
+// missing agents/ folder (that lists as empty), so it always means the stored
+// repo, branch, or token no longer lines up with GitHub.
+const LIST_AGENTS_ERROR_MESSAGES: Record<
+  Extract<ListAgentsResult, { ok: false }>["error"],
+  string
+> = {
+  "no-repo": "No repository is connected to this workspace.",
+  "not-found":
+    "GitHub returned 404 for the connected repo's default branch. The repo may have been renamed or moved, the branch renamed or deleted, or the stored token lost access to it. Reconnect the repo with a token that can see it.",
+  "invalid-token":
+    "GitHub rejected the stored token. It may have expired or been revoked. Reconnect the repo with a new token.",
+  "path-exists": "GitHub reported a conflict reading the repo. Try again.",
+  "branch-protected": "GitHub refused the request because of branch protection.",
+  "rate-limited": "GitHub rate-limited the request. Try again in a few minutes.",
+  network: "Couldn't reach GitHub. Try again in a moment.",
+};
 
 export default async function WorkspacePage({
   params,
@@ -335,9 +354,25 @@ export default async function WorkspacePage({
       )}
 
       {!agentsResult.ok ? (
-        <div className="text-sentiment-negative text-sm">
-          Couldn&apos;t list agents: {agentsResult.error}
-          {agentsResult.detail ? ` — ${agentsResult.detail}` : ""}
+        <div className="text-sentiment-negative flex flex-col gap-1 text-sm">
+          <p>
+            Couldn&apos;t list agents
+            {repo
+              ? ` from ${repo.owner}/${repo.name}@${repo.defaultBranch}`
+              : ""}
+            : {LIST_AGENTS_ERROR_MESSAGES[agentsResult.error]}
+            {agentsResult.detail ? ` (${agentsResult.detail})` : ""}
+          </p>
+          {repo &&
+          (agentsResult.error === "not-found" ||
+            agentsResult.error === "invalid-token") ? (
+            <Link
+              href={`/${workspace.slug}/settings/repository`}
+              className="text-foreground hover:underline font-medium"
+            >
+              Open repository settings →
+            </Link>
+          ) : null}
         </div>
       ) : (
         <AgentsInventory
