@@ -19,7 +19,8 @@ describe("historical pricing display", () => {
     expect(body.match(/~\$/g)).toHaveLength(1);
   });
   it("shows provider rates and their verification date", () => {
-    const body = renderToStaticMarkup(<RunPricing pricing={lookupPricing("anthropic:claude-sonnet-5")} cost={12} live={false} reused={false} />);
+    const saved = { ...lookupPricing("anthropic:claude-sonnet-5")!, verifiedOn: "2026-10-10" };
+    const body = renderToStaticMarkup(<RunPricing pricing={saved} cost={12} live={false} reused={false} />);
     expect(body).toContain("$2.00 input / $10.00 output per 1M tokens");
     expect(body).toContain("Rates verified 2026-10-10");
     expect(body).toContain('href="https://platform.claude.com/docs/en/about-claude/pricing"');

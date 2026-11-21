@@ -1,5 +1,5 @@
 {
-  "verifiedOn": "2026-10-10",
+  "verifiedOn": "2026-11-21",
   "effort": [
     {
       "models": [
@@ -93,6 +93,8 @@
     },
     {
       "models": [
+        "anthropic:claude-fable-5-2",
+        "anthropic:claude-mythos-5-2",
         "anthropic:claude-fable-5",
         "anthropic:claude-fable-5-1",
         "anthropic:claude-mythos-5",
@@ -130,6 +132,13 @@
       "levels": ["low", "medium", "high", "xhigh", "max"],
       "default": "medium",
       "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+    },
+    {
+      "models": ["openai:gpt-6.1-terra"],
+      "setting": "openai_reasoning_effort",
+      "levels": ["none", "low", "medium", "high", "xhigh", "max"],
+      "default": "medium",
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-terra"
     },
     {
       "models": ["openai:gpt-6-sol"],

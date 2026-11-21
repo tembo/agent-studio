@@ -31,12 +31,26 @@ describe("effort catalog", () => {
     expect(effortSupport("anthropic:claude-sonnet-5")?.levels).toContain("xhigh");
     expect(effortSupport("openai:gpt-5.1")?.levels).not.toContain("xhigh");
   });
+  it.each(["fable", "mythos"])("verifies %s 5.2 effort without inferring aliases", (name) => {
+    const model = `anthropic:claude-${name}-5-2`;
+    const support = effortSupport(model);
+    expect(support?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(support?.default).toBe("high");
+    expect(support?.setting).toBe("anthropic_effort");
+    expect(effortSupport(`${model}-preview`)).toBeNull();
+    for (const effort of support!.levels) {
+      const original = { model, instructions: "Hello", model_settings: { max_tokens: 4096 } };
+      const updated = JSON.parse(setModelEffort(JSON.stringify(original), "json", effort));
+      expect(updated.model_settings).toEqual({ max_tokens: 4096, anthropic_effort: effort });
+    }
+    expect(() => setModelEffort(JSON.stringify({ model, instructions: "Hello" }), "json", "none")).toThrow(/not supported/);
+  });
   it("includes Haiku 5.5 with five effort levels and the Medium default", () => {
     const haiku = effortSupport("anthropic:claude-haiku-5-5");
     expect(haiku?.levels).toEqual(["low", "medium", "high", "xhigh", "max"]);
     expect(haiku?.default).toBe("medium");
   });
-  it.each(["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("verifies exact effort levels and defaults for %s", (model) => {
+  it.each(["gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"])("verifies exact effort levels and defaults for %s", (model) => {
     const support = effortSupport(`openai:${model}`);
     const levels = ["low", "medium", "high", "xhigh", "max"];
     expect(support?.levels).toEqual(model === "gpt-6.1-sol" ? levels : ["none", ...levels]);
@@ -56,6 +70,16 @@ describe("effort catalog", () => {
     expect(effortSupport("openai:gpt-6-astra")).toBeNull();
     expect(effortSupport("openai:gpt-6.1-sol-preview")).toBeNull();
     expect(() => setModelEffort('{"model":"openai:gpt-6.1-sol","instructions":"Hello"}', "json", "none")).toThrow(/not supported/);
+  });
+  it.each(["gpt-6.2-astra", "gpt-6.2-sol"])("preserves authored %s effort while its provider default is unverified", (name) => {
+    const model = `openai:${name}`;
+    expect(effortSupport(model)).toBeNull();
+    const spec = { model, instructions: "Hello", model_settings: { openai_reasoning_effort: "high", max_tokens: 4096 } };
+    const original = JSON.stringify(spec);
+    expect(readModelEffort(spec).custom).toBe(true);
+    expect(() => setModelEffort(original, "json", "medium")).toThrow();
+    expect(spec.model_settings).toEqual({ openai_reasoning_effort: "high", max_tokens: 4096 });
+    expect(effortSupport(`${model}-preview`)).toBeNull();
   });
 });
 

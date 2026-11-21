@@ -21,6 +21,21 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **GPT-6.2 Astra and Sol pricing.** Verified exact model IDs, standard token
+  and cache prices, and the higher rates above 272,000 input tokens. Effort
+  dropdowns remain unavailable until provider defaults are documented. Existing
+  agent settings and saved run costs are preserved.
+
+- **Claude Fable 5.2 and Mythos 5.2 catalog support.** Verified exact model IDs,
+  standard token and cache prices, and Low through Maximum effort with a High
+  provider default. Existing agent settings and saved run costs are preserved;
+  Mythos 5.2 requires restricted provider access.
+
+- **GPT-6.1 Terra catalog support.** Verified standard token/cache prices,
+  pricing above 272,000 input tokens, and None through Maximum effort with a
+  Medium provider default. Existing agent settings and historical run costs
+  remain unchanged.
+
 - **Workspace usage report.** Admins can inspect estimated spend by run-as user,
   agent/trigger, and saved automation from the dashboard, with a 30-day Eastern
   date range, daily activity, and drill-downs to individual runs. Includes dry
