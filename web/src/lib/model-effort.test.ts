@@ -71,6 +71,16 @@ describe("effort catalog", () => {
     expect(effortSupport("openai:gpt-6.1-sol-preview")).toBeNull();
     expect(() => setModelEffort('{"model":"openai:gpt-6.1-sol","instructions":"Hello"}', "json", "none")).toThrow(/not supported/);
   });
+  it.each(["gpt-6.2-astra", "gpt-6.2-sol"])("preserves authored %s effort while its provider default is unverified", (name) => {
+    const model = `openai:${name}`;
+    expect(effortSupport(model)).toBeNull();
+    const spec = { model, instructions: "Hello", model_settings: { openai_reasoning_effort: "high", max_tokens: 4096 } };
+    const original = JSON.stringify(spec);
+    expect(readModelEffort(spec).custom).toBe(true);
+    expect(() => setModelEffort(original, "json", "medium")).toThrow();
+    expect(spec.model_settings).toEqual({ openai_reasoning_effort: "high", max_tokens: 4096 });
+    expect(effortSupport(`${model}-preview`)).toBeNull();
+  });
 });
 
 describe("effort edits", () => {

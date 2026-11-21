@@ -21,6 +21,11 @@ they are no longer release versions. Phase scope now lives in
 
 ### Added
 
+- **GPT-6.2 Astra and Sol pricing.** Verified exact model IDs, standard token
+  and cache prices, and the higher rates above 272,000 input tokens. Effort
+  dropdowns remain unavailable until provider defaults are documented. Existing
+  agent settings and saved run costs are preserved.
+
 - **Claude Fable 5.2 and Mythos 5.2 catalog support.** Verified exact model IDs,
   standard token and cache prices, and Low through Maximum effort with a High
   provider default. Existing agent settings and saved run costs are preserved;

@@ -335,6 +335,24 @@ listed models additionally support None. The catalog also recognizes the exact
 GPT-5.5 (`2026-04-23`), GPT-5.4 (`2026-03-05`), and GPT-5.4 Mini/Nano
 (`2026-03-17`) snapshots documented by OpenAI.
 
+The November 21, 2026 review adds pricing for the exact
+`openai:gpt-6.2-astra` and `openai:gpt-6.2-sol` IDs. At standard processing
+rates per million tokens, [Astra](https://developers.openai.com/api/docs/models/gpt-6.2-astra)
+costs $8 input, $40 output, $0.40 cache reads, and $10 cache writes;
+[Sol](https://developers.openai.com/api/docs/models/gpt-6.2-sol) costs $2 input,
+$10 output, $0.10 cache reads, and $2.50 cache writes. Cache writes use
+30-minute retention. Above 272,000 total input tokens, including cache reads
+and writes, input and cache rates double and output rates increase by 50%
+for the entire request. Twelve-hour writes, processing tiers other than
+Standard, and regional premiums are not separately represented in estimates.
+The [model catalog](https://developers.openai.com/api/docs/models) lists Low,
+Medium, High, Extra high, and Maximum effort for both models; None and Minimal
+are unsupported. The checked documentation does not establish their provider
+defaults, so no effort dropdown is added. Pydantic AI 2.71.0's Responses adapter
+was checked through the actual runner with tools, omitted effort, all five
+explicit levels, and cache usage. Existing authored settings and historical
+pricing snapshots are preserved; no preview or dated aliases are inferred.
+
 The November 14, 2026 review adds the exact `anthropic:claude-fable-5-2`
 and `anthropic:claude-mythos-5-2` IDs. Both support Low, Medium, High (provider
 default), Extra high, and Maximum effort, with adaptive thinking always on.

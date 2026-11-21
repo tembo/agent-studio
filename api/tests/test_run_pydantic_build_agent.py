@@ -550,7 +550,11 @@ REVIEWED_EFFORT_CASES = [
     for model in row["models"]
     if model in REVIEWED_OPENAI_MODELS
     for effort in [None, *row["levels"]]
-] + [("openai:gpt-6-astra", effort) for effort in [None, "low", "medium", "high", "xhigh", "max"]]
+] + [
+    (model, effort)
+    for model in ("openai:gpt-6-astra", "openai:gpt-6.2-astra", "openai:gpt-6.2-sol")
+    for effort in [None, "low", "medium", "high", "xhigh", "max"]
+]
 
 
 @pytest.mark.parametrize("model,effort", REVIEWED_EFFORT_CASES)
@@ -588,6 +592,8 @@ def test_reviewed_models_send_effort_tools_and_cache_usage_through_responses(mod
     result = asyncio.run(agent.run("Hello"))
     assert result.output == "done"
     request = create.call_args.kwargs
+    assert request["model"] == model.split(":", 1)[1]
+    assert request["parallel_tool_calls"] is False
     assert any(tool.get("name") == "available_tool" for tool in request["tools"])
     if effort is None:
         assert not isinstance(request.get("reasoning"), dict) or "effort" not in request["reasoning"]
